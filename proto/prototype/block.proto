@@ -1,0 +1,48 @@
+syntax = "proto3";
+option go_package = "./;prototype";
+
+package rdo.prototype;
+
+message Block{
+  uint64 num = 1;
+  uint64 slot = 2;
+  bytes version = 3;// 3 bytes version
+  bytes hash = 4;
+  bytes parent = 5;
+  uint64 timestamp = 6;
+  bytes txroot = 7;
+  uint32 size = 8;
+  Sign proposer = 9; // proposer sign
+  repeated Sign approvers = 10; // array of approvers' signs
+  repeated Sign slashers = 11; // array of slashers' signs
+  repeated Transaction transactions = 12; // array of transactions
+}
+
+message Transaction{
+  uint64 num = 1;
+  uint32 type = 2;
+  uint64 timestamp = 3;
+  bytes hash = 4;
+  uint64 fee = 5;
+  uint32 size = 6;
+  bytes data = 7;
+  repeated TxInput inputs = 8;
+  repeated TxOutput outputs = 9;
+}
+
+message TxInput {
+  bytes hash = 1;
+  uint32 index = 2;
+  bytes address = 3;
+  uint64 amount = 4;
+  Sign sign = 5;
+}
+
+message TxOutput{
+  bytes address = 1;
+  uint64 amount = 2;
+}
+
+message Sign{
+  bytes signature = 1; // TODO change size to 97 bytes
+}

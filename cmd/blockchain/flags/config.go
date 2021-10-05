@@ -1,0 +1,61 @@
+package flags
+
+import (
+	log "github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v2"
+)
+
+// GlobalFlags specifies all the global flags for the
+// rdo node.
+type GlobalFlags struct {
+	HeadSync                   bool
+	DisableSync                bool
+	SubscribeToAllSubnets      bool
+	MinimumSyncPeers           int
+	BlockBatchLimit            int
+	BlockBatchLimitBurstFactor int
+}
+
+var globalConfig *GlobalFlags
+
+// Get retrieves the global config.
+func Get() *GlobalFlags {
+	if globalConfig == nil {
+		return &GlobalFlags{}
+	}
+	return globalConfig
+}
+
+// Init sets the global config equal to the config that is passed in.
+func Init(c *GlobalFlags) {
+	globalConfig = c
+}
+
+// ConfigureGlobalFlags initializes the global config.
+// based on the provided cli context.
+func ConfigureGlobalFlags(ctx *cli.Context) {
+	cfg := &GlobalFlags{}
+	if ctx.Bool(HeadSync.Name) {
+		log.Warn("Using Head Sync flag, it starts syncing from last saved head.")
+		cfg.HeadSync = true
+	}
+	if ctx.Bool(DisableSync.Name) {
+		log.Warn("Using Disable Sync flag, using this flag on a live network might lead to adverse consequences.")
+		cfg.DisableSync = true
+	}
+
+	cfg.BlockBatchLimit = ctx.Int(BlockBatchLimit.Name)
+	cfg.BlockBatchLimitBurstFactor = ctx.Int(BlockBatchLimitBurstFactor.Name)
+	configureMinimumPeers(ctx, cfg)
+
+	Init(cfg)
+}
+
+func configureMinimumPeers(ctx *cli.Context, cfg *GlobalFlags) {
+	cfg.MinimumSyncPeers = ctx.Int(MinSyncPeers.Name)
+	maxPeers := 10 // wtf ??
+	if cfg.MinimumSyncPeers > maxPeers {
+		log.Warnf("Changing Minimum Sync Peers to %d", maxPeers)
+		cfg.MinimumSyncPeers = maxPeers
+	}
+}
