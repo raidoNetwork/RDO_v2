@@ -9,6 +9,7 @@ import (
 	"rdo_draft/shared/common"
 	"rdo_draft/shared/fileutil"
 	"rdo_draft/shared/types"
+	"sync"
 	"time"
 
 	"database/sql"
@@ -34,8 +35,10 @@ type Store struct {
 	databasePath string
 	ctx          context.Context
 
-	tx   map[int]*sql.Tx
-	txID int
+	tx      map[int]*sql.Tx
+	txQuery map[int]string
+	txID    int
+	lock    sync.RWMutex
 }
 
 func NewUTxOStore(ctx context.Context, dirPath string, config *Config) (*Store, error) {
@@ -62,9 +65,15 @@ func NewUTxOStore(ctx context.Context, dirPath string, config *Config) (*Store, 
 		ctx:          ctx,
 		txID:         1,
 		tx:           make(map[int]*sql.Tx),
+		txQuery:      make(map[int]string),
 	}
 
 	if err := sqlDB.createSchema(); err != nil {
+		return nil, err
+	}
+
+	// Clear all spent outputs in the database
+	if err := sqlDB.CleanSpent(); err != nil {
 		return nil, err
 	}
 
@@ -73,7 +82,14 @@ func NewUTxOStore(ctx context.Context, dirPath string, config *Config) (*Store, 
 
 // Close - close database connections
 func (s *Store) Close() error {
+	s.waitAllTxCommit()
+
 	return s.db.Close()
+}
+
+// waitAllTxCommit locks until all existing transaction will be commited or rollbacked
+func (s *Store) waitAllTxCommit() {
+	// lock for all tx are finish
 }
 
 // createSchema generates needed database structure if not exist.
@@ -112,7 +128,7 @@ func (s *Store) AddOutput(uo *types.UTxO) (id int64, err error) {
 	from := hex.EncodeToString(uo.From)
 	to := hex.EncodeToString(uo.To)
 
-	res, err := stmt.Exec(uo.TxType, hash, uo.Index, from, to, uo.Amount, time.Now().UnixNano(), common.UnspentTxO, uo.BlockNum)
+	res, err := stmt.Exec(uo.TxType, hash, uo.Index, from, to, uo.Amount, uo.Timestamp, common.UnspentTxO, uo.BlockNum)
 	if err != nil {
 		return
 	}
@@ -127,7 +143,8 @@ func (s *Store) AddOutput(uo *types.UTxO) (id int64, err error) {
 
 // SpendOutput mark output with given id as spent output in the database.
 func (s *Store) SpendOutput(id uint64) error {
-	query := `UPDATE ` + utxoTable + ` SET spent = ? WHERE id = ?`
+	//query := `UPDATE ` + utxoTable + ` SET spent = ? WHERE id = ?`
+	query := `DELETE FROM ` + utxoTable + ` WHERE id = ?`
 	stmt, err := s.db.Prepare(query)
 	defer stmt.Close()
 
@@ -139,7 +156,8 @@ func (s *Store) SpendOutput(id uint64) error {
 		return ErrBadUO
 	}
 
-	_, err = stmt.Exec(common.SpentTxO, id)
+	//_, err = stmt.Exec(common.SpentTxO, id)
+	_, err = stmt.Exec(id)
 	if err != nil {
 		return err
 	}
@@ -204,23 +222,6 @@ func (s *Store) HealthCheck() (lastId uint64, err error) {
 	return
 }
 
-func (s *Store) AddOutputBlockNum(n uint64, id int) error {
-	query := `UPDATE ` + utxoTable + ` SET blockId = ? WHERE id = ?`
-	stmt, err := s.db.Prepare(query)
-	defer stmt.Close()
-
-	if err != nil {
-		return err
-	}
-
-	_, err = stmt.Exec(n, id)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // FindGenesisOutput tries to get output from genesis block on user with given address.
 // if UTxO found return it otherwise return nil
 func (s *Store) FindGenesisOutput(addr string) (uo *types.UTxO, err error) {
@@ -257,14 +258,29 @@ func (s *Store) FindGenesisOutput(addr string) (uo *types.UTxO, err error) {
 func (s *Store) FindAllUTxO(addr string) (uoArr []*types.UTxO, err error) {
 	query := `SELECT id, hash, tx_index, address_from, address_to, amount, spent, timestamp, blockId, tx_type FROM "` + utxoTable + `" WHERE address_to = ? AND spent = ?`
 
+	start := time.Now()
 	rows, err := s.db.Query(query, addr, common.UnspentTxO)
 	if err != nil {
 		return nil, err
 	}
 
+	defer rows.Close()
+
+	end := time.Since(start)
+	log.Debugf("Get query result object in %s.", common.StatFmt(end))
+
 	uoArr = make([]*types.UTxO, 0)
 
+	start = time.Now()
+	showStat := true
 	for rows.Next() {
+		if showStat {
+			log.Debugf("First row next in %s", common.StatFmt(time.Since(start)))
+			showStat = false
+		}
+
+		startInner := time.Now()
+
 		var hash, from, to string
 		var id, spent, blockNum, amount, timestamp uint64
 		var index uint32
@@ -281,65 +297,45 @@ func (s *Store) FindAllUTxO(addr string) (uoArr []*types.UTxO, err error) {
 		}
 
 		uoArr = append(uoArr, uo)
+
+		endInner := time.Since(startInner)
+		log.Debugf("Parse one row in %s.", common.StatFmt(endInner))
 	}
+
+	end = time.Since(start)
+	log.Debugf("Get query parsed result in %s.", common.StatFmt(end))
 
 	return uoArr, nil
 }
 
+// CreateTx create new database transaction and return it's ID.
 func (s *Store) CreateTx() (int, error) {
-	ctx := context.Background()
-
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		return 0, err
 	}
 
+	s.lock.Lock()
 	s.tx[s.txID] = tx
-
+	// s.txQuery[s.txID] = "BEGIN TRANSACTION;"
 	id := s.txID
 	s.txID++
+	s.lock.Unlock()
+
+	log.Debugf("OutputDB.CreateTx: new database tx id #%d.", id)
 
 	return id, nil
 }
 
-func (s *Store) RollbackTx(txID int) (err error) {
+func (s *Store) RollbackTx(txID int) error {
+	s.lock.RLock()
 	tx, exists := s.tx[txID]
+	s.lock.RUnlock()
 	if !exists {
-		return errors.Errorf("Undefined transaction #%d", txID)
+		return errors.Errorf("OutputDB.RollbackTx: Undefined transaction #%d", txID)
 	}
 
-	return tx.Rollback()
-}
-
-func (s *Store) CommitTx(txID int) (err error) {
-	tx, exists := s.tx[txID]
-	if !exists {
-		return errors.Errorf("Undefined transaction #%d", txID)
-	}
-
-	return tx.Commit()
-}
-
-func (s *Store) SpendOutputWithTx(txID int, id uint64) error {
-	tx, exists := s.tx[txID]
-	if !exists {
-		return errors.Errorf("Undefined transaction #%d", txID)
-	}
-
-	query := `UPDATE ` + utxoTable + ` SET spent = ? WHERE id = ?`
-
-	stmt, err := tx.Prepare(query)
-	defer stmt.Close()
-
-	if err != nil {
-		return err
-	}
-
-	if id == 0 {
-		return ErrBadUO
-	}
-
-	_, err = stmt.Exec(common.SpentTxO, id)
+	err := tx.Rollback()
 	if err != nil {
 		return err
 	}
@@ -347,33 +343,117 @@ func (s *Store) SpendOutputWithTx(txID int, id uint64) error {
 	return nil
 }
 
-func (s *Store) AddOutputWithTx(txID int, uo *types.UTxO) (id int64, err error) {
+func (s *Store) CommitTx(txID int) (err error) {
+	s.lock.RLock()
 	tx, exists := s.tx[txID]
+	s.lock.RUnlock()
+	if !exists {
+		return errors.Errorf("OutputDB.CommitTx: Undefined transaction #%d", txID)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Store) SpendGenesis(txID int, address string) (rows int64, err error) {
+	s.lock.RLock()
+	tx, exists := s.tx[txID]
+	s.lock.RUnlock()
+
+	if !exists {
+		return 0, errors.Errorf("OutputDB.SpendGenesis: Undefined transaction #%d", txID)
+	}
+
+	query := `UPDATE ` + utxoTable + ` SET spent = ? WHERE address_to = ? AND tx_type = ? ;`
+
+	res, err := tx.Exec(query, common.SpentTxO, address, common.GenesisTxType)
+	if err != nil {
+		return 0, err
+	}
+
+	rows, err = res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+
+	if rows != 1 {
+		log.Debugf("Execute query: UPDATE %s SET spent = %d WHERE address_to = %s AND tx_type = %d ;", utxoTable, common.SpentTxO, address, common.GenesisTxType)
+	}
+
+	return
+}
+
+func (s *Store) AddOutputWithTx(txID int, uo *types.UTxO) (rows int64, err error) {
+	s.lock.RLock()
+	tx, exists := s.tx[txID]
+	s.lock.RUnlock()
 	if !exists {
 		return 0, errors.Errorf("Undefined transaction #%d", txID)
 	}
 
 	query := `INSERT INTO "` + utxoTable + `" (tx_type, hash, tx_index, address_from, address_to, amount, timestamp, spent, blockId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	stmt, err := tx.Prepare(query)
-	if err != nil {
-		return
-	}
-
-	defer stmt.Close()
 
 	hash := hex.EncodeToString(uo.Hash)
 	from := hex.EncodeToString(uo.From)
 	to := hex.EncodeToString(uo.To)
 
-	res, err := stmt.Exec(uo.TxType, hash, uo.Index, from, to, uo.Amount, time.Now().UnixNano(), common.UnspentTxO, uo.BlockNum)
+	res, err := tx.Exec(query, uo.TxType, hash, uo.Index, from, to, uo.Amount, uo.Timestamp, common.UnspentTxO, uo.BlockNum)
 	if err != nil {
 		return
 	}
 
-	id, err = res.LastInsertId()
+	rows, err = res.RowsAffected()
 	if err != nil {
 		return
+	}
+
+	if rows != 1 {
+		log.Debugf("Execute query: INSERT INTO %s (tx_type, hash, tx_index, address_from, address_to, amount, timestamp, spent, blockId) VALUES (%d, %s, %d, %s, %s, %d, %d, %d, %d)", utxoTable, uo.TxType, hash, uo.Index, from, to, uo.Amount, uo.Timestamp, common.UnspentTxO, uo.BlockNum)
 	}
 
 	return
+}
+
+func (s *Store) CleanSpent() error {
+	st, err := s.db.Prepare("DELETE FROM \"" + utxoTable + "\" WHERE spent = ? AND tx_type = ?")
+	if err != nil {
+		return err
+	}
+
+	defer st.Close()
+
+	_, err = st.Exec(common.SpentTxO, common.NormalTxType)
+
+	return err
+}
+
+func (s *Store) SpendOutputWithTx(txID int, hash string, index uint32) (int64, error) {
+	s.lock.RLock()
+	tx, exists := s.tx[txID]
+	s.lock.RUnlock()
+	if !exists {
+		return 0, errors.Errorf("Undefined transaction #%d", txID)
+	}
+
+	query := `DELETE FROM ` + utxoTable + ` WHERE hash = ? AND tx_index = ?`
+
+	res, err := tx.Exec(query, hash, index)
+	if err != nil {
+		return 0, err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+
+	if rows != 1 {
+		log.Debugf("Execute query: DELETE FROM %s WHERE hash = %s AND tx_index = %d", utxoTable, hash, index)
+	}
+
+	return rows, nil
 }
