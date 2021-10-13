@@ -1,6 +1,7 @@
 package rdochain
 
 import (
+	"encoding/hex"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -11,11 +12,16 @@ import (
 	"rdo_draft/proto/prototype"
 	"rdo_draft/shared/common"
 	"rdo_draft/shared/crypto"
+	"rdo_draft/shared/types"
+	"strconv"
+	"sync"
 	"time"
 )
 
 const (
 	txMinCout = 4 // minimum number of transactions in the block
+
+	slotTime = 1 * time.Second
 )
 
 var (
@@ -25,12 +31,16 @@ var (
 	log = logrus.WithField("prefix", "rdochain")
 )
 
+var nodeAddress = crypto.Keccak256Hash([]byte("super-node"))
+
 func NewBlockChain(db db.BlockStorage, ctx *cli.Context) (*BlockChain, error) {
 	bc := BlockChain{
 		db:           db,
 		prevHash:     GenesisHash,
 		blockNum:     1,
 		fullStatFlag: ctx.Bool(flags.LanSrvStat.Name),
+
+		lock: sync.RWMutex{},
 	}
 
 	err := bc.Init()
@@ -47,6 +57,8 @@ type BlockChain struct {
 	prevHash     []byte
 	blockNum     uint64
 	fullStatFlag bool
+
+	lock sync.RWMutex
 }
 
 // Init check database and update block num and previous hash
@@ -56,12 +68,12 @@ func (bc *BlockChain) Init() error {
 		return err
 	}
 
-	// means that
+	// means that we need to add genesis
 	if count == 0 {
 		return nil
 	}
 
-	bc.blockNum = uint64(count) + 1
+	bc.blockNum = uint64(count) + 1 // current block num
 	log.Infof("Database has %d blocks.", count)
 
 	// get last block for previous hash
@@ -71,7 +83,7 @@ func (bc *BlockChain) Init() error {
 	}
 
 	if block == nil {
-		log.Info("Block not found error")
+		log.Errorf("Not found block with num %d.", count)
 		return errors.New("block not found")
 	}
 
@@ -96,6 +108,18 @@ func (bc *BlockChain) GenerateAndSaveBlock(tx []*prototype.Transaction) (*protot
 
 	start = time.Now()
 
+	err = bc.ValidateBlock(block)
+	if err != nil {
+		return nil, err
+	}
+
+	if bc.fullStatFlag {
+		end := time.Since(start)
+		log.Infof("Validate block in %s", common.StatFmt(end))
+	}
+
+	start = time.Now()
+
 	err = bc.SaveBlock(block)
 	if err != nil {
 		return nil, err
@@ -109,10 +133,140 @@ func (bc *BlockChain) GenerateAndSaveBlock(tx []*prototype.Transaction) (*protot
 	return block, nil
 }
 
+// ValidateBlock validates given block.
+func (bc *BlockChain) ValidateBlock(block *prototype.Block) error {
+	// check that block has no double in outputs and inputs
+	inputExists := map[string]string{}
+	outputExists := map[string]string{}
+
+	start := time.Now()
+
+	var blockBalance uint64 = 0
+
+	for txIndex, tx := range block.Transactions {
+		// check inputs
+		for _, in := range tx.Inputs {
+			key := hex.EncodeToString(in.Hash) + "_" + strconv.Itoa(int(in.Index))
+
+			hash, exists := inputExists[key]
+			if exists {
+				curHash := hex.EncodeToString(tx.Hash) + "_" + strconv.Itoa(txIndex)
+				return errors.Errorf("Block #%d has double input in tx %s with key %s. Bad tx: %s.", block.Num, hash, key, curHash)
+			}
+
+			inputExists[key] = hex.EncodeToString(tx.Hash) + "_" + strconv.Itoa(txIndex)
+			blockBalance += in.Amount
+		}
+
+		// check outputs
+		for outIndex, out := range tx.Outputs {
+			key := hex.EncodeToString(tx.Hash) + "_" + strconv.Itoa(outIndex)
+
+			hash, exists := outputExists[key]
+			if exists {
+				curHash := hex.EncodeToString(tx.Hash) + "_" + strconv.Itoa(txIndex)
+				return errors.Errorf("Block #%d has double output in tx %s with key %s. Bad tx: %s.", block.Num, hash, key, curHash)
+			}
+
+			outputExists[key] = hex.EncodeToString(tx.Hash) + "_" + strconv.Itoa(txIndex)
+			blockBalance -= out.Amount
+		}
+	}
+
+	if bc.fullStatFlag {
+		end := time.Since(start)
+		log.Infof("Check block tx doubles in %s", common.StatFmt(end))
+	}
+
+	if blockBalance != 0 {
+		return errors.New("Wrong block balance.")
+	}
+
+	// TODO check tx root
+
+	tstamp := time.Now().UnixNano() + int64(slotTime)
+	if tstamp < int64(block.Timestamp) {
+		return errors.Errorf("Wrong block timestamp: %d. Timestamp with slot time: %d.", block.Timestamp, tstamp)
+	}
+
+	start = time.Now()
+
+	// check if block exists
+	b, err := bc.GetBlockByNum(int(block.Num))
+	if err != nil {
+		return errors.New("Error reading block from database.")
+	}
+
+	if bc.fullStatFlag {
+		end := time.Since(start)
+		log.Infof("Get block by num in %s", common.StatFmt(end))
+	}
+
+	if b != nil {
+		return errors.Errorf("Block #%d is already exists in blockchain!", block.Num)
+	}
+
+	start = time.Now()
+
+	// FIXME use prevhash here and create func findByHash
+	// find prevBlock
+	b, err = bc.GetBlockByNum(int(block.Num) - 1)
+	if err != nil {
+		return errors.New("Error reading block from database.")
+	}
+
+	if bc.fullStatFlag {
+		end := time.Since(start)
+		log.Infof("Check block tx doubles in %s", common.StatFmt(end)) // TODO change to the Find prev block
+	}
+
+	if b == nil {
+		return errors.Errorf("Previous Block #%d for given block #%d is not exists.", block.Num-1, block.Num)
+	}
+
+	if b.Timestamp >= block.Timestamp {
+		return errors.Errorf("Timestamp is too small. Previous: %d. Current: %d.", b.Timestamp, block.Timestamp)
+	}
+
+	// TODO check block approvers and slashers
+
+	return nil
+}
+
 // GenerateBlock creates block from given batch of transactions and store it to the database.
 func (bc *BlockChain) GenerateBlock(tx []*prototype.Transaction) (*prototype.Block, error) {
 	timestamp := time.Now().UnixNano()
-	h := bc.blockHash(bc.prevHash, bc.blockNum, timestamp) // hash
+
+	start := time.Now()
+
+	// generate fee tx for block
+	txFee, err := bc.createFeeTx(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	tx = append(tx, txFee)
+
+	if bc.fullStatFlag {
+		end := time.Since(start)
+		log.Infof("GenerateBlock: Create fee tx for address %s in %s.", hex.EncodeToString(nodeAddress), common.StatFmt(end))
+	}
+
+	start = time.Now()
+
+	// create tx merklee tree root
+	txRoot, err := bc.genTxRoot(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	if bc.fullStatFlag {
+		end := time.Since(start)
+		log.Infof("GenerateBlock: Create tx root in %s.", common.StatFmt(end))
+	}
+
+	// generate block hash
+	h := bc.blockHash(bc.prevHash, bc.blockNum, txRoot, nodeAddress)
 
 	block := &prototype.Block{
 		Num:       bc.blockNum,
@@ -120,10 +274,10 @@ func (bc *BlockChain) GenerateBlock(tx []*prototype.Transaction) (*prototype.Blo
 		Version:   []byte{1, 0, 0},
 		Hash:      h,
 		Parent:    bc.prevHash,
-		Txroot:    h,
+		Txroot:    txRoot,
 		Timestamp: uint64(timestamp),
 		Size:      33,
-		Proposer:  bc.sign(bc.prevHash, h),
+		Proposer:  bc.sign(bc.prevHash, nodeAddress),
 		Approvers: []*prototype.Sign{
 			bc.sign(bc.prevHash, h),
 			bc.sign(bc.prevHash, h),
@@ -159,17 +313,14 @@ func (bc *BlockChain) GetBlockByNum(num int) (*prototype.Block, error) {
 	return block, nil
 }
 
-func (bc *BlockChain) hashDomain(num uint64, timestamp int64) []byte {
-	data := make([]byte, 0, 16)
-	data = ssz.MarshalUint64(data, num)
-	data = ssz.MarshalUint64(data, uint64(timestamp))
+// blockHash returns blockHash
+func (bc *BlockChain) blockHash(prev []byte, num uint64, txroot []byte, proposer []byte) []byte {
+	res := make([]byte, 0, 8)
+	res = ssz.MarshalUint64(res, num)
 
-	return data
-}
-
-func (bc *BlockChain) blockHash(prev []byte, num uint64, timestamp int64) []byte {
-	res := bc.hashDomain(num, timestamp)
 	res = append(res, prev...)
+	res = append(res, txroot...)
+	res = append(res, proposer...)
 
 	h := crypto.Keccak256Hash(res)
 	res = h[:]
@@ -177,6 +328,7 @@ func (bc *BlockChain) blockHash(prev []byte, num uint64, timestamp int64) []byte
 	return res
 }
 
+// sign test function for signing some data
 func (bc *BlockChain) sign(prevHash []byte, hash []byte) *prototype.Sign {
 	res := prevHash[:]
 
@@ -194,6 +346,7 @@ func (bc *BlockChain) sign(prevHash []byte, hash []byte) *prototype.Sign {
 	return sign
 }
 
+// genKey creates []byte key for database row by block num
 func (bc *BlockChain) genKey(num int) []byte {
 	nbyte := make([]byte, 0)
 	nbyte = ssz.MarshalUint64(nbyte, uint64(num))
@@ -203,6 +356,99 @@ func (bc *BlockChain) genKey(num int) []byte {
 	return key
 }
 
+// GetBlockCount return current block number
 func (bc *BlockChain) GetBlockCount() uint64 {
-	return bc.blockNum
+	bc.lock.RLock()
+	num := bc.blockNum
+	bc.lock.RUnlock()
+
+	return num
+}
+
+// createFeeTx creates fee transaction.
+func (bc *BlockChain) createFeeTx(txarr []*prototype.Transaction) (*prototype.Transaction, error) {
+	var feeAmount uint64 = 0
+
+	for _, tx := range txarr {
+		feeAmount += tx.Fee
+	}
+
+	opts := types.TxOptions{
+		Outputs: []*prototype.TxOutput{
+			types.NewOutput(nodeAddress, feeAmount),
+		},
+		Type: common.FeeTxType,
+	}
+
+	ntx, err := types.NewTx(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// FeeTx num should be equal
+	// to the current block num
+	ntx.Num = bc.blockNum
+
+	return ntx, nil
+}
+
+// genTxRoot create transactions root hash of block
+func (bc *BlockChain) genTxRoot(txarr []*prototype.Transaction) ([]byte, error) {
+	data := make([][]byte, 0, len(txarr))
+
+	for _, tx := range txarr {
+		data = append(data, tx.Hash)
+	}
+
+	root, err := merkleeRoot(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return root, nil
+}
+
+// merkleeRoot return root hash with given []byte
+func merkleeRoot(data [][]byte) (res []byte, err error) {
+	size := len(data)
+
+	lvlKoef := size % 2
+	lvlCount := size/2 + lvlKoef
+	lvlSize := size
+
+	prevLvl := data
+	tree := make([][][]byte, lvlCount)
+
+	var mix []byte
+	for i := 0; i < lvlCount; i++ {
+		tree[i] = make([][]byte, 0)
+
+		for j := 0; j < lvlSize; j += 2 {
+			next := j + 1
+
+			if next == lvlSize {
+				mix = prevLvl[j]
+			} else {
+				mix = prevLvl[j]
+				mix = append(mix, prevLvl[next]...)
+			}
+
+			mix = crypto.Keccak256Hash(mix)
+
+			tree[i] = append(tree[i], mix)
+		}
+
+		lvlSize = len(tree[i])
+		prevLvl = tree[i]
+	}
+
+	d := tree[len(tree)-1]
+
+	if len(d) > 1 {
+		return nil, errors.New("Error creating MerkleeTree")
+	}
+
+	res = d[0]
+
+	return res, nil
 }

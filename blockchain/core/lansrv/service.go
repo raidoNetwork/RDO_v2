@@ -79,6 +79,8 @@ func NewLanSrv(ctx *cli.Context, db db.BlockStorage, outDB db.OutputManager) (*L
 		return nil, err
 	}
 
+	statFlag := ctx.Bool(flags.LanSrvStat.Name)
+
 	srv := &LanSrv{
 		ctx:    ctx,
 		err:    make(chan error),
@@ -94,13 +96,13 @@ func NewLanSrv(ctx *cli.Context, db db.BlockStorage, outDB db.OutputManager) (*L
 
 		// flags
 		readTestFlag: ctx.Bool(flags.DBReadTest.Name),
-		fullStatFlag: ctx.Bool(flags.LanSrvStat.Name),
+		fullStatFlag: statFlag,
 
 		// inputs
 		inputs: map[string][]*types.UTxO{},
 
 		// restore data
-		inputsTmp: []*types.UTxO{},
+		inputsTmp: map[string][]*types.UTxO{},
 	}
 
 	err = srv.loadBalances()
@@ -124,7 +126,7 @@ type LanSrv struct {
 
 	alreadySent map[string]int // map of users already sent tx in this block
 
-	bc *rdochain.BlockChain
+	bc        *rdochain.BlockChain
 
 	lastUTxO   uint64 // last utxo id
 	readBlocks int    // readed blocks counter
@@ -138,7 +140,7 @@ type LanSrv struct {
 
 	// inputs map[address] -> []*UTxO
 	inputs    map[string][]*types.UTxO
-	inputsTmp []*types.UTxO
+	inputsTmp map[string][]*types.UTxO
 }
 
 // loadBalances bootstraps service and get balances form UTxO storage
@@ -230,7 +232,18 @@ func (s *LanSrv) generatorLoop() {
 
 			num, err := s.genBlockWorker()
 			if err != nil {
-				log.Error("Error in tx generator loop.", err)
+				log.Errorf("Error in tx generator loop. %s", err.Error())
+
+				if errors.Is(err, ErrUtxoSize) {
+					log.Info("Got wrong UTxO count. Reload balances.")
+					err = s.loadBalances()
+
+					// if no error try another
+					if err == nil {
+						continue
+					}
+				}
+
 				s.err <- err
 				return
 			}
@@ -281,6 +294,18 @@ func (s *LanSrv) genBlockWorker() (uint64, error) {
 		return 0, err
 	}
 
+	// update SQLite
+	start = time.Now()
+	err = s.processBlock(block)
+	if err != nil {
+		return 0, err
+	}
+
+	if s.fullStatFlag {
+		end := time.Since(start)
+		log.Infof("Process block in %s.", common.StatFmt(end))
+	}
+
 	// reset already sent map after block creation
 	s.alreadySent = make(map[string]int, accountNum)
 
@@ -302,7 +327,7 @@ func (s *LanSrv) genTxWorker(blockNum uint64) (*prototype.Transaction, error) {
 	}
 
 	start = time.Now()
-
+	
 	err = s.validateTx(tx)
 	if err != nil {
 		return nil, err
@@ -313,17 +338,19 @@ func (s *LanSrv) genTxWorker(blockNum uint64) (*prototype.Transaction, error) {
 		log.Infof("genTxWorker: Validate tx in %s", common.StatFmt(end))
 	}
 
-	start = time.Now()
+	// save tx data
 
-	err = s.processTx(tx, blockNum)
-	if err != nil {
-		return nil, err
-	}
+	// FIXME test inputs has the same address
+	from := hex.EncodeToString(tx.Inputs[0].Address)
 
-	if s.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("genTxWorker: Prccess tx in %s", common.StatFmt(end))
-	}
+	// mark user as sender in this block
+	s.alreadySent[from] = 1
+
+	// save inputs to the tmp map
+	s.inputsTmp[from] = s.inputs[from][:]
+
+	// reset inputs of user
+	s.inputs[from] = make([]*types.UTxO, 0)
 
 	return tx, nil
 }
@@ -429,9 +456,15 @@ func (s *LanSrv) createTx(blockNum uint64) (*prototype.Transaction, error) {
 	end := time.Since(start)
 	log.Debugf("createTx: Find effective balance in %s", common.StatFmt(end))
 
+	eb := int(effectiveBalance)
+	if eb <= 0 {
+		log.Errorf("createTx: Error balance value %d.", eb)
+		return s.createTx(blockNum)
+	}
+
 	// generate random target amount
 	rand.Seed(time.Now().UnixNano())
-	targetAmount := uint64(rand.Intn(int(effectiveBalance)) + 1)
+	targetAmount := uint64(rand.Intn(eb) + 1)
 
 	log.Warnf("Address: %s Balance: %d. Trying to spend: %d.", from, balance, targetAmount)
 
@@ -543,7 +576,6 @@ func (s *LanSrv) validateTx(tx *prototype.Transaction) error {
 
 	start = time.Now()
 
-	// FIXME in tests all inputs have the same address but in real it can be different
 	from := hex.EncodeToString(tx.Inputs[0].Address)
 	usrKey := s.accman.GetKey(from)
 
@@ -657,244 +689,147 @@ func (s *LanSrv) validateTx(tx *prototype.Transaction) error {
 	return nil
 }
 
-// processTx add tx changes to the databases
-func (s *LanSrv) processTx(tx *prototype.Transaction, blockNum uint64) error {
-	// FIXME in tests all inputs have the same address but in real it can be different
-	from := hex.EncodeToString(tx.Inputs[0].Address)
+// processBlock update SQLite database with given transactions in block.
+func (s *LanSrv) processBlock(block *prototype.Block) error {
+	// check errors
+	errorsCheck := func(arows int64, blockTx int, outDB db.OutputManager, err error) error {
+		errb := outDB.RollbackTx(blockTx)
+		if errb != nil {
+			log.Errorf("processBlock: Rollback error on addTx: %s.", errb)
+		}
+
+		if arows != 1 {
+			log.Errorf("processBlock: Affected rows error. Got: %d. Error: %s.", arows, err.Error())
+			return ErrAffectedRows
+		} else {
+			log.Errorf("processBlock: %s.", err.Error())
+		}
+
+		// restore inputs
+		s.restoreInputs()
+
+		return err
+	}
 
 	start := time.Now()
 
-	txId, err := s.outDB.CreateTx()
+	var arows int64
+
+	blockTx, err := s.outDB.CreateTx()
 	if err != nil {
-		log.Error("processTx: Error creating database transaction.")
+		log.Panicf("processBlock: Error creating DB tx. %s.", err)
 		return err
 	}
 
-	var affectedRows int64
+	// update SQLite
+	for _, tx := range block.Transactions {
+		var from string
 
-	// spend all outputs which was used
-	for _, in := range tx.Inputs {
-		startInner := time.Now()
+		txHash := hex.EncodeToString(tx.Hash)
 
-		// doesn't delete genesis from DB
-		if bytes.Equal(in.Hash, genesisTxHash) {
-			affectedRows, err = s.outDB.SpendGenesis(txId, from)
-		} else {
-			affectedRows, err = s.outDB.SpendOutputWithTx(txId, hex.EncodeToString(in.Hash), in.Index)
-		}
+		startTxInner := time.Now() // whole transaction
+		startInner := time.Now()   // inputs or outputs block
 
-		if err != nil {
-			log.Errorf("processTx: Error spending output: %s.", err.Error())
+		// FeeTx has no inputs
+		if tx.Type != common.FeeTxType {
+			from = hex.EncodeToString(tx.Inputs[0].Address)
 
-			errb := s.outDB.RollbackTx(txId)
-			if errb != nil {
-				log.Errorf("processTx: Rollback error: %s.", errb)
+			// update inputs
+			for _, in := range tx.Inputs {
+				startIn := time.Now()
+
+				hash := hex.EncodeToString(in.Hash)
+
+				// doesn't delete genesis from DB
+				if bytes.Equal(in.Hash, genesisTxHash) {
+					arows, err = s.outDB.SpendGenesis(blockTx, from)
+				} else {
+					arows, err = s.outDB.SpendOutputWithTx(blockTx, hash, in.Index)
+				}
+
+				if err != nil || arows != 1 {
+					return errorsCheck(arows, blockTx, s.outDB, err)
+				}
+
+				if s.fullStatFlag {
+					endIn := time.Since(startIn)
+					log.Infof("processTx: Spent one output in %s", common.StatFmt(endIn))
+				}
 			}
 
-			return err
-		}
-
-		if affectedRows != 1 {
-			log.Errorf("Affected rows %d while executing query for spending.", affectedRows)
-
-			errb := s.outDB.RollbackTx(txId)
-			if errb != nil {
-				log.Errorf("processTx: Rollback error: %s.", errb)
-			}
-
-			return ErrAffectedRows
+		} else{
+			// TODO change it
+			from = hex.EncodeToString(crypto.Keccak256Hash([]byte("system")))
 		}
 
 		if s.fullStatFlag {
 			endInner := time.Since(startInner)
-			log.Infof("processTx: Spent one output in %s", common.StatFmt(endInner))
+			log.Infof("processBlock: Update tx %s inputs in %s.", txHash, common.StatFmt(endInner))
+		}
+
+		// update outputs
+		startInner = time.Now()
+
+		var index uint32 = 0
+		for _, out := range tx.Outputs {
+			startOut := time.Now()
+
+			uo := types.NewUTxO(tx.Hash, hexToByte(from), out.Address, index, out.Amount, block.Num)
+			arows, err = s.outDB.AddOutputWithTx(blockTx, uo)
+			if err != nil || arows != 1 {
+				return errorsCheck(arows, blockTx, s.outDB, err)
+			}
+
+			// add output to the map
+			to := hex.EncodeToString(uo.To)
+			s.inputs[to] = append(s.inputs[to], uo)
+
+			index++
+
+			if s.fullStatFlag {
+				endOut := time.Since(startOut)
+				log.Infof("processBlock: Add one output to DB in %s", common.StatFmt(endOut))
+			}
+		}
+
+		if s.fullStatFlag {
+			endInner := time.Since(startInner)
+			log.Infof("processBlock: Update tx %s outputs in %s.", txHash, common.StatFmt(endInner))
+		}
+
+		if s.fullStatFlag {
+			endTxInner := time.Since(startTxInner)
+			log.Infof("processBlock: Update all transaction %s data in %s.", txHash, common.StatFmt(endTxInner))
 		}
 	}
 
-	err = s.outDB.CommitTx(txId)
+	err = s.outDB.CommitTx(blockTx)
 	if err != nil {
-		log.Error("processTx: Error committing spend outputs transaction.")
+		log.Error("processBlock: Error committing block transaction.")
 
-		errb := s.outDB.RollbackTx(txId)
-		if errb != nil {
-			log.Errorf("processTx: Rollback error: %s.", errb)
-		}
+		// restore inputs
+		s.restoreInputs()
 
 		return err
 	}
 
 	if s.fullStatFlag {
 		end := time.Since(start)
-		log.Infof("processTx: Spent outputs in %s", common.StatFmt(end))
+		log.Infof("Update all block inputs, outputs in %s.", common.StatFmt(end))
 	}
 
-	// store sender inputs for future
-	s.inputsTmp = make([]*types.UTxO, 0, len(s.inputs[from]))
-	copy(s.inputsTmp, s.inputs[from])
-
-	// reset sender inputs
-	s.inputs[from] = make([]*types.UTxO, 0)
-
-	// update utxo memory
-	start = time.Now()
-
-	txId, err = s.outDB.CreateTx()
-	if err != nil {
-		log.Error("processTx: Error creating add outputs transaction.")
-		return err
-	}
-
-	var index uint32 = 0
-	for _, out := range tx.Outputs {
-		// new utxo
-		uo := types.NewUTxO(tx.Hash, hexToByte(from), out.Address, index, out.Amount, blockNum)
-
-		startInner := time.Now()
-
-		// add to database
-		affectedRows, err = s.outDB.AddOutputWithTx(txId, uo)
-		if err != nil {
-			log.Errorf("processTx: Error adding output: %s.", err.Error())
-
-			errb := s.outDB.RollbackTx(txId)
-			if errb != nil {
-				log.Errorf("processTx: Rollback error: %s.", errb)
-			}
-
-			// try to restore inputs of sender in database
-			errb = s.restoreInputs()
-			if errb != nil {
-				log.Panicf("Can't restore inputs of user %s. %s.", from, errb.Error())
-			}
-
-			return err
-		}
-
-		if affectedRows != 1 {
-			log.Errorf("Affected rows %d while executing query for adding.", affectedRows)
-
-			errb := s.outDB.RollbackTx(txId)
-			if errb != nil {
-				log.Errorf("processTx: Rollback error: %s.", errb)
-			}
-
-			// try to restore inputs of sender in database
-			errb = s.restoreInputs()
-			if errb != nil {
-				log.Panicf("Can't restore inputs of user %s. %s.", from, errb.Error())
-			}
-
-			return ErrAffectedRows
-		}
-
-		// add output to the map
-		to := hex.EncodeToString(uo.To)
-		s.inputs[to] = append(s.inputs[to], uo)
-
-		if s.fullStatFlag {
-			endInner := time.Since(startInner)
-			log.Infof("Add one output to DB in %s", common.StatFmt(endInner))
-		}
-
-		index++
-	}
-
-	err = s.outDB.CommitTx(txId)
-	if err != nil {
-		log.Error("processTx: Error committing add outputs transaction.")
-
-		errb := s.outDB.RollbackTx(txId)
-		if errb != nil {
-			log.Errorf("processTx: Rollback error: %s.", errb)
-		}
-
-		return err
-	}
-
-	if s.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("Create outputs in %s", common.StatFmt(end))
-	}
-
-	// update stats
-	s.alreadySent[from] = 1
-	s.count[from]++
-
-	log.Warnf("Processed tx %s", hex.EncodeToString(tx.Hash))
+	// reset inputs store
+	s.inputsTmp = make(map[string][]*types.UTxO)
 
 	return nil
 }
 
-func (s *LanSrv) restoreInputs() error {
-	log.Info("Start restoring inputs")
-
-	start := time.Now()
-
-	txId, err := s.outDB.CreateTx()
-	if err != nil {
-		log.Error("restoreInputs: Error creating add outputs transaction.")
-		return err
+func (s *LanSrv) restoreInputs() {
+	s.lock.Lock()
+	for addr, inputs := range s.inputsTmp {
+		s.inputs[addr] = inputs[:]
 	}
-
-	var affectedRows int64
-	for _, uo := range s.inputsTmp {
-		startInner := time.Now()
-
-		// restore input in the database
-		affectedRows, err = s.outDB.AddOutputWithTx(txId, uo)
-		if err != nil {
-			errb := s.outDB.RollbackTx(txId)
-			if errb != nil {
-				log.Errorf("restoreInputs: Rollback error: %s.", errb)
-			}
-
-			return err
-		}
-
-		if affectedRows != 1 {
-			log.Errorf("restoreInputs: Affected rows %d while executing query for adding.", affectedRows)
-
-			errb := s.outDB.RollbackTx(txId)
-			if errb != nil {
-				log.Errorf("restoreInputs: Rollback error: %s.", errb)
-			}
-
-			return ErrAffectedRows
-		}
-
-		// add output to the map
-		to := hex.EncodeToString(uo.To)
-		s.inputs[to] = append(s.inputs[to], uo)
-
-		if s.fullStatFlag {
-			endInner := time.Since(startInner)
-			log.Infof("Restore one output in %s", common.StatFmt(endInner))
-		}
-	}
-
-	err = s.outDB.CommitTx(txId)
-	if err != nil {
-		log.Error("restoreInputs: Error committing add outputs transaction.")
-
-		errb := s.outDB.RollbackTx(txId)
-		if errb != nil {
-			log.Errorf("restoreInputs: Rollback error: %s.", errb)
-		}
-
-		return err
-	}
-
-	// reset inputs diff
-	s.inputsTmp = make([]*types.UTxO, 0)
-
-	log.Info("Inputs successfully restore in the database.")
-
-	if s.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("Restore all outputs in %s", common.StatFmt(end))
-	}
-
-	return nil
+	s.lock.Unlock()
 }
 
 func (s *LanSrv) Stop() error {
