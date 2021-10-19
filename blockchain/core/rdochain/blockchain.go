@@ -1,6 +1,7 @@
 package rdochain
 
 import (
+	"bytes"
 	"encoding/hex"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/pkg/errors"
@@ -12,7 +13,6 @@ import (
 	"rdo_draft/proto/prototype"
 	"rdo_draft/shared/common"
 	"rdo_draft/shared/crypto"
-	"rdo_draft/shared/types"
 	"strconv"
 	"sync"
 	"time"
@@ -144,6 +144,19 @@ func (bc *BlockChain) ValidateBlock(block *prototype.Block) error {
 	var blockBalance uint64 = 0
 
 	for txIndex, tx := range block.Transactions {
+		// skip reward tx
+		if tx.Type == common.RewardTxType {
+			if len(tx.Outputs) != 1 {
+				return errors.New("Wrong tx reward outputs size.")
+			}
+
+			if tx.Outputs[0].Amount != bc.GetReward() {
+				return errors.New("Wrong block reward given.")
+			}
+
+			continue
+		}
+
 		// check inputs
 		for _, in := range tx.Inputs {
 			key := hex.EncodeToString(in.Hash) + "_" + strconv.Itoa(int(in.Index))
@@ -182,9 +195,18 @@ func (bc *BlockChain) ValidateBlock(block *prototype.Block) error {
 		return errors.New("Wrong block balance.")
 	}
 
-	// TODO check tx root
+	// check block tx root
+	txRoot, err := bc.GenTxRoot(block.Transactions)
+	if err != nil {
+		log.Error("BlockChain.ValidateBlock: error creating tx root.")
+		return err
+	}
 
-	tstamp := time.Now().UnixNano() + int64(slotTime)
+	if !bytes.Equal(txRoot, block.Txroot) {
+		return errors.Errorf("Block tx root mismatch. Given: %s. Expected: %s.", hex.EncodeToString(block.Txroot), hex.EncodeToString(txRoot))
+	}
+
+	tstamp := time.Now().UnixNano() + int64(common.SlotTime)
 	if tstamp < int64(block.Timestamp) {
 		return errors.Errorf("Wrong block timestamp: %d. Timestamp with slot time: %d.", block.Timestamp, tstamp)
 	}
@@ -208,27 +230,30 @@ func (bc *BlockChain) ValidateBlock(block *prototype.Block) error {
 
 	start = time.Now()
 
-	// FIXME use prevhash here and create func findByHash
 	// find prevBlock
-	b, err = bc.GetBlockByNum(int(block.Num) - 1)
+	prevBlockNum := int(block.Num) - 1
+	prevBlock, err := bc.GetBlockByNum(prevBlockNum)
 	if err != nil {
 		return errors.New("Error reading block from database.")
 	}
 
 	if bc.fullStatFlag {
 		end := time.Since(start)
-		log.Infof("Check block tx doubles in %s", common.StatFmt(end)) // TODO change to the Find prev block
+		log.Infof("Check prev block in %s", common.StatFmt(end))
 	}
 
-	if b == nil {
-		return errors.Errorf("Previous Block #%d for given block #%d is not exists.", block.Num-1, block.Num)
+	if prevBlock == nil {
+		// check if prevBlock is genesis
+		if prevBlockNum == 0 {
+			// add genesis check
+		} else {
+			return errors.Errorf("Previous Block #%d for given block #%d is not exists.", block.Num-1, block.Num)
+		}
 	}
 
-	if b.Timestamp >= block.Timestamp {
-		return errors.Errorf("Timestamp is too small. Previous: %d. Current: %d.", b.Timestamp, block.Timestamp)
+	if prevBlock.Timestamp >= block.Timestamp {
+		return errors.Errorf("Timestamp is too small. Previous: %d. Current: %d.", prevBlock.Timestamp, block.Timestamp)
 	}
-
-	// TODO check block approvers and slashers
 
 	return nil
 }
@@ -255,7 +280,7 @@ func (bc *BlockChain) GenerateBlock(tx []*prototype.Transaction) (*prototype.Blo
 	start = time.Now()
 
 	// create tx merklee tree root
-	txRoot, err := bc.genTxRoot(tx)
+	txRoot, err := bc.GenTxRoot(tx)
 	if err != nil {
 		return nil, err
 	}
@@ -365,35 +390,8 @@ func (bc *BlockChain) GetBlockCount() uint64 {
 	return num
 }
 
-// createFeeTx creates fee transaction.
-func (bc *BlockChain) createFeeTx(txarr []*prototype.Transaction) (*prototype.Transaction, error) {
-	var feeAmount uint64 = 0
-
-	for _, tx := range txarr {
-		feeAmount += tx.Fee
-	}
-
-	opts := types.TxOptions{
-		Outputs: []*prototype.TxOutput{
-			types.NewOutput(nodeAddress, feeAmount),
-		},
-		Type: common.FeeTxType,
-	}
-
-	ntx, err := types.NewTx(opts)
-	if err != nil {
-		return nil, err
-	}
-
-	// FeeTx num should be equal
-	// to the current block num
-	ntx.Num = bc.blockNum
-
-	return ntx, nil
-}
-
-// genTxRoot create transactions root hash of block
-func (bc *BlockChain) genTxRoot(txarr []*prototype.Transaction) ([]byte, error) {
+// GenTxRoot create transactions root hash of block
+func (bc *BlockChain) GenTxRoot(txarr []*prototype.Transaction) ([]byte, error) {
 	data := make([][]byte, 0, len(txarr))
 
 	for _, tx := range txarr {

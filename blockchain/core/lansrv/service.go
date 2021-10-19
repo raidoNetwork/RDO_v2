@@ -327,7 +327,7 @@ func (s *LanSrv) genTxWorker(blockNum uint64) (*prototype.Transaction, error) {
 	}
 
 	start = time.Now()
-	
+
 	err = s.validateTx(tx)
 	if err != nil {
 		return nil, err
