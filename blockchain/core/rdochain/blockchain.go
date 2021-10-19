@@ -21,7 +21,7 @@ import (
 const (
 	txMinCout = 4 // minimum number of transactions in the block
 
-	slotTime = 1 * time.Second
+	GenesisBlockNum = 0
 )
 
 var (
@@ -31,14 +31,15 @@ var (
 	log = logrus.WithField("prefix", "rdochain")
 )
 
+// test node address
 var nodeAddress = crypto.Keccak256Hash([]byte("super-node"))
 
 func NewBlockChain(db db.BlockStorage, ctx *cli.Context) (*BlockChain, error) {
 	bc := BlockChain{
 		db:           db,
 		prevHash:     GenesisHash,
-		blockNum:     1,
-		fullStatFlag: ctx.Bool(flags.LanSrvStat.Name),
+		blockNum:     GenesisBlockNum + 1,             // first block has number genesis num + 1
+		fullStatFlag: ctx.Bool(flags.LanSrvStat.Name), // stat flag
 
 		lock: sync.RWMutex{},
 	}
@@ -129,6 +130,8 @@ func (bc *BlockChain) GenerateAndSaveBlock(tx []*prototype.Transaction) (*protot
 		end := time.Since(start)
 		log.Infof("Store block in %s", common.StatFmt(end))
 	}
+
+	bc.blockNum++
 
 	return block, nil
 }
@@ -245,7 +248,7 @@ func (bc *BlockChain) ValidateBlock(block *prototype.Block) error {
 	if prevBlock == nil {
 		// check if prevBlock is genesis
 		if prevBlockNum == 0 {
-			// add genesis check
+			// add genesis get func
 		} else {
 			return errors.Errorf("Previous Block #%d for given block #%d is not exists.", block.Num-1, block.Num)
 		}
@@ -275,6 +278,21 @@ func (bc *BlockChain) GenerateBlock(tx []*prototype.Transaction) (*prototype.Blo
 	if bc.fullStatFlag {
 		end := time.Since(start)
 		log.Infof("GenerateBlock: Create fee tx for address %s in %s.", hex.EncodeToString(nodeAddress), common.StatFmt(end))
+	}
+
+	start = time.Now()
+
+	// generate reward tx for block
+	txReward, err := bc.createRewardTx()
+	if err != nil {
+		return nil, err
+	}
+
+	tx = append(tx, txReward)
+
+	if bc.fullStatFlag {
+		end := time.Since(start)
+		log.Infof("GenerateBlock: Create reward tx for address %s in %s.", hex.EncodeToString(nodeAddress), common.StatFmt(end))
 	}
 
 	start = time.Now()
@@ -317,7 +335,6 @@ func (bc *BlockChain) GenerateBlock(tx []*prototype.Transaction) (*prototype.Blo
 
 	block.Size = uint32(block.SizeSSZ())
 
-	bc.blockNum++
 	bc.prevHash = h
 
 	return block, nil

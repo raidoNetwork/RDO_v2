@@ -359,7 +359,7 @@ func (s *LanSrv) genTxWorker(blockNum uint64) (*prototype.Transaction, error) {
 func (s *LanSrv) createTx(blockNum uint64) (*prototype.Transaction, error) {
 	log.Infof("createTx: Start creating tx for block #%d.", blockNum)
 
-	if s.nullBalance == accountNum {
+	if s.nullBalance >= accountNum {
 		return nil, errors.New("All balances are empty.")
 	}
 
@@ -401,8 +401,6 @@ func (s *LanSrv) createTx(blockNum uint64) (*prototype.Transaction, error) {
 	userInputs := s.inputs[from]
 	inputsArr := make([]*prototype.TxInput, 0, len(userInputs))
 
-	start = time.Now()
-
 	usrKey := s.accman.GetKey(from)
 
 	// count balance
@@ -411,11 +409,6 @@ func (s *LanSrv) createTx(blockNum uint64) (*prototype.Transaction, error) {
 		balance += uo.Amount
 
 		inputsArr = append(inputsArr, uo.ToInput(usrKey))
-	}
-
-	if s.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("createTx: Count balance in %s", common.StatFmt(end))
 	}
 
 	// if balance is equal to zero try to create new transaction
@@ -431,7 +424,7 @@ func (s *LanSrv) createTx(blockNum uint64) (*prototype.Transaction, error) {
 		return s.createTx(blockNum)
 	}
 
-	fee := getFee()
+	fee := getFee() // get price for 1 byte of tx
 	opts := types.TxOptions{
 		Fee:    fee,
 		Num:    s.count[from],
@@ -440,51 +433,24 @@ func (s *LanSrv) createTx(blockNum uint64) (*prototype.Transaction, error) {
 		Inputs: inputsArr,
 	}
 
-	start = time.Now()
-
-	// maximum value user can spent
-	effectiveBalance := balance - fee
-
-	// if we got negative or zero effective balance
-	// find another fee and try one more time
-	for effectiveBalance <= 0 {
-		fee = getFee()
-		effectiveBalance = balance - fee
-	}
-
-	// debug stat
-	end := time.Since(start)
-	log.Debugf("createTx: Find effective balance in %s", common.StatFmt(end))
-
-	eb := int(effectiveBalance)
-	if eb <= 0 {
-		log.Errorf("createTx: Error balance value %d.", eb)
-		return s.createTx(blockNum)
-	}
-
 	// generate random target amount
-	rand.Seed(time.Now().UnixNano())
-	targetAmount := uint64(rand.Intn(eb) + 1)
+	targetAmount := RandUint64(1, balance)
 
 	log.Warnf("Address: %s Balance: %d. Trying to spend: %d.", from, balance, targetAmount)
 
-	outputCount := rand.Intn(outputsLimit) + 1 // outputs size limit
-	change := effectiveBalance - targetAmount  // user change
+	change := balance - targetAmount // user change
 
-	// check something strange
-	if change < 0 {
-		return nil, errors.Errorf("User %s has negative change: %d. Effective balance: %d. Target amount: %d.", from, change, effectiveBalance, targetAmount)
+	if change == 0 {
+		return nil, errors.Errorf("Null change.")
 	}
+
+	outputCount := rand.Intn(outputsLimit) + 1 // outputs size limit
 
 	var out *prototype.TxOutput
 
 	// create change output
-	if change > 0 {
-		out = types.NewOutput(hexToByte(from), change)
-		opts.Outputs = append(opts.Outputs, out)
-
-		log.Infof("Account %s has change: %d.", from, change)
-	}
+	out = types.NewOutput(hexToByte(from), change)
+	opts.Outputs = append(opts.Outputs, out)
 
 	outAmount := targetAmount      // output total balance should be equal to the input balance
 	sentOutput := map[string]int{} // list of users who have already received money
@@ -509,10 +475,16 @@ func (s *LanSrv) createTx(blockNum uint64) (*prototype.Transaction, error) {
 			continue
 		}
 
-		amount := uint64(rand.Intn(int(outAmount)) + 1) // get random amount
+		// get random amount
+		amount := RandUint64(1, outAmount)
 
-		// if it is a last cycle iteration and random amount is not equal to remaining amount (outAmount)
-		if i == outputCount-1 && outAmount != amount {
+		if i != outputCount-1 {
+			if amount == outAmount {
+				k := uint64(outputCount - i)
+				amount = outAmount / k
+			}
+		} else if outAmount != amount {
+			// if it is a last cycle iteration and random amount is not equal to remaining amount (outAmount)
 			amount = outAmount
 		}
 
@@ -534,10 +506,30 @@ func (s *LanSrv) createTx(blockNum uint64) (*prototype.Transaction, error) {
 		return nil, err
 	}
 
+	realFee := tx.GetRealFee()
+
+	errFeeTooBig := errors.Errorf("Tx can't pay fee. Balance: %d. Value: %d. Fee: %d. Change: %d.", balance, targetAmount, realFee, change)
+
+	if change > realFee {
+		change -= realFee
+		tx.Outputs[0].Amount = change
+	} else if len(tx.Outputs) >= 2 {
+		amount := tx.Outputs[1].Amount
+
+		if amount <= realFee {
+			return nil, errFeeTooBig
+		} else {
+			tx.Outputs[1].Amount -= realFee
+		}
+	} else {
+		return nil, errFeeTooBig
+	}
+
 	log.Warnf("Generated tx %s", hex.EncodeToString(tx.Hash))
 
 	return tx, nil
 }
+
 
 // validateTx check if tx is correct
 func (s *LanSrv) validateTx(tx *prototype.Transaction) error {
@@ -555,8 +547,6 @@ func (s *LanSrv) validateTx(tx *prototype.Transaction) error {
 	var txBalance uint64 = 0
 	for _, in := range tx.Inputs {
 		txBalance += in.Amount
-
-		// TODO add signature validation here
 	}
 
 	for _, out := range tx.Outputs {
@@ -758,8 +748,7 @@ func (s *LanSrv) processBlock(block *prototype.Block) error {
 			}
 
 		} else{
-			// TODO change it
-			from = hex.EncodeToString(crypto.Keccak256Hash([]byte("system")))
+			from = ""
 		}
 
 		if s.fullStatFlag {
@@ -905,4 +894,13 @@ func getFee() uint64 {
 	rand.Seed(time.Now().UnixNano())
 
 	return uint64(rand.Intn(maxFee-minFee) + minFee)
+}
+
+func RandUint64(min, max uint64) uint64 {
+	rand.Seed(time.Now().UnixNano())
+	rnd := rand.Intn(100) + 1
+
+	res := uint64(rnd)*(max-min)/100 + min
+
+	return res
 }
