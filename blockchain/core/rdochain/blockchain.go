@@ -248,14 +248,10 @@ func (bc *BlockChain) ValidateBlock(block *prototype.Block) error {
 	if prevBlock == nil {
 		// check if prevBlock is genesis
 		if prevBlockNum == 0 {
-			// add genesis get func
+			// do nothing
 		} else {
 			return errors.Errorf("Previous Block #%d for given block #%d is not exists.", block.Num-1, block.Num)
 		}
-	}
-
-	if prevBlock.Timestamp >= block.Timestamp {
-		return errors.Errorf("Timestamp is too small. Previous: %d. Current: %d.", prevBlock.Timestamp, block.Timestamp)
 	}
 
 	return nil

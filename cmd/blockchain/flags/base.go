@@ -127,4 +127,9 @@ var (
 		Name:  "lan-srv-stat",
 		Usage: "Show full statistics of lan server",
 	}
+
+	LanSrvExpStat = &cli.BoolFlag{
+		Name:  "lan-srv-exp-stat",
+		Usage: "Show exposed statistics of lan server",
+	}
 )

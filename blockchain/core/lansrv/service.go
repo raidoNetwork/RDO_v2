@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"math/rand"
+	"rdo_draft/blockchain/consensus"
 	"rdo_draft/blockchain/core/rdochain"
 	"rdo_draft/blockchain/db"
 	"rdo_draft/cmd/blockchain/flags"
@@ -14,7 +15,6 @@ import (
 	"rdo_draft/shared/common"
 	"rdo_draft/shared/crypto"
 	"rdo_draft/shared/types"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -80,6 +80,9 @@ func NewLanSrv(ctx *cli.Context, db db.BlockStorage, outDB db.OutputManager) (*L
 	}
 
 	statFlag := ctx.Bool(flags.LanSrvStat.Name)
+	expStatFlag := ctx.Bool(flags.LanSrvExpStat.Name)
+
+	validator := consensus.NewCryspValidator(bc, outDB, statFlag, expStatFlag)
 
 	srv := &LanSrv{
 		ctx:    ctx,
@@ -88,6 +91,7 @@ func NewLanSrv(ctx *cli.Context, db db.BlockStorage, outDB db.OutputManager) (*L
 		outDB:  outDB,
 		accman: accman,
 		bc:     bc,
+		validator: validator,
 
 		count:       make(map[string]uint64, accountNum),
 		alreadySent: make(map[string]int, accountNum),
@@ -127,6 +131,7 @@ type LanSrv struct {
 	alreadySent map[string]int // map of users already sent tx in this block
 
 	bc        *rdochain.BlockChain
+	validator consensus.TxValidator // transaction validator
 
 	lastUTxO   uint64 // last utxo id
 	readBlocks int    // readed blocks counter
@@ -170,7 +175,7 @@ func (s *LanSrv) loadBalances() error {
 		if genesisUo == nil {
 			log.Infof("Address %s doesn't have genesis outputs.", addr)
 
-			genesisUo = types.NewUTxO(genesisTxHash, rdochain.GenesisHash, addrInBytes, index, startAmount, 1)
+			genesisUo = types.NewUTxO(genesisTxHash, rdochain.GenesisHash, addrInBytes, index, startAmount, rdochain.GenesisBlockNum, common.GenesisTxType)
 			genesisUo.TxType = common.GenesisTxType
 
 			id, err := s.outDB.AddOutput(genesisUo)
@@ -258,6 +263,7 @@ func (s *LanSrv) generatorLoop() {
 	}
 }
 
+
 // genBlockWorker worker for creating one block and store it to the database
 func (s *LanSrv) genBlockWorker() (uint64, error) {
 	txBatch := make([]*prototype.Transaction, txLimit)
@@ -284,7 +290,7 @@ func (s *LanSrv) genBlockWorker() (uint64, error) {
 
 	if s.fullStatFlag {
 		end := time.Since(start)
-		log.Infof("Generate transactions for block. Count: %d Time: %s", txLimit, common.StatFmt(end))
+		log.Infof("Generated transaction batch. Count: %d Time: %s", txLimit, common.StatFmt(end))
 	}
 
 	// create and store block
@@ -328,7 +334,7 @@ func (s *LanSrv) genTxWorker(blockNum uint64) (*prototype.Transaction, error) {
 
 	start = time.Now()
 
-	err = s.validateTx(tx)
+	err = s.validator.ValidateTransaction(tx)
 	if err != nil {
 		return nil, err
 	}
@@ -339,8 +345,6 @@ func (s *LanSrv) genTxWorker(blockNum uint64) (*prototype.Transaction, error) {
 	}
 
 	// save tx data
-
-	// FIXME test inputs has the same address
 	from := hex.EncodeToString(tx.Inputs[0].Address)
 
 	// mark user as sender in this block
@@ -351,6 +355,10 @@ func (s *LanSrv) genTxWorker(blockNum uint64) (*prototype.Transaction, error) {
 
 	// reset inputs of user
 	s.inputs[from] = make([]*types.UTxO, 0)
+
+	if s.fullStatFlag {
+		log.Infof("Reset addr %s balance.", from)
+	}
 
 	return tx, nil
 }
@@ -530,184 +538,13 @@ func (s *LanSrv) createTx(blockNum uint64) (*prototype.Transaction, error) {
 	return tx, nil
 }
 
-
-// validateTx check if tx is correct
-func (s *LanSrv) validateTx(tx *prototype.Transaction) error {
-	if len(tx.Inputs) == 0 {
-		return errors.Errorf("Empty tx inputs.")
-	}
-
-	if len(tx.Outputs) == 0 {
-		return errors.Errorf("Empty tx outputs.")
-	}
-
-	start := time.Now()
-
-	// check that inputs and outputs balance with fee are equal
-	var txBalance uint64 = 0
-	for _, in := range tx.Inputs {
-		txBalance += in.Amount
-	}
-
-	for _, out := range tx.Outputs {
-		txBalance -= out.Amount
-	}
-
-	txBalance -= tx.Fee
-
-	if s.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("validateTx: Check Tx balance in %s.", common.StatFmt(end))
-	}
-
-	if txBalance != 0 {
-		return errors.Errorf("Tx balance is inconsistent. Mismatch is %d.", txBalance)
-	}
-
-	start = time.Now()
-
-	from := hex.EncodeToString(tx.Inputs[0].Address)
-	usrKey := s.accman.GetKey(from)
-
-	// get user inputs from DB
-	utxo, err := s.outDB.FindAllUTxO(from)
-	if err != nil {
-		return errors.Wrap(err, "validateTx")
-	}
-
-	utxoSize := len(utxo)
-
-	if s.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("validateTx: Read all UTxO of user %s Count: %d Time: %s", from, utxoSize, common.StatFmt(end))
-	}
-
-	inputsSize := len(tx.Inputs)
-
-	if utxoSize != inputsSize {
-		return errors.Errorf("validateTx: Inputs size mismatch: real - %d given - %d.", utxoSize, inputsSize)
-	}
-
-	if utxoSize == 0 {
-		return ErrUtxoSize
-	}
-
-	// create spentOutputs map
-	spentOutputsMap := map[string]*prototype.TxInput{}
-
-	start = time.Now()
-
-	// count balance and create spent map
-	var balance uint64
-	var key, hash, indexStr string
-	for _, uo := range utxo {
-		hash = hex.EncodeToString(uo.Hash)
-		indexStr = strconv.Itoa(int(uo.Index))
-		key = hash + "_" + indexStr
-
-		// fill map with outputs from db
-		spentOutputsMap[key] = uo.ToInput(usrKey)
-		balance += uo.Amount
-	}
-
-	if s.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("validateTx: Count balance in %s", common.StatFmt(end))
-	}
-
-	// if balance is equal to zero try to create new transaction
-	if balance == 0 {
-		return errors.Errorf("Account %s has balance 0.", from)
-	}
-
-	alreadySpent := map[string]int{}
-
-	// Inputs verification
-	for _, in := range tx.Inputs {
-		hash = hex.EncodeToString(in.Hash)
-		indexStr = strconv.Itoa(int(in.Index))
-		key = hash + "_" + indexStr
-
-		dbInput, exists := spentOutputsMap[key]
-		if !exists {
-			return errors.Errorf("User %s gave undefined output with key: %s.", from, key)
-		}
-
-		if alreadySpent[key] == 1 {
-			return errors.Errorf("User %s try to spend output twice with key: %s.", from, key)
-		}
-
-		if !bytes.Equal(dbInput.Hash, in.Hash) {
-			return errors.Errorf("Hash mismatch with key %s. Given %s. Expected %s.", key, hash, hex.EncodeToString(dbInput.Hash))
-		}
-
-		if in.Index != dbInput.Index {
-			return errors.Errorf("Index mismatch with key %s. Given %d. Expected %d.", key, in.Index, dbInput.Index)
-		}
-
-		if in.Amount != dbInput.Amount {
-			return errors.Errorf("Amount mismatch with key: %s. Given %d. Expected %d.", key, in.Amount, dbInput.Amount)
-		}
-
-		// TODO check negative amount case
-
-		// mark output as already spent
-		alreadySpent[key] = 1
-	}
-
-	if s.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("validateTx: Inputs verification. Count: %d. Time: %s.", inputsSize, common.StatFmt(end))
-	}
-
-	start = time.Now()
-
-	//Check that all outputs are spent
-	for _, isSpent := range alreadySpent {
-		if isSpent != 1 {
-			return errors.Errorf("Unspent output of user %s with key %s.", from, key)
-		}
-	}
-
-	if s.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("validateTx: Verify all inputs are lock for spent in %s.", common.StatFmt(end))
-	}
-
-	log.Warnf("Validated tx %s", hex.EncodeToString(tx.Hash))
-
-	return nil
-}
-
 // processBlock update SQLite database with given transactions in block.
 func (s *LanSrv) processBlock(block *prototype.Block) error {
-	// check errors
-	errorsCheck := func(arows int64, blockTx int, outDB db.OutputManager, err error) error {
-		errb := outDB.RollbackTx(blockTx)
-		if errb != nil {
-			log.Errorf("processBlock: Rollback error on addTx: %s.", errb)
-		}
-
-		if arows != 1 {
-			log.Errorf("processBlock: Affected rows error. Got: %d. Error: %s.", arows, err.Error())
-			return ErrAffectedRows
-		} else {
-			log.Errorf("processBlock: %s.", err.Error())
-		}
-
-		// restore inputs
-		s.restoreInputs()
-
-		return err
-	}
-
 	start := time.Now()
-
-	var arows int64
 
 	blockTx, err := s.outDB.CreateTx()
 	if err != nil {
-		log.Panicf("processBlock: Error creating DB tx. %s.", err)
+		log.Errorf("processBlock: Error creating DB tx. %s.", err)
 		return err
 	}
 
@@ -720,34 +557,17 @@ func (s *LanSrv) processBlock(block *prototype.Block) error {
 		startTxInner := time.Now() // whole transaction
 		startInner := time.Now()   // inputs or outputs block
 
-		// FeeTx has no inputs
-		if tx.Type != common.FeeTxType {
+		// Only normal Tx has inputs
+		if tx.Type == common.NormalTxType {
 			from = hex.EncodeToString(tx.Inputs[0].Address)
 
-			// update inputs
-			for _, in := range tx.Inputs {
-				startIn := time.Now()
-
-				hash := hex.EncodeToString(in.Hash)
-
-				// doesn't delete genesis from DB
-				if bytes.Equal(in.Hash, genesisTxHash) {
-					arows, err = s.outDB.SpendGenesis(blockTx, from)
-				} else {
-					arows, err = s.outDB.SpendOutputWithTx(blockTx, hash, in.Index)
-				}
-
-				if err != nil || arows != 1 {
-					return errorsCheck(arows, blockTx, s.outDB, err)
-				}
-
-				if s.fullStatFlag {
-					endIn := time.Since(startIn)
-					log.Infof("processTx: Spent one output in %s", common.StatFmt(endIn))
-				}
+			// update tx inputs in database
+			err := s.processBlockInputs(blockTx, tx)
+			if err != nil {
+				return err
 			}
-
-		} else{
+		} else {
+			// for FeeTx and RewardTx
 			from = ""
 		}
 
@@ -759,26 +579,10 @@ func (s *LanSrv) processBlock(block *prototype.Block) error {
 		// update outputs
 		startInner = time.Now()
 
-		var index uint32 = 0
-		for _, out := range tx.Outputs {
-			startOut := time.Now()
-
-			uo := types.NewUTxO(tx.Hash, hexToByte(from), out.Address, index, out.Amount, block.Num)
-			arows, err = s.outDB.AddOutputWithTx(blockTx, uo)
-			if err != nil || arows != 1 {
-				return errorsCheck(arows, blockTx, s.outDB, err)
-			}
-
-			// add output to the map
-			to := hex.EncodeToString(uo.To)
-			s.inputs[to] = append(s.inputs[to], uo)
-
-			index++
-
-			if s.fullStatFlag {
-				endOut := time.Since(startOut)
-				log.Infof("processBlock: Add one output to DB in %s", common.StatFmt(endOut))
-			}
+		// create tx outputs in the database
+		err := s.proccesBlockOutputs(blockTx, tx, from, block.Num)
+		if err != nil {
+			return err
 		}
 
 		if s.fullStatFlag {
@@ -813,10 +617,107 @@ func (s *LanSrv) processBlock(block *prototype.Block) error {
 	return nil
 }
 
+// processBlockInputs updates all transaction inputs in the database with given DB tx
+func (s *LanSrv) processBlockInputs(blockTx int, tx *prototype.Transaction) error {
+		var arows int64
+	var err error
+
+	// update inputs
+	for _, in := range tx.Inputs {
+		startIn := time.Now()
+
+		from := hex.EncodeToString(in.Address)
+		hash := hex.EncodeToString(in.Hash)
+
+		// doesn't delete genesis from DB
+		if bytes.Equal(in.Hash, genesisTxHash) {
+			arows, err = s.outDB.SpendGenesis(blockTx, from)
+		} else {
+			arows, err = s.outDB.SpendOutputWithTx(blockTx, hash, in.Index)
+		}
+
+		if err != nil || arows != 1 {
+			return s.errorsCheck(arows, blockTx, err)
+		}
+
+		if s.fullStatFlag {
+			endIn := time.Since(startIn)
+			log.Infof("processBlockInputs: Spent one output in %s", common.StatFmt(endIn))
+		}
+	}
+
+	return nil
+}
+
+// processBlockOutputs creates all transaction output in the database with given tx
+// and rollback tx if error return
+func (s *LanSrv) proccesBlockOutputs(blockTx int, tx *prototype.Transaction, from string, blockNum uint64) error {
+	var index uint32 = 0
+	var arows int64
+	var err error
+
+	for _, out := range tx.Outputs {
+		startOut := time.Now()
+
+		uo := types.NewUTxO(tx.Hash, hexToByte(from), out.Address, index, out.Amount, blockNum, int(tx.Type))
+
+		if tx.Type == common.NormalTxType || tx.Type == common.GenesisTxType {
+			arows, err = s.outDB.AddOutputWithTx(blockTx, uo)
+		} else {
+			arows, err = s.outDB.AddNodeOutputWithTx(blockTx, uo)
+		}
+
+		if err != nil || arows != 1 {
+			return s.errorsCheck(arows, blockTx, err)
+		}
+
+		// add output to the map
+		to := hex.EncodeToString(uo.To)
+		s.inputs[to] = append(s.inputs[to], uo)
+
+		index++
+
+		if s.fullStatFlag {
+			endOut := time.Since(startOut)
+			log.Infof("processBlockOutputs: Add one output to DB in %s", common.StatFmt(endOut))
+			log.Infof("processBlockOutputs: Add %d to addr %s", uo.Amount, to)
+		}
+	}
+
+	return nil
+}
+
+// errorsCheck check error type when updating database and rollback all changes
+func (s *LanSrv) errorsCheck(arows int64, blockTx int, err error) error {
+	errb := s.outDB.RollbackTx(blockTx)
+	if errb != nil {
+		log.Errorf("processBlock: Rollback error on addTx: %s.", errb)
+	}
+
+	if arows != 1 {
+		if err != nil {
+			log.Errorf("processBlock: Error: %s.", err.Error())
+		}
+		log.Errorf("processBlock: Affected rows error. Got: %d.", arows)
+		return ErrAffectedRows
+	} else {
+		log.Errorf("processBlock: %s.", err.Error())
+	}
+
+	// restore inputs
+	s.restoreInputs()
+
+	return err
+}
+
 func (s *LanSrv) restoreInputs() {
 	s.lock.Lock()
 	for addr, inputs := range s.inputsTmp {
 		s.inputs[addr] = inputs[:]
+
+		if s.fullStatFlag {
+			log.Infof("restoreInputs: Add inputs count %d to addr %s", len(inputs), addr)
+		}
 	}
 	s.lock.Unlock()
 }
@@ -891,9 +792,12 @@ func hexToByte(h string) []byte {
 }
 
 func getFee() uint64 {
-	rand.Seed(time.Now().UnixNano())
+	/*rand.Seed(time.Now().UnixNano())
 
-	return uint64(rand.Intn(maxFee-minFee) + minFee)
+	return uint64(rand.Intn(maxFee-minFee) + minFee)*/
+
+	// return fix fee for tests
+	return minFee
 }
 
 func RandUint64(min, max uint64) uint64 {

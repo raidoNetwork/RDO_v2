@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"rdo_draft/proto/prototype"
-	"rdo_draft/shared/common"
 	"time"
 )
 
@@ -56,7 +55,7 @@ func (uo *UTxO) ToString() string {
 		uo.Timestamp)
 }
 
-func NewUTxO(hash, from, to []byte, index uint32, amount uint64, blockNum uint64) *UTxO {
+func NewUTxO(hash, from, to []byte, index uint32, amount uint64, blockNum uint64, typev int) *UTxO {
 	uo := UTxO{
 		Hash:      hash,
 		Index:     index,
@@ -65,7 +64,7 @@ func NewUTxO(hash, from, to []byte, index uint32, amount uint64, blockNum uint64
 		Amount:    amount,
 		Timestamp: uint64(time.Now().UnixNano()),
 		BlockNum:  blockNum,
-		TxType:    common.NormalTxType,
+		TxType:    typev,
 	}
 
 	return &uo

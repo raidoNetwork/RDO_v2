@@ -93,6 +93,8 @@ func main() {
 			}
 		}
 
+		logrus.SetLevel(logrus.DebugLevel)
+
 		// runtimeDebug.SetGCPercent(100)
 
 		runtime.GOMAXPROCS(runtime.NumCPU())

@@ -37,6 +37,9 @@ type OutputManager interface {
 	// AddOutputWithTx - add unspent output to the database in database transaction.
 	AddOutputWithTx(int, *types.UTxO) (int64, error)
 
+	// AddNodeOutputWithTx - create outputs for special transactions
+	AddNodeOutputWithTx(int, *types.UTxO) (int64, error)
+
 	// HealthCheck - test function which read and print last 20 rows in order to know database is working correctly.
 	HealthCheck() (uint64, error)
 

@@ -26,20 +26,26 @@ func NewInput(hash []byte, index uint32, out *TxOutput, key *ecdsa.PrivateKey) (
 		Address: out.Address,
 	}
 
-	signer := MakeInputSigner("keccak256")
+	if key != nil {
+		signer := MakeInputSigner("keccak256")
 
-	// signature digest = Keccak256(index + amount + hash)
-	dgst := GetInputDomain(index, out.Amount, hash)
-	sign, err := signer.Sign(dgst, key)
-	if err != nil {
-		return nil, err
-	}
+		// signature digest = Keccak256(index + amount + hash)
+		dgst := GetInputDomain(index, out.Amount, hash)
+		sign, err := signer.Sign(dgst, key)
+		if err != nil {
+			return nil, err
+		}
 
-	signa := make([]byte, 31)
-	signa = append(signa, sign...)
+		signa := make([]byte, 31)
+		signa = append(signa, sign...)
 
-	input.Sign = &Sign{
-		Signature: signa,
+		input.Sign = &Sign{
+			Signature: signa,
+		}
+	} else {
+		input.Sign = &Sign{
+			Signature: make([]byte, 96),
+		}
 	}
 
 	return &input, nil
