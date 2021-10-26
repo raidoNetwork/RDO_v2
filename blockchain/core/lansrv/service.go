@@ -131,7 +131,7 @@ type LanSrv struct {
 	alreadySent map[string]int // map of users already sent tx in this block
 
 	bc        *rdochain.BlockChain
-	validator consensus.TxValidator // transaction validator
+	validator consensus.Validator // transaction validator
 
 	lastUTxO   uint64 // last utxo id
 	readBlocks int    // readed blocks counter
@@ -293,11 +293,43 @@ func (s *LanSrv) genBlockWorker() (uint64, error) {
 		log.Infof("Generated transaction batch. Count: %d Time: %s", txLimit, common.StatFmt(end))
 	}
 
-	// create and store block
-	block, err := s.bc.GenerateAndSaveBlock(txBatch)
+	start = time.Now()
+
+	// generate block
+	block, err := s.bc.GenerateBlock(txBatch)
 	if err != nil {
-		log.Error("Error creating block.", err)
 		return 0, err
+	}
+
+	if s.fullStatFlag {
+		end := time.Since(start)
+		log.Infof("Create block struct in %s", common.StatFmt(end))
+	}
+
+	start = time.Now()
+
+	// validate block
+	err = s.validator.ValidateBlock(block)
+	if err != nil {
+		return 0, err
+	}
+
+	if s.fullStatFlag {
+		end := time.Since(start)
+		log.Infof("Validate block in %s", common.StatFmt(end))
+	}
+
+	start = time.Now()
+
+	// validate block
+	err = s.bc.SaveBlock(block)
+	if err != nil {
+		return 0, err
+	}
+
+	if s.fullStatFlag {
+		end := time.Since(start)
+		log.Infof("Save block in %s", common.StatFmt(end))
 	}
 
 	// update SQLite
