@@ -47,10 +47,6 @@ func (cv *CryspValidator) ValidateTransaction(tx *prototype.Transaction) error {
 	case common.GenesisTxType:
 		log.Warnf("Validate genesis tx %s.", hex.EncodeToString(tx.Hash))
 		return nil
-	case common.FeeTxType:
-		return cv.validateFeeTx(tx)
-	case common.RewardTxType:
-		return cv.validateAwardTx(tx)
 	default:
 		return errors.New("Undefined tx type.")
 	}
@@ -141,36 +137,6 @@ func (cv *CryspValidator) validateNormalTx(tx *prototype.Transaction) error {
 	}
 
 	log.Warnf("Validated tx %s", hex.EncodeToString(tx.Hash))
-
-	return nil
-}
-
-// validateFeeTx validate fee transaction
-func (cv *CryspValidator) validateFeeTx(tx *prototype.Transaction) error {
-	// if tx has type different from fee return error
-	if tx.Type != common.FeeTxType {
-		return errors.Errorf("Transaction has wrong type: %d.", tx.Type)
-	}
-
-	return nil
-}
-
-// validateAwardTx validate award transaction
-func (cv *CryspValidator) validateAwardTx(tx *prototype.Transaction) error {
-	// if tx has type different from fee return error
-	if tx.Type != common.RewardTxType {
-		return errors.Errorf("Transaction has wrong type: %d.", tx.Type)
-	}
-
-	if len(tx.Outputs) != 1 {
-		return errors.New("Wrong tx reward outputs size.")
-	}
-
-	// Find reward for block number equal to tx num.
-	// AwardTx num is always equal to the block number.
-	if tx.Outputs[0].Amount != cv.bc.GetRewardForBlock(tx.Num) {
-		return errors.New("Wrong block reward given.")
-	}
 
 	return nil
 }
@@ -274,24 +240,29 @@ func (cv *CryspValidator) checkInputsData(tx *prototype.Transaction, spentOutput
 func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 	// check that block has no double in outputs and inputs
 	inputExists := map[string]string{}
-	outputExists := map[string]string{}
 
 	start := time.Now()
 
 	var blockBalance uint64 = 0
 
 	for txIndex, tx := range block.Transactions {
-		// skip reward tx
+		// validate reward tx and skip it
+		// because reward tx brings inconsistency in block balance
 		if tx.Type == common.RewardTxType {
-			if len(tx.Outputs) != 1 {
-				return errors.New("Wrong tx reward outputs size.")
-			}
-
-			if tx.Outputs[0].Amount != cv.bc.GetReward() {
-				return errors.New("Wrong block reward given.")
+			err := cv.validateRewardTx(tx, block)
+			if err != nil {
+				return err
 			}
 
 			continue
+		}
+
+		//validate fee tx
+		if tx.Type == common.FeeTxType {
+			err := cv.validateFeeTx(tx, block)
+			if err != nil {
+				return err
+			}
 		}
 
 		// check inputs
@@ -309,16 +280,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 		}
 
 		// check outputs
-		for outIndex, out := range tx.Outputs {
-			key := hex.EncodeToString(tx.Hash) + "_" + strconv.Itoa(outIndex)
-
-			hash, exists := outputExists[key]
-			if exists {
-				curHash := hex.EncodeToString(tx.Hash) + "_" + strconv.Itoa(txIndex)
-				return errors.Errorf("Block #%d has double output in tx %s with key %s. Bad tx: %s.", block.Num, hash, key, curHash)
-			}
-
-			outputExists[key] = hex.EncodeToString(tx.Hash) + "_" + strconv.Itoa(txIndex)
+		for _, out := range tx.Outputs {
 			blockBalance -= out.Amount
 		}
 	}
@@ -386,6 +348,60 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 		} else {
 			return errors.Errorf("Previous Block #%d for given block #%d is not exists.", block.Num-1, block.Num)
 		}
+	}
+
+	return nil
+}
+
+// validateAwardTx validate award transaction
+func (cv *CryspValidator) validateRewardTx(tx *prototype.Transaction, block *prototype.Block) error {
+	// if tx has type different from fee return error
+	if tx.Type != common.RewardTxType {
+		return errors.Errorf("Transaction has wrong type: %d.", tx.Type)
+	}
+
+	if len(tx.Outputs) != 1 {
+		return errors.New("Wrong tx reward outputs size.")
+	}
+
+	// reward tx num should be equal to the block num
+	if tx.Num != block.Num {
+		return errors.New("Wrong tx reward num.")
+	}
+
+	// Find reward for block number equal to tx num.
+	// AwardTx num is always equal to the block number.
+	if tx.Outputs[0].Amount != cv.bc.GetRewardForBlock(block.Num) {
+		return errors.New("Wrong block reward given.")
+	}
+
+	return nil
+}
+
+// validateFeeTx validate fee transaction
+func (cv *CryspValidator) validateFeeTx(tx *prototype.Transaction, block *prototype.Block) error {
+	// if tx has type different from fee return error
+	if tx.Type != common.FeeTxType {
+		return errors.Errorf("Transaction has wrong type: %d.", tx.Type)
+	}
+
+	if len(tx.Outputs) != 1 {
+		return errors.New("Wrong tx fee outputs size.")
+	}
+
+	// fee tx num should be equal to the block num
+	if tx.Num != block.Num {
+		return errors.New("Wrong tx fee num.")
+	}
+
+	// check fee tx amount
+	var amount uint64 = 0
+	for _, txi := range block.Transactions {
+		amount += txi.GetRealFee()
+	}
+
+	if amount != tx.Outputs[0].Amount {
+		return errors.New("Wrong tx fee amount.")
 	}
 
 	return nil
