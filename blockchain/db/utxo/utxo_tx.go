@@ -2,14 +2,18 @@ package utxo
 
 import (
 	"context"
-	"encoding/hex"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 )
 
-// AddOutputWithTx add new tx output to the database
-func (s *Store) AddOutputWithTx(txID int, uo *types.UTxO) (rows int64, err error) {
+const (
+	simpleTxType = iota
+	lockTxType   // lock database closing until tx with this type commit or rollback
+)
+
+// AddOutput add new tx output to the database
+func (s *Store) AddOutput(txID int, uo *types.UTxO) (rows int64, err error) {
 	s.lock.RLock()
 	tx, exists := s.tx[txID]
 	s.lock.RUnlock()
@@ -17,13 +21,9 @@ func (s *Store) AddOutputWithTx(txID int, uo *types.UTxO) (rows int64, err error
 		return 0, errors.Errorf("Undefined transaction #%d", txID)
 	}
 
-	query := `INSERT INTO "` + utxoTable + `" (tx_type, hash, tx_index, address_from, address_to, amount, timestamp, spent, blockId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	query := `INSERT INTO "` + utxoTable + `" (tx_type, hash, tx_index, address_from, address_to, amount, timestamp, spent, blockId, address_node) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	hash := hex.EncodeToString(uo.Hash)
-	from := hex.EncodeToString(uo.From)
-	to := hex.EncodeToString(uo.To)
-
-	res, err := tx.Exec(query, uo.TxType, hash, uo.Index, from, to, uo.Amount, uo.Timestamp, common.UnspentTxO, uo.BlockNum)
+	res, err := tx.Exec(query, uo.TxType, uo.Hash.Hex(), uo.Index, uo.From.Hex(), uo.To.Hex(), uo.Amount, uo.Timestamp, common.UnspentTxO, uo.BlockNum, uo.Node.Hex())
 	if err != nil {
 		return
 	}
@@ -33,45 +33,15 @@ func (s *Store) AddOutputWithTx(txID int, uo *types.UTxO) (rows int64, err error
 		return
 	}
 
-	if rows != 1 {
-		log.Debugf("Execute query: INSERT INTO %s (tx_type, hash, tx_index, address_from, address_to, amount, timestamp, spent, blockId) VALUES (%d, %s, %d, %s, %s, %d, %d, %d, %d)", utxoTable, uo.TxType, hash, uo.Index, from, to, uo.Amount, uo.Timestamp, common.UnspentTxO, uo.BlockNum)
+	if rows != 1 && s.cfg.ShowFullStat {
+		log.Debugf("Execute query: INSERT INTO %s (tx_type, hash, tx_index, address_from, address_to, amount, timestamp, spent, blockId, address_node) VALUES (%d, %s, %d, %s, %s, %d, %d, %d, %d, %s)", utxoTable, uo.TxType, uo.Hash, uo.Index, uo.From, uo.To, uo.Amount, uo.Timestamp, common.UnspentTxO, uo.BlockNum, uo.Node)
 	}
 
 	return
 }
 
-// AddNodeOutputWithTx add new tx output to the database
-func (s *Store) AddNodeOutputWithTx(txID int, uo *types.UTxO) (rows int64, err error) {
-	s.lock.RLock()
-	tx, exists := s.tx[txID]
-	s.lock.RUnlock()
-	if !exists {
-		return 0, errors.Errorf("Undefined transaction #%d", txID)
-	}
-
-	query := `INSERT INTO "` + utxoTable + `" (tx_type, hash, tx_index, address_node, amount, timestamp, spent, blockId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-
-	hash := hex.EncodeToString(uo.Hash)
-	to := hex.EncodeToString(uo.To)
-
-	res, err := tx.Exec(query, uo.TxType, hash, uo.Index, to, uo.Amount, uo.Timestamp, common.UnspentTxO, uo.BlockNum)
-	if err != nil {
-		return
-	}
-
-	rows, err = res.RowsAffected()
-	if err != nil {
-		return
-	}
-
-	if rows != 1 {
-		log.Debugf("Execute query: INSERT INTO %s (tx_type, hash, tx_index, address_node, amount, timestamp, spent, blockId) VALUES (%d, %s, %d, %s, %d, %d, %d, %d)", utxoTable, uo.TxType, hash, uo.Index, to, uo.Amount, uo.Timestamp, common.UnspentTxO, uo.BlockNum)
-	}
-
-	return
-}
-
-func (s *Store) SpendOutputWithTx(txID int, hash string, index uint32) (int64, error) {
+// SpendOutput delete output in the database
+func (s *Store) SpendOutput(txID int, hash string, index uint32) (int64, error) {
 	s.lock.RLock()
 	tx, exists := s.tx[txID]
 	s.lock.RUnlock()
@@ -91,43 +61,72 @@ func (s *Store) SpendOutputWithTx(txID int, hash string, index uint32) (int64, e
 		return 0, err
 	}
 
-	if rows != 1 {
+	// rows can be equal to 0 when sync databases
+	if rows > 1 && s.cfg.ShowFullStat {
 		log.Debugf("Execute query: DELETE FROM %s WHERE hash = %s AND tx_index = %d", utxoTable, hash, index)
 	}
 
 	return rows, nil
 }
 
-func (s *Store) SpendGenesis(txID int, address string) (rows int64, err error) {
+// VerifyOutput check if there is a given output in the database.
+func (s *Store) VerifyOutput(txID int, uo *types.UTxO) (int, error) {
 	s.lock.RLock()
 	tx, exists := s.tx[txID]
 	s.lock.RUnlock()
 
 	if !exists {
-		return 0, errors.Errorf("OutputDB.SpendGenesis: Undefined transaction #%d", txID)
+		return 0, errors.Errorf("OutputDB.VerifyOutput: Undefined transaction #%d", txID)
 	}
 
-	query := `UPDATE ` + utxoTable + ` SET spent = ? WHERE address_to = ? AND tx_type = ? ;`
+	query := `SELECT COUNT(id) FROM ` + utxoTable + ` WHERE blockId = ? AND hash = ? AND tx_index = ? AND address_to = ? AND amount = ? AND tx_type = ? AND timestamp = ? AND address_node = ?`
 
-	res, err := tx.Exec(query, common.SpentTxO, address, common.GenesisTxType)
+	rows, err := tx.Query(query, uo.BlockNum, uo.Hash.Hex(), uo.Index, uo.To.Hex(), uo.Amount, uo.TxType, uo.Timestamp, uo.Node.Hex())
 	if err != nil {
 		return 0, err
 	}
 
-	rows, err = res.RowsAffected()
+	var affectedRows int
+	for rows.Next() {
+		err = rows.Scan(&affectedRows)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return affectedRows, nil
+}
+
+// DeleteOutputs delete all outputs with given block number.
+func (s *Store) DeleteOutputs(txID int, blockNum uint64) error {
+	s.lock.RLock()
+	tx, exists := s.tx[txID]
+	s.lock.RUnlock()
+
+	if !exists {
+		return errors.Errorf("OutputDB.VerifyOutput: Undefined transaction #%d", txID)
+	}
+
+	query := `DELETE FROM ` + utxoTable + ` WHERE blockId = ?`
+
+	_, err := tx.Exec(query, blockNum)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
-	if rows != 1 {
-		log.Debugf("Execute query: UPDATE %s SET spent = %d WHERE address_to = %s AND tx_type = %d ;", utxoTable, common.SpentTxO, address, common.GenesisTxType)
-	}
-
-	return
+	return nil
 }
 
 // CreateTx create new database transaction and return it's ID.
 func (s *Store) CreateTx() (int, error) {
+	s.lock.RLock()
+	canCreate := s.canCreateTx
+	s.lock.RUnlock()
+
+	if !canCreate {
+		return 0, errors.New("Database is closing.")
+	}
+
 	tx, err := s.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		return 0, err
@@ -135,15 +134,19 @@ func (s *Store) CreateTx() (int, error) {
 
 	s.lock.Lock()
 	s.tx[s.txID] = tx
+	s.txStatus[s.txID] = simpleTxType
 	id := s.txID
 	s.txID++
 	s.lock.Unlock()
 
-	log.Debugf("OutputDB.CreateTx: new database tx id #%d.", id)
+	if s.cfg.ShowFullStat {
+		log.Debugf("OutputDB.CreateTx: new database tx id #%d.", id)
+	}
 
 	return id, nil
 }
 
+// RollbackTx rollback database transaction.
 func (s *Store) RollbackTx(txID int) error {
 	s.lock.RLock()
 	tx, exists := s.tx[txID]
@@ -151,6 +154,13 @@ func (s *Store) RollbackTx(txID int) error {
 	if !exists {
 		return errors.Errorf("OutputDB.RollbackTx: Undefined transaction #%d", txID)
 	}
+
+	defer func() {
+		s.lock.Lock()
+		delete(s.tx, txID)
+		delete(s.txStatus, txID)
+		s.lock.Unlock()
+	}()
 
 	err := tx.Rollback()
 	if err != nil {
@@ -160,6 +170,7 @@ func (s *Store) RollbackTx(txID int) error {
 	return nil
 }
 
+// CommitTx commit database transaction.
 func (s *Store) CommitTx(txID int) (err error) {
 	s.lock.RLock()
 	tx, exists := s.tx[txID]
@@ -168,10 +179,24 @@ func (s *Store) CommitTx(txID int) (err error) {
 		return errors.Errorf("OutputDB.CommitTx: Undefined transaction #%d", txID)
 	}
 
+	defer func() {
+		s.lock.Lock()
+		delete(s.tx, txID)
+		delete(s.txStatus, txID)
+		s.lock.Unlock()
+	}()
+
 	err = tx.Commit()
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// finishWriting prepare database for closing
+func (s *Store) finishWriting() {
+	s.lock.Lock()
+	s.canCreateTx = false
+	s.lock.Unlock()
 }

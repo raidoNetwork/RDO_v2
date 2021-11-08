@@ -2,35 +2,32 @@ package types
 
 import (
 	"crypto/ecdsa"
-	"encoding/hex"
 	"fmt"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"time"
 )
 
 type UTxO struct {
-	BlockNum  uint64
-	Hash      []byte
-	Index     uint32
-	From      []byte
-	To        []byte
-	Amount    uint64
-	Timestamp uint64
-
+	BlockNum  uint64         `json:"blockNum"`
+	Hash      common.Hash    `json:"hash"`
+	Index     uint32         `json:"index"`
+	From      common.Address `json:"from"`
+	To        common.Address `json:"to"`
+	Node      common.Hash    `json:"node"`
+	Amount    uint64         `json:"amount"`
+	Timestamp uint64         `json:"timestamp"`
 	ID     uint64
 	Spent  uint64
-	TxType int
-
-	idIndex string
-	node    []byte
+	TxType int    			 `json:"txType"`
 }
 
 func (uo *UTxO) ToOutput() *prototype.TxOutput {
-	return NewOutput(uo.To, uo.Amount)
+	return NewOutput(uo.To.Bytes(), uo.Amount, uo.Node.Bytes())
 }
 
 func (uo *UTxO) ToInput(key *ecdsa.PrivateKey) *prototype.TxInput {
-	in, err := NewInput(uo.Hash, uo.Index, uo.ToOutput(), key)
+	in, err := NewInput(uo.Hash.Bytes(), uo.Index, uo.ToOutput(), key)
 	if err != nil {
 		return nil
 	}
@@ -39,30 +36,32 @@ func (uo *UTxO) ToInput(key *ecdsa.PrivateKey) *prototype.TxInput {
 }
 
 func (uo *UTxO) ToString() string {
-	hash := hex.EncodeToString(uo.Hash)
-	from := hex.EncodeToString(uo.From)
-	to := hex.EncodeToString(uo.To)
-
-	return fmt.Sprintf("ID: %d Type: %d Hash: %s From: %s To: %s Amount: %d  Spent: %d BlockNum: %d Timestamp %d",
+	return fmt.Sprintf("ID: %d Type: %d Hash: %s From: %s To: %s Node: %s Amount: %d  Spent: %d BlockNum: %d Timestamp %d",
 		uo.ID,
 		uo.TxType,
-		hash,
-		from,
-		to,
+		uo.Hash,
+		uo.From,
+		uo.To,
+		uo.Node,
 		uo.Amount,
 		uo.Spent,
 		uo.BlockNum,
 		uo.Timestamp)
 }
 
-func NewUTxO(hash, from, to []byte, index uint32, amount uint64, blockNum uint64, typev int) *UTxO {
+func NewUTxO(hash, from, to, node []byte, index uint32, amount uint64, blockNum uint64, typev int, tstamp uint64) *UTxO {
+	if tstamp == 0 {
+		tstamp = uint64(time.Now().UnixNano())
+	}
+
 	uo := UTxO{
-		Hash:      hash,
+		Hash:      common.BytesToHash(hash),
 		Index:     index,
-		From:      from,
-		To:        to,
+		From:      common.BytesToAddress(from),
+		To:        common.BytesToAddress(to),
+		Node:      common.BytesToHash(node),
 		Amount:    amount,
-		Timestamp: uint64(time.Now().UnixNano()),
+		Timestamp: tstamp,
 		BlockNum:  blockNum,
 		TxType:    typev,
 	}
@@ -71,26 +70,12 @@ func NewUTxO(hash, from, to []byte, index uint32, amount uint64, blockNum uint64
 }
 
 func NewUTxOFull(id uint64, hash, from, to string, index uint32, amount, blockNum, unspent, timestamp uint64, typev int) (*UTxO, error) {
-	bhash, err := hex.DecodeString(hash)
-	if err != nil {
-		return nil, err
-	}
-
-	bfrom, err := hex.DecodeString(from)
-	if err != nil {
-		return nil, err
-	}
-
-	bto, err := hex.DecodeString(to)
-	if err != nil {
-		return nil, err
-	}
-
 	uo := UTxO{
 		ID:        id,
-		Hash:      bhash,
-		From:      bfrom,
-		To:        bto,
+		Hash:      common.HexToHash(hash),
+		From:      common.HexToAddress(from),
+		To:        common.HexToAddress(to),
+		Node:      common.HexToHash(""),
 		Index:     index,
 		Amount:    amount,
 		BlockNum:  blockNum,

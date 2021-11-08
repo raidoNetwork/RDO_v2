@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+option go_package = "github.com/raidoNetwork/RDO_v2/proto/prototype";
+
+package rdo.prototype.types;
+
+import "google/protobuf/descriptor.proto";
+import "ext/options.proto";
+
+message Block{
+  uint64 num = 1;
+  bytes version = 2 [(rdo.ext.opts.ssz_size) = "3"];
+  bytes hash = 3 [(rdo.ext.opts.ssz_size) = "32"];
+  bytes parent = 4 [(rdo.ext.opts.ssz_size) = "32"];
+  uint64 timestamp = 5;
+  bytes txroot = 6 [(rdo.ext.opts.ssz_size) = "32"];
+  Sign proposer = 7;
+  repeated Sign approvers = 8 [(rdo.ext.opts.ssz_max) = "128"];
+  repeated Sign slashers = 9 [(rdo.ext.opts.ssz_max) = "128"];
+  repeated Transaction transactions = 10;
+}
+
+message Sign{
+  bytes address = 1 [(rdo.ext.opts.ssz_size) = "32"];
+  bytes signature = 2 [(rdo.ext.opts.ssz_size) = "65"];
+}
+
+message Transaction{
+  uint64 num = 1;
+  uint32 type = 2;
+  uint64 timestamp = 3;
+  bytes hash = 4 [(rdo.ext.opts.ssz_size) = "32"];
+  uint64 fee = 5;
+  bytes data = 6 [(rdo.ext.opts.ssz_max) = "10000"]; // external byte data
+  repeated TxInput inputs = 7 [(rdo.ext.opts.ssz_max) = "20"];
+  repeated TxOutput outputs = 8 [(rdo.ext.opts.ssz_max) = "20"];
+  bytes signature = 9 [(rdo.ext.opts.ssz_size) = "65"];
+}
+
+message TxInput {
+  bytes hash = 1 [(rdo.ext.opts.ssz_size) = "32"];
+  uint32 index = 2;
+  bytes address = 3 [(rdo.ext.opts.ssz_size) = "32"];
+  uint64 amount = 4;
+  bytes signature = 5 [(rdo.ext.opts.ssz_size) = "65"]; // deprecated
+}
+
+message TxOutput{
+  bytes address = 1 [(rdo.ext.opts.ssz_size) = "20"];
+  uint64 amount = 2;
+  optional bytes node = 3 [(rdo.ext.opts.ssz_max) = "32"];
+}
+
+

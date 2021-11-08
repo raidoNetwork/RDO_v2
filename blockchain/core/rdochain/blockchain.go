@@ -76,7 +76,7 @@ func (bc *BlockChain) Init() error {
 
 	// Insert Genesis if blockchain has no blocks
 	if count == 0 {
-		//need to insert genesis here
+		block, err = bc.insertGenesis()
 		if err != nil {
 			return err
 		}

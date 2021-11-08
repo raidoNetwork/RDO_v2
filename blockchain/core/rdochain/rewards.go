@@ -42,12 +42,12 @@ func (bc *BlockChain) createFeeTx(txarr []*prototype.Transaction) (*prototype.Tr
 
 	opts := types.TxOptions{
 		Outputs: []*prototype.TxOutput{
-			types.NewOutput(nodeAddress.Bytes(), feeAmount),
+			types.NewOutput(nil, feeAmount, nodeAddress.Bytes()),
 		},
 		Type: common.FeeTxType,
 	}
 
-	ntx, err := types.NewTx(opts)
+	ntx, err := types.NewTx(opts, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -65,14 +65,14 @@ func (bc *BlockChain) createRewardTx() (*prototype.Transaction, error) {
 
 	opts := types.TxOptions{
 		Outputs: []*prototype.TxOutput{
-			types.NewOutput(nodeAddress.Bytes(), reward),
+			types.NewOutput(nil, reward, nodeAddress.Bytes()),
 		},
 		Type: common.RewardTxType,
 	}
 
 	log.Warnf("Get reward %d.", reward)
 
-	ntx, err := types.NewTx(opts)
+	ntx, err := types.NewTx(opts, nil)
 	if err != nil {
 		return nil, err
 	}

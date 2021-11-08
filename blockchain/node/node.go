@@ -3,14 +3,7 @@ package node
 import (
 	"context"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"github.com/raidoNetwork/RDO_v2/blockchain/core/dbchecker"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/lansrv"
-	"github.com/raidoNetwork/RDO_v2/blockchain/core/txgen"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/kv"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/utxo"
@@ -18,6 +11,11 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared"
 	"github.com/raidoNetwork/RDO_v2/shared/cmd"
 	"github.com/raidoNetwork/RDO_v2/shared/version"
+	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v2"
+	"os"
+	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 )
@@ -65,13 +63,6 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 		return nil, err
 	}
 
-	/*
-		// service for block gen test
-		if err := rdo.registerGenService(); err != nil {
-			return nil, err
-		}
-	*/
-
 	// utxo generator service
 	if cliCtx.Bool(flags.LanSrv.Name) {
 		if err := rdo.registerLanService(); err != nil {
@@ -80,30 +71,6 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 	}
 
 	return rdo, nil
-}
-
-func (r *RDONode) registerDBService() error {
-	srv := dbchecker.NewDBService(r.db)
-
-	err := r.services.RegisterService(srv)
-	if err != nil {
-		log.Error("can't start block gen service", err)
-		return err
-	}
-
-	return nil
-}
-
-func (r *RDONode) registerGenService() error {
-	s := txgen.NewService(r.cliCtx, r.db)
-
-	err := r.services.RegisterService(s)
-	if err != nil {
-		log.Error("can't register tx gen service")
-		return err
-	}
-
-	return nil
 }
 
 func (r *RDONode) registerLanService() error {

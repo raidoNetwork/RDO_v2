@@ -2,13 +2,12 @@ package utxo
 
 import (
 	"context"
-	"encoding/hex"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
-	"path/filepath"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/fileutil"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
+	"github.com/sirupsen/logrus"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -28,6 +27,7 @@ var (
 )
 
 type Config struct {
+	ShowFullStat bool
 }
 
 type Store struct {
@@ -35,10 +35,12 @@ type Store struct {
 	databasePath string
 	ctx          context.Context
 
-	tx      map[int]*sql.Tx
-	txQuery map[int]string
-	txID    int
-	lock    sync.RWMutex
+	tx          map[int]*sql.Tx
+	txStatus    map[int]int
+	txID        int
+	canCreateTx bool
+	lock        sync.RWMutex
+	cfg         *Config
 }
 
 func NewUTxOStore(ctx context.Context, dirPath string, config *Config) (*Store, error) {
@@ -65,15 +67,12 @@ func NewUTxOStore(ctx context.Context, dirPath string, config *Config) (*Store, 
 		ctx:          ctx,
 		txID:         1,
 		tx:           make(map[int]*sql.Tx),
-		txQuery:      make(map[int]string),
+		txStatus:     make(map[int]int),
+		cfg:          config,
+		canCreateTx:  true,
 	}
 
 	if err := sqlDB.createSchema(); err != nil {
-		return nil, err
-	}
-
-	// Clear all spent outputs in the database
-	if err := sqlDB.CleanSpent(); err != nil {
 		return nil, err
 	}
 
@@ -82,14 +81,9 @@ func NewUTxOStore(ctx context.Context, dirPath string, config *Config) (*Store, 
 
 // Close - close database connections
 func (s *Store) Close() error {
-	s.waitAllTxCommit()
+	s.finishWriting()
 
 	return s.db.Close()
-}
-
-// waitAllTxCommit locks until all existing transaction will be commited or rollbacked
-func (s *Store) waitAllTxCommit() {
-	// lock for all tx are finish
 }
 
 // createSchema generates needed database structure if not exist.
@@ -114,146 +108,6 @@ func (s *Store) DatabasePath() string {
 	return s.databasePath
 }
 
-// AddOutput stores given output in the database
-func (s *Store) AddOutput(uo *types.UTxO) (id int64, err error) {
-	query := `INSERT INTO "` + utxoTable + `" (tx_type, hash, tx_index, address_from, address_to, amount, timestamp, spent, blockId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	stmt, err := s.db.Prepare(query)
-	if err != nil {
-		return
-	}
-
-	defer stmt.Close()
-
-	hash := hex.EncodeToString(uo.Hash)
-	from := hex.EncodeToString(uo.From)
-	to := hex.EncodeToString(uo.To)
-
-	res, err := stmt.Exec(uo.TxType, hash, uo.Index, from, to, uo.Amount, uo.Timestamp, common.UnspentTxO, uo.BlockNum)
-	if err != nil {
-		return
-	}
-
-	id, err = res.LastInsertId()
-	if err != nil {
-		return
-	}
-
-	return
-}
-
-// SpendOutput mark output with given id as spent output in the database.
-func (s *Store) SpendOutput(id uint64) error {
-	//query := `UPDATE ` + utxoTable + ` SET spent = ? WHERE id = ?`
-	query := `DELETE FROM ` + utxoTable + ` WHERE id = ?`
-	stmt, err := s.db.Prepare(query)
-	defer stmt.Close()
-
-	if err != nil {
-		return err
-	}
-
-	if id == 0 {
-		return ErrBadUO
-	}
-
-	//_, err = stmt.Exec(common.SpentTxO, id)
-	_, err = stmt.Exec(id)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// TODO rewrite it
-func (s *Store) HealthCheck() (lastId uint64, err error) {
-	query := `SELECT id, hash, tx_index, address_from, address_to, amount, spent, timestamp, blockId, tx_type FROM "` + utxoTable + `" ORDER BY "id" DESC LIMIT 20`
-
-	rows, err := s.db.Query(query)
-	if err != nil {
-		return
-	}
-
-	var uo types.UTxO
-	for rows.Next() {
-		var hash, from, to string
-
-		uo = types.UTxO{
-			Hash:      make([]byte, 0, 32),
-			Index:     0,
-			From:      make([]byte, 0, 32),
-			To:        make([]byte, 0, 32),
-			Amount:    0,
-			Spent:     common.UnspentTxO,
-			ID:        0,
-			Timestamp: 0,
-			BlockNum:  0,
-			TxType:    common.NormalTxType,
-		}
-
-		err = rows.Scan(&uo.ID, &hash, &uo.Index, &from, &to, &uo.Amount, &uo.Spent, &uo.Timestamp, &uo.BlockNum, &uo.TxType)
-		if err != nil {
-			return
-		}
-
-		uo.Hash, err = hex.DecodeString(hash)
-		if err != nil {
-			return
-		}
-
-		uo.From, err = hex.DecodeString(from)
-		if err != nil {
-			return
-		}
-
-		uo.To, err = hex.DecodeString(to)
-		if err != nil {
-			return
-		}
-
-		// save last id
-		if lastId == 0 {
-			lastId = uo.ID
-		}
-
-		log.Info(uo.ToString())
-	}
-
-	return
-}
-
-// FindGenesisOutput tries to get output from genesis block on user with given address.
-// if UTxO found return it otherwise return nil
-func (s *Store) FindGenesisOutput(addr string) (uo *types.UTxO, err error) {
-	query := `SELECT id, hash, tx_index, address_from, address_to, amount, spent, timestamp, blockId FROM "` + utxoTable + `" WHERE address_to = ? AND tx_type = ?`
-	row := s.db.QueryRow(query, addr, common.GenesisTxType)
-
-	err = row.Err()
-	if err != nil {
-		return nil, err
-	}
-
-	var hash, from, to string
-	var id, spent, blockNum, amount, timestamp uint64
-	var index uint32
-
-	err = row.Scan(&id, &hash, &index, &from, &to, &amount, &spent, &timestamp, &blockNum)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-
-		return
-	}
-
-	uo, err = types.NewUTxOFull(id, hash, from, to, index, amount, blockNum, spent, timestamp, common.GenesisTxType)
-	if err != nil {
-		return nil, err
-	}
-
-	return uo, nil
-}
-
 // FindAllUTxO find all addresses' unspent outputs
 func (s *Store) FindAllUTxO(addr string) (uoArr []*types.UTxO, err error) {
 	query := `SELECT id, hash, tx_index, address_from, address_to, amount, spent, timestamp, blockId, tx_type FROM "` + utxoTable + `" WHERE address_to = ? AND spent = ?`
@@ -266,15 +120,17 @@ func (s *Store) FindAllUTxO(addr string) (uoArr []*types.UTxO, err error) {
 
 	defer rows.Close()
 
-	end := time.Since(start)
-	log.Debugf("Get query result object in %s.", common.StatFmt(end))
+	if s.cfg.ShowFullStat {
+		end := time.Since(start)
+		log.Debugf("Get query result object in %s.", common.StatFmt(end))
+	}
 
 	uoArr = make([]*types.UTxO, 0)
 
 	start = time.Now()
 	showStat := true
 	for rows.Next() {
-		if showStat {
+		if showStat && s.cfg.ShowFullStat {
 			log.Debugf("First row next in %s", common.StatFmt(time.Since(start)))
 			showStat = false
 		}
@@ -298,26 +154,53 @@ func (s *Store) FindAllUTxO(addr string) (uoArr []*types.UTxO, err error) {
 
 		uoArr = append(uoArr, uo)
 
-		endInner := time.Since(startInner)
-		log.Debugf("Parse one row in %s.", common.StatFmt(endInner))
+		if s.cfg.ShowFullStat {
+			endInner := time.Since(startInner)
+			log.Debugf("Parse one row in %s.", common.StatFmt(endInner))
+		}
 	}
 
-	end = time.Since(start)
-	log.Debugf("Get query parsed result in %s.", common.StatFmt(end))
+	if s.cfg.ShowFullStat {
+		end := time.Since(start)
+		log.Debugf("Get query parsed result in %s.", common.StatFmt(end))
+	}
 
 	return uoArr, nil
 }
 
-func (s *Store) CleanSpent() error {
-	st, err := s.db.Prepare("DELETE FROM \"" + utxoTable + "\" WHERE spent = ? AND tx_type = ?")
+// FindLastBlockNum search max block num in the database.
+func (s *Store) FindLastBlockNum() (num uint64, err error) {
+	query := `SELECT IFNULL(MAX(blockId), 0) as maxBlockId FROM ` + utxoTable
+	rows, err := s.db.Query(query)
 	if err != nil {
-		return err
+		return
 	}
 
-	defer st.Close()
+	num = 0
+	for rows.Next() {
+		err = rows.Scan(&num)
+		if err != nil {
+			return
+		}
+	}
 
-	_, err = st.Exec(common.SpentTxO, common.NormalTxType)
-
-	return err
+	return
 }
 
+func (s *Store) GetTotalAmount() (uint64, error) {
+	query := `SELECT IFNULL(SUM(amount), 0) FROM ` + utxoTable + ` WHERE tx_type != ?`
+	rows, err := s.db.Query(query, common.RewardTxType)
+	if err != nil {
+		return 0, nil
+	}
+
+	var sum uint64 = 0
+	for rows.Next() {
+		err = rows.Scan(&sum)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return sum, nil
+}

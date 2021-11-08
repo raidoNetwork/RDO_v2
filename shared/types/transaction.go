@@ -1,8 +1,11 @@
 package types
 
 import (
-	"github.com/sirupsen/logrus"
+	"crypto/ecdsa"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared/crypto"
+	"github.com/raidoNetwork/RDO_v2/shared/hasher"
+	"github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -18,7 +21,7 @@ type TxOptions struct {
 var log = logrus.WithField("prefix", "types")
 
 // NewTx creates new transaction with given options
-func NewTx(opts TxOptions) (*prototype.Transaction, error) {
+func NewTx(opts TxOptions, key *ecdsa.PrivateKey) (*prototype.Transaction, error) {
 	tx := new(prototype.Transaction)
 
 	tx.Num = opts.Num
@@ -29,19 +32,28 @@ func NewTx(opts TxOptions) (*prototype.Transaction, error) {
 	tx.Inputs = opts.Inputs
 	tx.Outputs = opts.Outputs
 
-	// TODO: create hasher interface or simple method
-	hasher := TransactionHasher{
-		opts: &opts,
-	}
-
-	h, err := hasher.Hash()
+	hash, err := hasher.TxHash(tx)
 	if err != nil {
-		log.Error("Error generating tx hash.", err)
+		log.Errorf("NewTx: Error generating tx hash. Error: %s", err)
 		return nil, err
 	}
 
-	tx.Hash = h[:]
-	tx.Size = uint32(tx.SizeSSZ())
+	tx.Hash = hash[:]
+
+	if key != nil {
+		signer := MakeTxSigner("keccak256")
+
+		// signature digest = Keccak256(hash)
+		dgst := GetTxDomain(tx.Hash)
+		sign, err := signer.Sign(dgst, key)
+		if err != nil {
+			return nil, err
+		}
+
+		tx.Signature = sign
+	} else {
+		tx.Signature = make([]byte, crypto.SignatureLength)
+	}
 
 	return tx, nil
 }
