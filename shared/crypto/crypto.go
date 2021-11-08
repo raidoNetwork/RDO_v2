@@ -7,12 +7,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/shared/math"
 	"hash"
 	"io"
 	"io/ioutil"
 	"math/big"
 	"os"
-	"rdo_draft/shared/math"
 
 	"golang.org/x/crypto/sha3"
 )
@@ -61,8 +62,7 @@ func Keccak256(data ...[]byte) []byte {
 
 // Keccak256Hash calculates and returns the Keccak256 hash of the input data,
 // converting it to an internal Hash data structure.
-func Keccak256Hash(data ...[]byte) (h []byte) { // was [32]byte
-	h = make([]byte, 32) // TODO: modified for correct work
+func Keccak256Hash(data ...[]byte) (h common.Hash) {
 	d := NewKeccakState()
 	for _, b := range data {
 		d.Write(b)

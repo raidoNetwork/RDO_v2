@@ -15,7 +15,7 @@
 package secp256k1
 
 import (
-	_ "rdo_draft/shared/crypto/secp256k1/libsecp256k1/include"
-	_ "rdo_draft/shared/crypto/secp256k1/libsecp256k1/src"
-	_ "rdo_draft/shared/crypto/secp256k1/libsecp256k1/src/modules/recovery"
+	_ "github.com/raidoNetwork/RDO_v2/shared/crypto/secp256k1/libsecp256k1/include"
+	_ "github.com/raidoNetwork/RDO_v2/shared/crypto/secp256k1/libsecp256k1/src"
+	_ "github.com/raidoNetwork/RDO_v2/shared/crypto/secp256k1/libsecp256k1/src/modules/recovery"
 )

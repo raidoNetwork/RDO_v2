@@ -7,9 +7,9 @@ import (
 	"github.com/urfave/cli/v2"
 	"io/ioutil"
 	"path/filepath"
-	"rdo_draft/shared/cmd"
-	"rdo_draft/shared/crypto"
-	"rdo_draft/shared/fileutil"
+	"github.com/raidoNetwork/RDO_v2/shared/cmd"
+	"github.com/raidoNetwork/RDO_v2/shared/crypto"
+	"github.com/raidoNetwork/RDO_v2/shared/fileutil"
 	"strconv"
 )
 

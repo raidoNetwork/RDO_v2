@@ -2,8 +2,8 @@ package db
 
 import (
 	"context"
-	"rdo_draft/blockchain/db/kv"
-	"rdo_draft/blockchain/db/utxo"
+	"github.com/raidoNetwork/RDO_v2/blockchain/db/kv"
+	"github.com/raidoNetwork/RDO_v2/blockchain/db/utxo"
 )
 
 // NewDB initializes a new DB.

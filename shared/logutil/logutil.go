@@ -4,7 +4,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"io"
 	"os"
-	"rdo_draft/shared/params"
+	"github.com/raidoNetwork/RDO_v2/shared/params"
 )
 
 func addLogWriter(w io.Writer) {

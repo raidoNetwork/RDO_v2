@@ -5,10 +5,10 @@ import (
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
+	types "github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/shared/crypto"
 	bolt "go.etcd.io/bbolt"
-	types "rdo_draft/proto/prototype"
-	"rdo_draft/shared/common"
-	"rdo_draft/shared/crypto"
 	"time"
 )
 
@@ -95,16 +95,47 @@ func (s *Store) ReadBlock(key []byte) (*types.Block, error) {
 	return blk, err
 }
 
+// ReadBlockWithNumkey returns block from database by key if found otherwise returns error.
+func (s *Store) ReadBlockWithNumkey(num uint64) (*types.Block, error) {
+	// generate key
+	key := genKey(int(num))
+
+	var blk *types.Block
+	err := s.db.View(func(tx *bolt.Tx) error {
+		start := time.Now()
+
+		bkt := tx.Bucket(blocksBucket)
+		enc := bkt.Get(key)
+		if enc == nil {
+			return nil
+		}
+
+		// save stat for reading db
+		log.Debugf("Read row from db in %s.", common.StatFmt(time.Since(start)))
+
+		var err error
+		blk, err = unmarshalBlock(enc)
+		if err != nil {
+			return err
+		}
+
+		// save stat for reading db
+		log.Debugf("Read row end in %s.", common.StatFmt(time.Since(start)))
+
+		return nil
+	})
+
+	return blk, err
+}
+
 // CountBlocks iterates the whole database and count number of rows in it.
 func (s *Store) CountBlocks() (int, error) {
 	num := 0
 	err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(blocksBucket)
-		c := bkt.Cursor()
+		c := bkt.Stats()
 
-		for k, _ := c.First(); k != nil; k, _ = c.Next() {
-			num++
-		}
+		num = c.KeyN
 
 		return nil
 	})
@@ -142,7 +173,7 @@ func genKey(num int) []byte {
 	nbyte := make([]byte, 0)
 	nbyte = ssz.MarshalUint64(nbyte, uint64(num))
 	nbyte = append(nbyte, BlockSuffix...)
-	key := crypto.Keccak256Hash(nbyte)
+	key := crypto.Keccak256(nbyte)
 
 	return key
 }

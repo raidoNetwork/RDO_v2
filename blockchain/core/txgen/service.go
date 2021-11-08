@@ -6,11 +6,11 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"math/rand"
-	"rdo_draft/blockchain/db"
-	"rdo_draft/blockchain/db/kv"
-	"rdo_draft/cmd/blockchain/flags"
-	types "rdo_draft/proto/prototype"
-	"rdo_draft/shared/keystore"
+	"github.com/raidoNetwork/RDO_v2/blockchain/db"
+	"github.com/raidoNetwork/RDO_v2/blockchain/db/kv"
+	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
+	types "github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared/keystore"
 	"time"
 )
 

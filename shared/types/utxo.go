@@ -4,7 +4,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
-	"rdo_draft/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"time"
 )
 

@@ -3,8 +3,8 @@ package types
 import (
 	"crypto/ecdsa"
 	ssz "github.com/ferranbt/fastssz"
-	. "rdo_draft/proto/prototype"
-	"rdo_draft/shared/crypto"
+	. "github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared/crypto"
 )
 
 func NewOutput(address []byte, amount uint64) *TxOutput {
@@ -58,7 +58,7 @@ func GetInputDomain(index uint32, amount uint64, hash []byte) []byte {
 	domain = ssz.MarshalUint64(domain, amount)
 	domain = append(domain, hash...)
 
-	domain = crypto.Keccak256Hash(domain)
+	domain = crypto.Keccak256(domain)
 
 	return domain
 }

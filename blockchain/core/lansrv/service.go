@@ -4,17 +4,17 @@ import (
 	"bytes"
 	"encoding/hex"
 	"github.com/pkg/errors"
+	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
+	"github.com/raidoNetwork/RDO_v2/blockchain/core/rdochain"
+	"github.com/raidoNetwork/RDO_v2/blockchain/db"
+	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
+	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/shared/crypto"
+	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"math/rand"
-	"rdo_draft/blockchain/consensus"
-	"rdo_draft/blockchain/core/rdochain"
-	"rdo_draft/blockchain/db"
-	"rdo_draft/cmd/blockchain/flags"
-	"rdo_draft/proto/prototype"
-	"rdo_draft/shared/common"
-	"rdo_draft/shared/crypto"
-	"rdo_draft/shared/types"
 	"sync"
 	"time"
 )
@@ -175,7 +175,7 @@ func (s *LanSrv) loadBalances() error {
 		if genesisUo == nil {
 			log.Infof("Address %s doesn't have genesis outputs.", addr)
 
-			genesisUo = types.NewUTxO(genesisTxHash, rdochain.GenesisHash, addrInBytes, index, startAmount, rdochain.GenesisBlockNum, common.GenesisTxType)
+			genesisUo = types.NewUTxO(genesisTxHash.Bytes(), rdochain.GenesisHash, addrInBytes, index, startAmount, rdochain.GenesisBlockNum, common.GenesisTxType)
 			genesisUo.TxType = common.GenesisTxType
 
 			id, err := s.outDB.AddOutput(genesisUo)
@@ -662,7 +662,7 @@ func (s *LanSrv) processBlockInputs(blockTx int, tx *prototype.Transaction) erro
 		hash := hex.EncodeToString(in.Hash)
 
 		// doesn't delete genesis from DB
-		if bytes.Equal(in.Hash, genesisTxHash) {
+		if bytes.Equal(in.Hash, genesisTxHash.Bytes()) {
 			arows, err = s.outDB.SpendGenesis(blockTx, from)
 		} else {
 			arows, err = s.outDB.SpendOutputWithTx(blockTx, hash, in.Index)
@@ -792,7 +792,7 @@ func (s *LanSrv) readTest() {
 			num := rand.Intn(int(s.bc.GetBlockCount())) + 1
 
 			start := time.Now()
-			res, err := s.bc.GetBlockByNum(num)
+			res, err := s.bc.GetBlockByNum(uint64(num))
 			if err != nil {
 				log.Error("Error reading block.", err)
 				return

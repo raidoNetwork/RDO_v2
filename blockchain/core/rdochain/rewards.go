@@ -1,10 +1,10 @@
 package rdochain
 
 import (
+	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"math"
-	"rdo_draft/proto/prototype"
-	"rdo_draft/shared/common"
-	"rdo_draft/shared/types"
 )
 
 const (
@@ -42,7 +42,7 @@ func (bc *BlockChain) createFeeTx(txarr []*prototype.Transaction) (*prototype.Tr
 
 	opts := types.TxOptions{
 		Outputs: []*prototype.TxOutput{
-			types.NewOutput(nodeAddress, feeAmount),
+			types.NewOutput(nodeAddress.Bytes(), feeAmount),
 		},
 		Type: common.FeeTxType,
 	}
@@ -65,7 +65,7 @@ func (bc *BlockChain) createRewardTx() (*prototype.Transaction, error) {
 
 	opts := types.TxOptions{
 		Outputs: []*prototype.TxOutput{
-			types.NewOutput(nodeAddress, reward),
+			types.NewOutput(nodeAddress.Bytes(), reward),
 		},
 		Type: common.RewardTxType,
 	}

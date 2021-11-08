@@ -6,7 +6,7 @@ import (
 	"contrib.go.opencensus.io/exporter/jaeger"
 	"github.com/sirupsen/logrus"
 	"go.opencensus.io/trace"
-	"rdo_draft/shared/version"
+	"github.com/raidoNetwork/RDO_v2/shared/version"
 )
 
 var log = logrus.WithField("prefix", "tracing")

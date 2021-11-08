@@ -7,8 +7,8 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"fmt"
-	"rdo_draft/shared/crypto/secp256k1"
-	"rdo_draft/shared/math"
+	"github.com/raidoNetwork/RDO_v2/shared/crypto/secp256k1"
+	"github.com/raidoNetwork/RDO_v2/shared/math"
 )
 
 // Ecrecover returns the uncompressed public keyAcc that created the given signature.

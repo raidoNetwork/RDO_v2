@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/hex"
 	"github.com/pkg/errors"
+	"github.com/raidoNetwork/RDO_v2/blockchain/core/rdochain"
+	"github.com/raidoNetwork/RDO_v2/blockchain/db"
+	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/sirupsen/logrus"
-	"rdo_draft/blockchain/core/rdochain"
-	"rdo_draft/blockchain/db"
-	"rdo_draft/proto/prototype"
-	"rdo_draft/shared/common"
-	"rdo_draft/shared/types"
 	"strconv"
 	"time"
 )
@@ -313,7 +313,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 	start = time.Now()
 
 	// check if block exists
-	b, err := cv.bc.GetBlockByNum(int(block.Num))
+	b, err := cv.bc.GetBlockByNum(block.Num)
 	if err != nil {
 		return errors.New("Error reading block from database.")
 	}
@@ -330,7 +330,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 	start = time.Now()
 
 	// find prevBlock
-	prevBlockNum := int(block.Num) - 1
+	prevBlockNum := block.Num - 1
 	prevBlock, err := cv.bc.GetBlockByNum(prevBlockNum)
 	if err != nil {
 		return errors.New("Error reading block from database.")

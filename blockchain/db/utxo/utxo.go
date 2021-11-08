@@ -6,9 +6,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"path/filepath"
-	"rdo_draft/shared/common"
-	"rdo_draft/shared/fileutil"
-	"rdo_draft/shared/types"
+	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/shared/fileutil"
+	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"sync"
 	"time"
 

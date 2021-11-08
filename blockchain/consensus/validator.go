@@ -1,6 +1,6 @@
 package consensus
 
-import "rdo_draft/proto/prototype"
+import "github.com/raidoNetwork/RDO_v2/proto/prototype"
 
 // TxValidator validates only transactions
 type TxValidator interface {

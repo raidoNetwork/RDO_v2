@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/hex"
 	"github.com/pkg/errors"
-	"rdo_draft/shared/common"
-	"rdo_draft/shared/types"
+	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/shared/types"
 )
 
 // AddOutputWithTx add new tx output to the database

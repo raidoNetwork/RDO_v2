@@ -1,4 +1,4 @@
-module rdo_draft
+module github.com/raidoNetwork/RDO_v2
 
 go 1.16
 

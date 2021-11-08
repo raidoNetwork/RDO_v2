@@ -10,7 +10,7 @@ import (
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"rdo_draft/shared/params"
+	"github.com/raidoNetwork/RDO_v2/shared/params"
 )
 
 // ExpandPath given a string which may be a relative path.

@@ -2,7 +2,7 @@ package types
 
 import (
 	ssz "github.com/ferranbt/fastssz"
-	"rdo_draft/shared/crypto"
+	"github.com/raidoNetwork/RDO_v2/shared/crypto"
 )
 
 const (
@@ -59,7 +59,7 @@ func (th *TransactionHasher) Hash() ([]byte, error) {
 	buf = append(buf, inputsDomain...)
 	buf = append(buf, th.opts.Data...)
 
-	hash := crypto.Keccak256Hash(buf)
+	hash := crypto.Keccak256(buf)
 
 	return hash, nil
 }

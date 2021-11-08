@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"github.com/sirupsen/logrus"
-	"rdo_draft/blockchain/db"
-	"rdo_draft/shared/keystore"
+	"github.com/raidoNetwork/RDO_v2/blockchain/db"
+	"github.com/raidoNetwork/RDO_v2/shared/keystore"
 	"time"
 )
 

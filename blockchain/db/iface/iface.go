@@ -1,17 +1,18 @@
 package iface
 
 import (
+	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"io"
-	"rdo_draft/proto/prototype"
-	"rdo_draft/shared/types"
 )
 
 // BlockStorage test interface for database opportunities
 type BlockStorage interface {
 	CountBlocks() (int, error)
 	WriteBlock(*prototype.Block) error
-	WriteBlockWithNumKey(*prototype.Block) error
+	WriteBlockWithNumKey(block *prototype.Block) error
 	ReadBlock([]byte) (*prototype.Block, error)
+	ReadBlockWithNumkey(uint64) (*prototype.Block, error)
 }
 
 // Database common database interface

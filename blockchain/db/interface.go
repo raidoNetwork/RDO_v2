@@ -1,7 +1,7 @@
 package db
 
 import (
-	"rdo_draft/blockchain/db/iface"
+	"github.com/raidoNetwork/RDO_v2/blockchain/db/iface"
 )
 
 type Database = iface.Database

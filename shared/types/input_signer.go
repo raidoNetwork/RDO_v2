@@ -2,7 +2,7 @@ package types
 
 import (
 	"crypto/ecdsa"
-	"rdo_draft/shared/crypto"
+	"github.com/raidoNetwork/RDO_v2/shared/crypto"
 )
 
 type TxInputSigner interface {
