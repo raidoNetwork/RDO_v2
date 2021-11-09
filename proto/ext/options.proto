@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package rdo.ext.opts;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/raidochain/proto/ext";
+
+extend google.protobuf.FieldOptions {
+  string ssz_size = 50000;
+  string ssz_max = 50001;
+}
