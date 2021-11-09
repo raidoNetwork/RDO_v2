@@ -12,9 +12,9 @@ import (
 	"time"
 )
 
-// WriteBlockWithNumKey useful func for testings database.
+// WriteBlock useful func for testings database.
 // It writes blocks with key Keccak256(block num + block suffix)
-func (s *Store) WriteBlockWithNumKey(block *types.Block) error {
+func (s *Store) WriteBlock(block *types.Block) error {
 	start := time.Now()
 
 	data, err := marshalBlock(block)
@@ -44,59 +44,8 @@ func (s *Store) WriteBlockWithNumKey(block *types.Block) error {
 	})
 }
 
-// WriteBlock puts blocks to the database with key = block.Hash
-func (s *Store) WriteBlock(block *types.Block) error {
-	data, err := marshalBlock(block)
-	if err != nil {
-		return err
-	}
-
-	return s.db.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(blocksBucket)
-		if exists := bkt.Get(block.Hash); exists != nil {
-			return errors.Errorf("block #%s already exists", string(block.Hash))
-		}
-
-		if err := bkt.Put(block.Hash, data); err != nil {
-			return err
-		}
-
-		return nil
-	})
-}
-
 // ReadBlock returns block from database by key if found otherwise returns error.
-func (s *Store) ReadBlock(key []byte) (*types.Block, error) {
-	var blk *types.Block
-	err := s.db.View(func(tx *bolt.Tx) error {
-		start := time.Now()
-
-		bkt := tx.Bucket(blocksBucket)
-		enc := bkt.Get(key)
-		if enc == nil {
-			return nil
-		}
-
-		// save stat for reading db
-		log.Infof("Read row from db in %s.", common.StatFmt(time.Since(start)))
-
-		var err error
-		blk, err = unmarshalBlock(enc)
-		if err != nil {
-			return err
-		}
-
-		// save stat for reading db
-		log.Infof("Read row end in %s.", common.StatFmt(time.Since(start)))
-
-		return nil
-	})
-
-	return blk, err
-}
-
-// ReadBlockWithNumkey returns block from database by key if found otherwise returns error.
-func (s *Store) ReadBlockWithNumkey(num uint64) (*types.Block, error) {
+func (s *Store) ReadBlock(num uint64) (*types.Block, error) {
 	// generate key
 	key := genKey(int(num))
 

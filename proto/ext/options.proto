@@ -4,7 +4,7 @@ package rdo.ext.opts;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "github.com/raidochain/proto/ext";
+option go_package = "github.com/raidoNetwork/RDO_v2/proto/ext";
 
 extend google.protobuf.FieldOptions {
   string ssz_size = 50000;

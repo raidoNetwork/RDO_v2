@@ -9,6 +9,9 @@ import (
 type TxValidator interface {
 	// ValidateTransaction validate transaction and return an error if something is wrong
 	ValidateTransaction(*prototype.Transaction) error
+
+	// ValidateTransactionData validates transaction balances, signatures and hash.
+	ValidateTransactionData(*prototype.Transaction) error
 }
 
 // BlockValidator checks only blocks
@@ -23,14 +26,13 @@ type Validator interface {
 	TxValidator
 }
 
-
 // BalanceReader checks all address unspent outputs
-type BalanceReader interface{
+type BalanceReader interface {
 	FindAllUTxO(string) ([]*types.UTxO, error)
 }
 
 // BlockSpecifying get need info from blockchain for verifying block
-type BlockSpecifying interface{
+type BlockSpecifying interface {
 	// GenTxRoot returns root hash of Merklee tree of transactions
 	// or return error if hash was not found
 	GenTxRoot([]*prototype.Transaction) ([]byte, error)

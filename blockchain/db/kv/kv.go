@@ -2,15 +2,13 @@ package kv
 
 import (
 	"context"
-	"encoding/binary"
 	"github.com/pkg/errors"
+	"github.com/raidoNetwork/RDO_v2/shared/fileutil"
+	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
 	"os"
 	"path"
-	"github.com/raidoNetwork/RDO_v2/blockchain/db/iface"
-	"github.com/raidoNetwork/RDO_v2/shared/fileutil"
-	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"time"
 )
 
@@ -127,43 +125,4 @@ func (s *Store) Close() error {
 // DatabasePath at which this database writes files.
 func (s *Store) DatabasePath() string {
 	return s.databasePath
-}
-
-func (s *Store) SaveData(key []byte, data []byte) error {
-	return s.db.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(blocksBucket)
-
-		exists := bkt.Get(key)
-		if exists != nil {
-			return errors.New("error adding data to db. Key is already exists")
-		}
-
-		if err := bkt.Put(key, data); err != nil {
-			return err
-		}
-
-		return nil
-	})
-}
-
-func (s *Store) ReadAllData() ([]iface.DataRow, error) {
-	res := make([]iface.DataRow, 0)
-	err := s.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(blocksBucket)
-		c := bkt.Cursor()
-
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			key := binary.BigEndian.Uint64(k)
-			data := iface.DataRow{
-				Timestamp: int64(key),
-				Hash:      v,
-			}
-
-			res = append(res, data)
-		}
-
-		return nil
-	})
-
-	return res, err
 }

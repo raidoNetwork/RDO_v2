@@ -176,7 +176,7 @@ func (cv *CryspValidator) ValidateTransaction(tx *prototype.Transaction) error {
 	switch tx.Type {
 	case common.NormalTxType:
 		return cv.validateNormalTx(tx)
-	case common.GenesisTxType:
+	case common.GenesisTxType: // TODO write func for validate it
 		log.Warnf("Validate genesis tx %s.", common.Encode(tx.Hash))
 		return nil
 	default:

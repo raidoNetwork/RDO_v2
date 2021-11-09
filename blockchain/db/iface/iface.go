@@ -9,10 +9,8 @@ import (
 // BlockStorage interface for work with blocks
 type BlockStorage interface {
 	WriteBlock(*prototype.Block) error
-	WriteBlockWithNumKey(*prototype.Block) error
 	CountBlocks() (int, error)
-	ReadBlock([]byte) (*prototype.Block, error)
-	ReadBlockWithNumkey(num uint64) (*prototype.Block, error)
+	ReadBlock(num uint64) (*prototype.Block, error)
 }
 
 // Database common database interface
@@ -20,8 +18,6 @@ type Database interface {
 	io.Closer // Close() error
 	DatabasePath() string
 	ClearDB() error
-	SaveData(key []byte, data []byte) error
-	ReadAllData() ([]DataRow, error)
 
 	BlockStorage
 }
@@ -59,12 +55,17 @@ type OutputStorage interface {
 	DeleteOutputs(int, uint64) error
 
 	GetTotalAmount() (uint64, error)
-
-	FindGenesisOutput(string) (*types.UTxO, error)
 }
 
 type OutputDatabase interface {
 	io.Closer
 
 	OutputStorage
+}
+
+// SQLConfig create config for any SQL database.
+type SQLConfig struct {
+	ShowFullStat bool
+	ConfigPath   string
+	DataDir      string
 }
