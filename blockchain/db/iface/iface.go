@@ -59,6 +59,8 @@ type OutputStorage interface {
 	DeleteOutputs(int, uint64) error
 
 	GetTotalAmount() (uint64, error)
+
+	FindGenesisOutput(string) (*types.UTxO, error)
 }
 
 type OutputDatabase interface {

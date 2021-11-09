@@ -175,10 +175,11 @@ func (s *LanSrv) loadBalances() error {
 		if genesisUo == nil {
 			log.Infof("Address %s doesn't have genesis outputs.", addr)
 
-			genesisUo = types.NewUTxO(genesisTxHash.Bytes(), rdochain.GenesisHash, addrInBytes, index, startAmount, rdochain.GenesisBlockNum, common.GenesisTxType)
+			tstamp := uint64(time.Now().UnixNano())
+			genesisUo = types.NewUTxO(genesisTxHash.Bytes(), rdochain.GenesisHash, addrInBytes, nil, index, startAmount, rdochain.GenesisBlockNum, common.GenesisTxType, tstamp)
 			genesisUo.TxType = common.GenesisTxType
 
-			id, err := s.outDB.AddOutput(genesisUo)
+			id, err := s.outDB.AddOutput(0, genesisUo)
 			if err != nil {
 				return errors.Wrap(err, "LoadBalances")
 			}
@@ -489,7 +490,7 @@ func (s *LanSrv) createTx(blockNum uint64) (*prototype.Transaction, error) {
 	var out *prototype.TxOutput
 
 	// create change output
-	out = types.NewOutput(hexToByte(from), change)
+	out = types.NewOutput(hexToByte(from), change, nil)
 	opts.Outputs = append(opts.Outputs, out)
 
 	outAmount := targetAmount      // output total balance should be equal to the input balance
@@ -529,7 +530,7 @@ func (s *LanSrv) createTx(blockNum uint64) (*prototype.Transaction, error) {
 		}
 
 		// create output
-		out = types.NewOutput(hexToByte(to), amount)
+		out = types.NewOutput(hexToByte(to), amount, nil)
 		opts.Outputs = append(opts.Outputs, out)
 
 		sentOutput[to] = 1
@@ -541,7 +542,7 @@ func (s *LanSrv) createTx(blockNum uint64) (*prototype.Transaction, error) {
 		log.Infof("createTx: Generate outputs. Count: %d. Time: %s.", len(opts.Outputs), common.StatFmt(end))
 	}
 
-	tx, err := types.NewTx(opts)
+	tx, err := types.NewTx(opts, usrKey)
 	if err != nil {
 		return nil, err
 	}

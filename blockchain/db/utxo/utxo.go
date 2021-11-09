@@ -204,3 +204,7 @@ func (s *Store) GetTotalAmount() (uint64, error) {
 
 	return sum, nil
 }
+
+func (s *Store) FindGenesisOutput(addr string){
+
+}
