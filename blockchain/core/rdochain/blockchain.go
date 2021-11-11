@@ -183,7 +183,7 @@ func (bc *BlockChain) GenerateBlock(tx []*prototype.Transaction) (*prototype.Blo
 
 // SaveBlock stores given block in the database.
 func (bc *BlockChain) SaveBlock(block *prototype.Block) error {
-	err := bc.db.WriteBlockWithNumKey(block)
+	err := bc.db.WriteBlock(block)
 	if err != nil {
 		return err
 	}
@@ -201,7 +201,7 @@ func (bc *BlockChain) SaveBlock(block *prototype.Block) error {
 
 // GetBlockByNum returns block from database by block number
 func (bc *BlockChain) GetBlockByNum(num uint64) (*prototype.Block, error) {
-	block, err := bc.db.ReadBlockWithNumkey(num)
+	block, err := bc.db.ReadBlock(num)
 	if err != nil {
 		return nil, err
 	}

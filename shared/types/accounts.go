@@ -2,14 +2,14 @@ package types
 
 import (
 	"crypto/ecdsa"
-	"encoding/hex"
 	"github.com/pkg/errors"
+	"github.com/raidoNetwork/RDO_v2/shared/cmd"
+	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/shared/crypto"
+	"github.com/raidoNetwork/RDO_v2/shared/fileutil"
 	"github.com/urfave/cli/v2"
 	"io/ioutil"
 	"path/filepath"
-	"github.com/raidoNetwork/RDO_v2/shared/cmd"
-	"github.com/raidoNetwork/RDO_v2/shared/crypto"
-	"github.com/raidoNetwork/RDO_v2/shared/fileutil"
 	"strconv"
 )
 
@@ -24,37 +24,26 @@ var (
 
 func NewAccountManager(ctx *cli.Context) (*AccountManager, error) {
 	am := &AccountManager{
-		store: map[string]*ecdsa.PrivateKey{},
-		ctx:   ctx,
+		store:   map[string]*ecdsa.PrivateKey{},
+		list:    make([]KeyPair, 0),
+		ctx:     ctx,
+		dataDir: ctx.String(cmd.DataDirFlag.Name),
 	}
-
-	baseDir := am.ctx.String(cmd.DataDirFlag.Name)
-	keyPath := filepath.Join(baseDir, keyDir)
-
-	hasDir, err := fileutil.HasDir(keyPath)
-	if err != nil {
-		return nil, err
-	}
-	if !hasDir {
-		if err := fileutil.MkdirAll(keyPath); err != nil {
-			return nil, err
-		}
-	}
-
-	am.keyPath = keyPath
 
 	return am, nil
 }
 
 type KeyPair struct {
-	Address string
+	Address common.Address
 	Private *ecdsa.PrivateKey
 }
 
 type AccountManager struct {
 	store   map[string]*ecdsa.PrivateKey
+	list    []KeyPair
 	ctx     *cli.Context
 	keyPath string
+	dataDir string
 }
 
 func (am *AccountManager) CreatePair() (string, error) {
@@ -63,13 +52,18 @@ func (am *AccountManager) CreatePair() (string, error) {
 		return "", err
 	}
 
-	hash := getPubKeyHex(key)
+	addr := am.createAddress(key)
+	hash := addr.Hex()
 
 	if _, exists := am.store[hash]; exists {
 		return "", errors.New("key " + hash + " already exists!")
 	}
 
 	am.store[hash] = key
+	am.list = append(am.list, KeyPair{
+		Address: addr,
+		Private: key,
+	})
 
 	return hash, nil
 }
@@ -90,24 +84,52 @@ func (am *AccountManager) GetPairs() map[string]*ecdsa.PrivateKey {
 }
 
 func (am *AccountManager) GetPairsList() []KeyPair {
-	data := make([]KeyPair, 0, len(am.store))
+	if len(am.list) == 0 || len(am.list) != len(am.store) {
+		am.list = make([]KeyPair, 0, len(am.store))
 
-	for hash, priv := range am.store {
-		data = append(data, KeyPair{
-			Address: hash,
-			Private: priv,
-		})
+		for hex, priv := range am.store {
+			addr := common.HexToAddress(hex)
+			am.list = append(am.list, KeyPair{
+				Address: addr,
+				Private: priv,
+			})
+		}
 	}
 
-	return data
+	return am.list
 }
 
 func (am *AccountManager) GetKey(addr string) *ecdsa.PrivateKey {
 	return am.store[addr]
 }
 
+func (am *AccountManager) createKeyDir() error {
+	keyPath := filepath.Join(am.dataDir, keyDir)
+
+	hasDir, err := fileutil.HasDir(keyPath)
+	if err != nil {
+		return err
+	}
+	if !hasDir {
+		if err := fileutil.MkdirAll(keyPath); err != nil {
+			return err
+		}
+	}
+
+	am.keyPath = keyPath
+
+	return nil
+}
+
 // StoreToDisk saves all created key pairs to the directory with path: {DATADIR}/keys
 func (am *AccountManager) StoreToDisk() error {
+	if am.keyPath == "" {
+		err := am.createKeyDir()
+		if err != nil {
+			return err
+		}
+	}
+
 	size := len(am.store)
 	if size == 0 {
 		return ErrEmptyStore
@@ -130,6 +152,13 @@ func (am *AccountManager) StoreToDisk() error {
 }
 
 func (am *AccountManager) LoadFromDisk() error {
+	if am.keyPath == "" {
+		err := am.createKeyDir()
+		if err != nil {
+			return err
+		}
+	}
+
 	files, err := ioutil.ReadDir(am.keyPath)
 	if err != nil {
 		return err
@@ -140,19 +169,25 @@ func (am *AccountManager) LoadFromDisk() error {
 	}
 
 	for _, f := range files {
+		// skip directories and UNIX hidden files
+		if f.IsDir() || f.Name()[0] == '.' {
+			continue
+		}
+
 		path := filepath.Join(am.keyPath, f.Name())
 		key, err := crypto.LoadECDSA(path)
 		if err != nil {
+			log.Errorf("Error reading file %s", path)
 			return err
 		}
 
-		pubKey := getPubKeyHex(key)
-		am.store[pubKey] = key
+		addr := am.createAddress(key)
+		am.store[addr.Hex()] = key
 	}
 
 	return nil
 }
 
-func getPubKeyHex(key *ecdsa.PrivateKey) string {
-	return hex.EncodeToString(crypto.CompressPubkey(&key.PublicKey)[1:])
+func (am *AccountManager) createAddress(key *ecdsa.PrivateKey) common.Address {
+	return crypto.PubkeyToAddress(key.PublicKey)
 }

@@ -10,6 +10,6 @@ type DataRow = iface.DataRow
 
 type BlockStorage = iface.BlockStorage
 
-type OutputManager = iface.OutputStorage
+type OutputStorage = iface.OutputStorage
 
 type OutputDatabase = iface.OutputDatabase

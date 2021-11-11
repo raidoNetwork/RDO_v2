@@ -21,6 +21,9 @@ const (
 
 const (
 	SlotTime = 1 * time.Second
+
+	AccountNum = 10
+	TxLimitPerBlock = 4
 )
 
 // StatFmt parse time.Duration to the needed string format

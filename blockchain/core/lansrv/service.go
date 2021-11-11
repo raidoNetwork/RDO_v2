@@ -1,49 +1,126 @@
 package lansrv
 
 import (
-	"bytes"
-	"encoding/hex"
+	"context"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
+	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/miner"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/rdochain"
+	"github.com/raidoNetwork/RDO_v2/blockchain/core/txpool"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
-	"github.com/raidoNetwork/RDO_v2/shared/crypto"
+	rmath "github.com/raidoNetwork/RDO_v2/shared/math"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
-	"math/rand"
 	"sync"
 	"time"
 )
 
 const (
-	// account count
-	accountNum = 10
-
-	// initial value of all accounts' balance
-	startAmount = 10000000 // 10 * 1e6
-
 	maxFee = 100 // max fee value
 	minFee = 1   // min fee value
 
-	txLimit      = 4
 	outputsLimit = 5
 )
 
 var (
-	ErrUtxoSize      = errors.New("UTxO count is 0.")
-	ErrAffectedRows  = errors.New("Rows affected are different from expected.")
-	ErrInputsRestore = errors.New("Can't restore inputs.")
-
-	genesisTxHash = crypto.Keccak256Hash([]byte("genesis_transaction"))
+	ErrUtxoSize = errors.New("UTxO count is 0.")
 )
+
+// system hex addr bb652b92498c3be9af648d37985095b6e17200cd0913d95bd383d572de1f3886
 
 var log = logrus.WithField("prefix", "LanService")
 
-func NewLanSrv(ctx *cli.Context, db db.BlockStorage, outDB db.OutputManager) (*LanSrv, error) {
+func NewLanSrv(cliCtx *cli.Context, db db.BlockStorage, outDB db.OutputStorage) (*LanSrv, error) {
+	accman, err := prepareAccounts(cliCtx)
+	if err != nil {
+		log.Errorf("Error generating accounts. %s", err)
+	}
+
+	bc, err := rdochain.NewBlockChain(db, cliCtx)
+	if err != nil {
+		log.Error("Error creating blockchain.")
+		return nil, err
+	}
+
+	statFlag := cliCtx.Bool(flags.LanSrvStat.Name)
+	expStatFlag := cliCtx.Bool(flags.LanSrvExpStat.Name)
+
+	// output manager
+	outm := rdochain.NewOutputManager(bc, outDB, &rdochain.OutputManagerConfig{
+		ShowStat: statFlag,
+	})
+
+	// sync database data
+	err = outm.SyncData()
+	if err != nil {
+		return nil, err
+	}
+
+	// check DB consistency
+	err = outm.CheckBalance()
+	if err != nil {
+		return nil, err
+	}
+
+	// new block and tx validator
+	validator := consensus.NewCryspValidator(bc, outm, statFlag, expStatFlag)
+
+	// new tx pool
+	txPool := txpool.NewTxPool(validator)
+
+	// new block miner
+	forger := miner.NewMiner(bc, validator, txPool, outm, &miner.MinerConfig{
+		ShowStat:     statFlag,
+		ShowFullStat: expStatFlag,
+	})
+
+	ctx, finish := context.WithCancel(context.Background())
+
+	srv := &LanSrv{
+		cliCtx:     cliCtx,
+		ctx:        ctx,
+		cancelFunc: finish,
+		err:        make(chan error),
+		outm:       outm,
+		accman:     accman,
+		bc:         bc,
+		txpool:     txPool,
+		miner:      forger,
+
+		count:       make(map[string]uint64, common.AccountNum),
+		alreadySent: make(map[string]int, common.AccountNum),
+		stop:        make(chan struct{}),
+		nullBalance: 0,
+
+		// flags
+		readTestFlag: cliCtx.Bool(flags.DBReadTest.Name),
+		fullStatFlag: statFlag,
+		expStatFlag:  expStatFlag,
+
+		// inputs
+		inputs: map[string][]*types.UTxO{},
+
+		// restore data
+		inputsTmp: map[string][]*types.UTxO{},
+
+		blockStat: map[string]int64{},
+	}
+
+	srv.initBlockStat()
+
+	err = srv.loadBalances()
+	if err != nil {
+		return nil, err
+	}
+
+	return srv, nil
+}
+
+func prepareAccounts(ctx *cli.Context) (*types.AccountManager, error) {
 	accman, err := types.NewAccountManager(ctx)
 	if err != nil {
 		log.Error("Error creating account manager.", err)
@@ -52,14 +129,14 @@ func NewLanSrv(ctx *cli.Context, db db.BlockStorage, outDB db.OutputManager) (*L
 
 	// update accman store with key pairs stored in the file
 	err = accman.LoadFromDisk()
-	if err != nil && !errors.Is(err, types.ErrEmptyStore) {
+	if err != nil && !errors.Is(err, types.ErrEmptyKeyDir) {
 		log.Error("Error loading accounts.", err)
 		return nil, err
 	}
 
 	// if keys are not stored create new key pairs and store them
 	if errors.Is(err, types.ErrEmptyKeyDir) {
-		err = accman.CreatePairs(accountNum)
+		err = accman.CreatePairs(common.AccountNum)
 		if err != nil {
 			log.Error("Error creating accounts.", err)
 			return nil, err
@@ -73,150 +150,78 @@ func NewLanSrv(ctx *cli.Context, db db.BlockStorage, outDB db.OutputManager) (*L
 		}
 	}
 
-	bc, err := rdochain.NewBlockChain(db, ctx)
-	if err != nil {
-		log.Error("Error creating blockchain.")
-		return nil, err
-	}
+	log.Warn("Account list is ready.")
 
-	statFlag := ctx.Bool(flags.LanSrvStat.Name)
-	expStatFlag := ctx.Bool(flags.LanSrvExpStat.Name)
-
-	validator := consensus.NewCryspValidator(bc, outDB, statFlag, expStatFlag)
-
-	srv := &LanSrv{
-		ctx:    ctx,
-		err:    make(chan error),
-		db:     db,
-		outDB:  outDB,
-		accman: accman,
-		bc:     bc,
-		validator: validator,
-
-		count:       make(map[string]uint64, accountNum),
-		alreadySent: make(map[string]int, accountNum),
-		stop:        make(chan struct{}),
-		nullBalance: 0,
-
-		// flags
-		readTestFlag: ctx.Bool(flags.DBReadTest.Name),
-		fullStatFlag: statFlag,
-
-		// inputs
-		inputs: map[string][]*types.UTxO{},
-
-		// restore data
-		inputsTmp: map[string][]*types.UTxO{},
-	}
-
-	err = srv.loadBalances()
-	if err != nil {
-		return nil, err
-	}
-
-	return srv, nil
+	return accman, nil
 }
 
 type LanSrv struct {
-	ctx  *cli.Context
-	err  chan error
-	stop chan struct{}
+	cliCtx     *cli.Context
+	ctx        context.Context
+	cancelFunc context.CancelFunc
+	err        chan error
+	stop       chan struct{}
 
-	db    db.BlockStorage  // block storage
-	outDB db.OutputManager // utxo storage
+	outm *rdochain.OutputManager // output manager
 
 	accman *types.AccountManager // key pair storage
 	count  map[string]uint64     // accounts tx counter
 
 	alreadySent map[string]int // map of users already sent tx in this block
 
-	bc        *rdochain.BlockChain
-	validator consensus.Validator // transaction validator
+	bc     *rdochain.BlockChain
+	miner  *miner.Miner
+	txpool *txpool.TxPool
 
 	lastUTxO   uint64 // last utxo id
 	readBlocks int    // readed blocks counter
 
 	nullBalance int
 
+	// flags
 	readTestFlag bool
 	fullStatFlag bool
+	expStatFlag  bool
 
 	lock sync.RWMutex
 
 	// inputs map[address] -> []*UTxO
 	inputs    map[string][]*types.UTxO
 	inputsTmp map[string][]*types.UTxO
+
+	blockStat map[string]int64
 }
 
 // loadBalances bootstraps service and get balances form UTxO storage
-// if user has no genesis tx add it to the user with initial amount
 func (s *LanSrv) loadBalances() error {
 	log.Info("Bootstrap balances from database.")
 
-	// Generate initial utxo amounts
-	var index uint32 = 0
 	for addr, _ := range s.accman.GetPairs() {
-		addrInBytes := hexToByte(addr)
-		if addrInBytes == nil {
-			log.Errorf("Can't convert address %s to the slice byte.", addr)
-			return errors.Errorf("Can't convert address %s to the slice byte.", addr)
-		}
+		// create inputs map for address
+		s.inputs[addr] = make([]*types.UTxO, 0)
 
-		// find genesis output in DB
-		genesisUo, err := s.outDB.FindGenesisOutput(addr)
+		// load user balance
+		uoarr, err := s.outm.FindAllUTxO(addr)
 		if err != nil {
 			return errors.Wrap(err, "LoadBalances")
 		}
 
-		// create inputs map
-		s.inputs[addr] = make([]*types.UTxO, 0)
-
-		// Null genesisUo means that user has no initial balance so add it to him.
-		if genesisUo == nil {
-			log.Infof("Address %s doesn't have genesis outputs.", addr)
-
-			tstamp := uint64(time.Now().UnixNano())
-			genesisUo = types.NewUTxO(genesisTxHash.Bytes(), rdochain.GenesisHash, addrInBytes, nil, index, startAmount, rdochain.GenesisBlockNum, common.GenesisTxType, tstamp)
-			genesisUo.TxType = common.GenesisTxType
-
-			id, err := s.outDB.AddOutput(0, genesisUo)
-			if err != nil {
-				return errors.Wrap(err, "LoadBalances")
-			}
-
-			log.Infof("Add genesis utxo for address: %s with id: %d.", addr, id)
-
-			s.inputs[addr] = append(s.inputs[addr], genesisUo)
-
-			index++
-
-		} else {
-			// if genesis unspent
-			if genesisUo.Spent == 0 {
-				log.Infof("Address %s has unspent genesis output.", addr)
-
-				s.inputs[addr] = append(s.inputs[addr], genesisUo)
-			} else {
-				// if user has spent genesis select his balance from database
-				uoarr, err := s.outDB.FindAllUTxO(addr)
-				if err != nil {
-					return errors.Wrap(err, "LoadBalances")
-				}
-
-				log.Infof("Load all outputs for address %s. Count: %d", addr, len(uoarr))
-
-				for _, uo := range uoarr {
-					s.inputs[addr] = append(s.inputs[addr], uo)
-				}
-			}
+		var balance uint64 = 0
+		for _, uo := range uoarr {
+			s.inputs[addr] = append(s.inputs[addr], uo)
+			balance += uo.Amount
 		}
 
+		log.Infof("Load all outputs for address %s. Count: %d. Balance: %d", addr, len(uoarr), balance)
+
+		// create counter of tx for user
 		s.count[addr] = 0
 	}
 
 	return nil
 }
 
+// Start service work
 func (s *LanSrv) Start() {
 	log.Warn("Start Lan service.")
 
@@ -238,16 +243,21 @@ func (s *LanSrv) generatorLoop() {
 
 			num, err := s.genBlockWorker()
 			if err != nil {
-				log.Errorf("Error in tx generator loop. %s", err.Error())
+				log.Errorf("generatorLoop: Error: %s", err.Error())
 
 				if errors.Is(err, ErrUtxoSize) {
-					log.Info("Got wrong UTxO count. Reload balances.")
+					log.Warn("Got wrong UTxO count. Reload balances.")
 					err = s.loadBalances()
 
 					// if no error try another
 					if err == nil {
 						continue
 					}
+				}
+
+				if errors.Is(err, ErrEmptyAll) {
+					log.Error("Break generator loop.")
+					return
 				}
 
 				s.err <- err
@@ -257,6 +267,7 @@ func (s *LanSrv) generatorLoop() {
 			if s.fullStatFlag {
 				end := time.Since(start)
 				log.Infof("Create block in: %s", common.StatFmt(end))
+				s.updateBlockStat(end)
 			}
 
 			log.Warnf("Block #%d generated.", num)
@@ -264,499 +275,121 @@ func (s *LanSrv) generatorLoop() {
 	}
 }
 
+// initBlockStat prepare counters
+func (s *LanSrv) initBlockStat() {
+	s.blockStat["count"] = 0
+	s.blockStat["max"] = 0
+	s.blockStat["min"] = 1e12
+	s.blockStat["sum"] = 0
+}
+
+// updateBlockStat update stats counters
+func (s *LanSrv) updateBlockStat(end time.Duration) {
+	s.lock.Lock()
+
+	res := int64(end / time.Millisecond)
+
+	if res > s.blockStat["max"] {
+		s.blockStat["max"] = res
+	}
+
+	if res < s.blockStat["min"] {
+		s.blockStat["min"] = res
+	}
+
+	s.blockStat["count"]++
+	s.blockStat["sum"] += res
+
+	s.lock.Unlock()
+}
 
 // genBlockWorker worker for creating one block and store it to the database
 func (s *LanSrv) genBlockWorker() (uint64, error) {
-	txBatch := make([]*prototype.Transaction, txLimit)
 	start := time.Now()
 
-	for i := 0; i < txLimit; i++ {
-		startInner := time.Now()
-
-		tx, err := s.genTxWorker(s.bc.GetBlockCount())
-		if err != nil {
-			log.Errorf("Error creating transaction. %s.", err.Error())
-
-			i--
-			continue
-		}
-
-		if s.fullStatFlag {
-			endInner := time.Since(startInner)
-			log.Infof("Generate transaction in %s", common.StatFmt(endInner))
-		}
-
-		txBatch[i] = tx
-	}
-
-	if s.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("Generated transaction batch. Count: %d Time: %s", txLimit, common.StatFmt(end))
-	}
-
-	start = time.Now()
-
-	// generate block
-	block, err := s.bc.GenerateBlock(txBatch)
+	// create tx batch and put generated transactions to the pool
+	err := s.generateTxBatch()
 	if err != nil {
 		return 0, err
 	}
 
 	if s.fullStatFlag {
 		end := time.Since(start)
-		log.Infof("Create block struct in %s", common.StatFmt(end))
+		log.Infof("Generated transactions for block. Count: %d Time: %s", common.TxLimitPerBlock, common.StatFmt(end))
 	}
 
 	start = time.Now()
 
-	// validate block
-	err = s.validator.ValidateBlock(block)
+	// generate block with block miner
+	block, err := s.miner.GenerateBlock()
 	if err != nil {
 		return 0, err
 	}
 
 	if s.fullStatFlag {
 		end := time.Since(start)
-		log.Infof("Validate block in %s", common.StatFmt(end))
+		log.Infof("genBlockWorker: Generate block in %s.", common.StatFmt(end))
 	}
 
 	start = time.Now()
 
-	// validate block
-	err = s.bc.SaveBlock(block)
+	// validate, save block and update SQL
+	err = s.miner.FinalizeBlock(block)
 	if err != nil {
+		log.Error("genBlockWorker: Error finalizing block.")
+		s.restoreInputs()
+
 		return 0, err
 	}
 
 	if s.fullStatFlag {
 		end := time.Since(start)
-		log.Infof("Save block in %s", common.StatFmt(end))
+		log.Infof("genBlockWorker: Finalize block in %s.", common.StatFmt(end))
 	}
 
-	// update SQLite
 	start = time.Now()
-	err = s.processBlock(block)
-	if err != nil {
-		return 0, err
-	}
+
+	// update local inputs map data
+	s.UpdateBlockOutputs(block)
 
 	if s.fullStatFlag {
 		end := time.Since(start)
-		log.Infof("Process block in %s.", common.StatFmt(end))
+		log.Infof("genBlockWorker: Update local inputs %s.", common.StatFmt(end))
 	}
-
-	// reset already sent map after block creation
-	s.alreadySent = make(map[string]int, accountNum)
 
 	return block.Num, nil
 }
 
-// genTxWorker creates transaction for block
-func (s *LanSrv) genTxWorker(blockNum uint64) (*prototype.Transaction, error) {
-	start := time.Now()
-
-	tx, err := s.createTx(blockNum)
-	if err != nil {
-		return nil, err
-	}
-
-	if s.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("genTxWorker: Generate tx in %s", common.StatFmt(end))
-	}
-
-	start = time.Now()
-
-	err = s.validator.ValidateTransaction(tx)
-	if err != nil {
-		return nil, err
-	}
-
-	if s.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("genTxWorker: Validate tx in %s", common.StatFmt(end))
-	}
-
-	// save tx data
-	from := hex.EncodeToString(tx.Inputs[0].Address)
-
-	// mark user as sender in this block
-	s.alreadySent[from] = 1
-
-	// save inputs to the tmp map
-	s.inputsTmp[from] = s.inputs[from][:]
-
-	// reset inputs of user
-	s.inputs[from] = make([]*types.UTxO, 0)
-
-	if s.fullStatFlag {
-		log.Infof("Reset addr %s balance.", from)
-	}
-
-	return tx, nil
-}
-
-// createTx create tx using in-memory inputs
-func (s *LanSrv) createTx(blockNum uint64) (*prototype.Transaction, error) {
-	log.Infof("createTx: Start creating tx for block #%d.", blockNum)
-
-	if s.nullBalance >= accountNum {
-		return nil, errors.New("All balances are empty.")
-	}
-
-	start := time.Now()
-
-	rnd := rand.Intn(accountNum)
-	lst := s.accman.GetPairsList()
-	pair := lst[rnd]
-	from := pair.Address
-
-	// find user that has no transaction in this block yet
-	if _, exists := s.alreadySent[from]; exists {
-		for exists {
-			rnd++
-
-			if rnd == accountNum {
-				rnd = 0
-			}
-
-			pair = lst[rnd]
-			from = pair.Address
-
-			_, exists = s.alreadySent[from]
-
-			log.Infof("Try new transaction sender: %s.", from)
-		}
-	}
-
-	// if from has no inputs in the memory map return error
-	if _, exists := s.inputs[from]; !exists {
-		return nil, errors.Errorf("Address %s has no inputs given.", from)
-	}
-
-	if s.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("createTx: Find sender in %s", common.StatFmt(end))
-	}
-
-	userInputs := s.inputs[from]
-	inputsArr := make([]*prototype.TxInput, 0, len(userInputs))
-
-	usrKey := s.accman.GetKey(from)
-
-	// count balance
-	var balance uint64
-	for _, uo := range userInputs {
-		balance += uo.Amount
-
-		inputsArr = append(inputsArr, uo.ToInput(usrKey))
-	}
-
-	// if balance is equal to zero try to create new transaction
-	if balance == 0 {
-		log.Warnf("Account %s has balance %d.", from, balance)
-		s.nullBalance++
-		return s.createTx(blockNum)
-	}
-
-	// if user has balance equal to the minimum fee find another user
-	if balance == minFee {
-		log.Warnf("Account %s has balanc equal to the minimum fee.", from)
-		return s.createTx(blockNum)
-	}
-
-	fee := getFee() // get price for 1 byte of tx
-	opts := types.TxOptions{
-		Fee:    fee,
-		Num:    s.count[from],
-		Data:   []byte{},
-		Type:   common.NormalTxType,
-		Inputs: inputsArr,
-	}
-
-	// generate random target amount
-	targetAmount := RandUint64(1, balance)
-
-	log.Warnf("Address: %s Balance: %d. Trying to spend: %d.", from, balance, targetAmount)
-
-	change := balance - targetAmount // user change
-
-	if change == 0 {
-		return nil, errors.Errorf("Null change.")
-	}
-
-	outputCount := rand.Intn(outputsLimit) + 1 // outputs size limit
-
-	var out *prototype.TxOutput
-
-	// create change output
-	out = types.NewOutput(hexToByte(from), change, nil)
-	opts.Outputs = append(opts.Outputs, out)
-
-	outAmount := targetAmount      // output total balance should be equal to the input balance
-	sentOutput := map[string]int{} // list of users who have already received money
-
-	start = time.Now()
-
-	for i := 0; i < outputCount; i++ {
-		// all money are spent
-		if outAmount == 0 {
-			break
-		}
-
-		pair = lst[rand.Intn(accountNum)] // get random account receiver
-		to := pair.Address
-
-		// check if this output was sent to the address to already
-		_, exists := sentOutput[to]
-
-		// if we got the same from go to the cycle start
-		if to == from || exists {
-			i--
+// UpdateBlockOutputs update in-memory outputs for users
+func (s *LanSrv) UpdateBlockOutputs(block *prototype.Block) {
+	// update local inputs
+	var index uint32
+	for _, tx := range block.Transactions {
+		if tx.Type != common.NormalTxType && tx.Type != common.GenesisTxType {
 			continue
 		}
 
-		// get random amount
-		amount := RandUint64(1, outAmount)
+		from := tx.Inputs[0].Address
+		index = 0
+		for _, out := range tx.Outputs {
+			uo := types.NewUTxO(tx.Hash, from, out.Address, out.Node, index, out.Amount, block.Num, int(tx.Type), 0)
+			s.inputs[uo.To.Hex()] = append(s.inputs[uo.To.Hex()], uo)
 
-		if i != outputCount-1 {
-			if amount == outAmount {
-				k := uint64(outputCount - i)
-				amount = outAmount / k
-			}
-		} else if outAmount != amount {
-			// if it is a last cycle iteration and random amount is not equal to remaining amount (outAmount)
-			amount = outAmount
-		}
-
-		// create output
-		out = types.NewOutput(hexToByte(to), amount, nil)
-		opts.Outputs = append(opts.Outputs, out)
-
-		sentOutput[to] = 1
-		outAmount -= amount
-	}
-
-	if s.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("createTx: Generate outputs. Count: %d. Time: %s.", len(opts.Outputs), common.StatFmt(end))
-	}
-
-	tx, err := types.NewTx(opts, usrKey)
-	if err != nil {
-		return nil, err
-	}
-
-	realFee := tx.GetRealFee()
-
-	errFeeTooBig := errors.Errorf("Tx can't pay fee. Balance: %d. Value: %d. Fee: %d. Change: %d.", balance, targetAmount, realFee, change)
-
-	if change > realFee {
-		change -= realFee
-		tx.Outputs[0].Amount = change
-	} else if len(tx.Outputs) >= 2 {
-		amount := tx.Outputs[1].Amount
-
-		if amount <= realFee {
-			return nil, errFeeTooBig
-		} else {
-			tx.Outputs[1].Amount -= realFee
-		}
-	} else {
-		return nil, errFeeTooBig
-	}
-
-	log.Warnf("Generated tx %s", hex.EncodeToString(tx.Hash))
-
-	return tx, nil
-}
-
-// processBlock update SQLite database with given transactions in block.
-func (s *LanSrv) processBlock(block *prototype.Block) error {
-	start := time.Now()
-
-	blockTx, err := s.outDB.CreateTx()
-	if err != nil {
-		log.Errorf("processBlock: Error creating DB tx. %s.", err)
-		return err
-	}
-
-	// update SQLite
-	for _, tx := range block.Transactions {
-		var from string
-
-		txHash := hex.EncodeToString(tx.Hash)
-
-		startTxInner := time.Now() // whole transaction
-		startInner := time.Now()   // inputs or outputs block
-
-		// Only normal Tx has inputs
-		if tx.Type == common.NormalTxType {
-			from = hex.EncodeToString(tx.Inputs[0].Address)
-
-			// update tx inputs in database
-			err := s.processBlockInputs(blockTx, tx)
-			if err != nil {
-				return err
-			}
-		} else {
-			// for FeeTx and RewardTx
-			from = ""
-		}
-
-		if s.fullStatFlag {
-			endInner := time.Since(startInner)
-			log.Infof("processBlock: Update tx %s inputs in %s.", txHash, common.StatFmt(endInner))
-		}
-
-		// update outputs
-		startInner = time.Now()
-
-		// create tx outputs in the database
-		err := s.proccesBlockOutputs(blockTx, tx, from, block.Num)
-		if err != nil {
-			return err
-		}
-
-		if s.fullStatFlag {
-			endInner := time.Since(startInner)
-			log.Infof("processBlock: Update tx %s outputs in %s.", txHash, common.StatFmt(endInner))
-		}
-
-		if s.fullStatFlag {
-			endTxInner := time.Since(startTxInner)
-			log.Infof("processBlock: Update all transaction %s data in %s.", txHash, common.StatFmt(endTxInner))
+			index++
 		}
 	}
 
-	err = s.outDB.CommitTx(blockTx)
-	if err != nil {
-		log.Error("processBlock: Error committing block transaction.")
-
-		// restore inputs
-		s.restoreInputs()
-
-		return err
-	}
-
-	if s.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("Update all block inputs, outputs in %s.", common.StatFmt(end))
-	}
-
-	// reset inputs store
+	// reset inputs backup
 	s.inputsTmp = make(map[string][]*types.UTxO)
 
-	return nil
+	// reset already sent map after block creation
+	s.alreadySent = make(map[string]int, common.AccountNum)
 }
 
-// processBlockInputs updates all transaction inputs in the database with given DB tx
-func (s *LanSrv) processBlockInputs(blockTx int, tx *prototype.Transaction) error {
-		var arows int64
-	var err error
-
-	// update inputs
-	for _, in := range tx.Inputs {
-		startIn := time.Now()
-
-		from := hex.EncodeToString(in.Address)
-		hash := hex.EncodeToString(in.Hash)
-
-		// doesn't delete genesis from DB
-		if bytes.Equal(in.Hash, genesisTxHash.Bytes()) {
-			arows, err = s.outDB.SpendGenesis(blockTx, from)
-		} else {
-			arows, err = s.outDB.SpendOutputWithTx(blockTx, hash, in.Index)
-		}
-
-		if err != nil || arows != 1 {
-			return s.errorsCheck(arows, blockTx, err)
-		}
-
-		if s.fullStatFlag {
-			endIn := time.Since(startIn)
-			log.Infof("processBlockInputs: Spent one output in %s", common.StatFmt(endIn))
-		}
-	}
-
-	return nil
-}
-
-// processBlockOutputs creates all transaction output in the database with given tx
-// and rollback tx if error return
-func (s *LanSrv) proccesBlockOutputs(blockTx int, tx *prototype.Transaction, from string, blockNum uint64) error {
-	var index uint32 = 0
-	var arows int64
-	var err error
-
-	for _, out := range tx.Outputs {
-		startOut := time.Now()
-
-		uo := types.NewUTxO(tx.Hash, hexToByte(from), out.Address, index, out.Amount, blockNum, int(tx.Type))
-
-		if tx.Type == common.NormalTxType || tx.Type == common.GenesisTxType {
-			arows, err = s.outDB.AddOutputWithTx(blockTx, uo)
-		} else {
-			arows, err = s.outDB.AddNodeOutputWithTx(blockTx, uo)
-		}
-
-		if err != nil || arows != 1 {
-			return s.errorsCheck(arows, blockTx, err)
-		}
-
-		// add output to the map
-		to := hex.EncodeToString(uo.To)
-		s.inputs[to] = append(s.inputs[to], uo)
-
-		index++
-
-		if s.fullStatFlag {
-			endOut := time.Since(startOut)
-			log.Infof("processBlockOutputs: Add one output to DB in %s", common.StatFmt(endOut))
-			log.Infof("processBlockOutputs: Add %d to addr %s", uo.Amount, to)
-		}
-	}
-
-	return nil
-}
-
-// errorsCheck check error type when updating database and rollback all changes
-func (s *LanSrv) errorsCheck(arows int64, blockTx int, err error) error {
-	errb := s.outDB.RollbackTx(blockTx)
-	if errb != nil {
-		log.Errorf("processBlock: Rollback error on addTx: %s.", errb)
-	}
-
-	if arows != 1 {
-		if err != nil {
-			log.Errorf("processBlock: Error: %s.", err.Error())
-		}
-		log.Errorf("processBlock: Affected rows error. Got: %d.", arows)
-		return ErrAffectedRows
-	} else {
-		log.Errorf("processBlock: %s.", err.Error())
-	}
-
-	// restore inputs
-	s.restoreInputs()
-
-	return err
-}
-
-func (s *LanSrv) restoreInputs() {
-	s.lock.Lock()
-	for addr, inputs := range s.inputsTmp {
-		s.inputs[addr] = inputs[:]
-
-		if s.fullStatFlag {
-			log.Infof("restoreInputs: Add inputs count %d to addr %s", len(inputs), addr)
-		}
-	}
-	s.lock.Unlock()
-}
-
+// Stop stops tx generator service
 func (s *LanSrv) Stop() error {
-	close(s.stop)
+	close(s.stop)  // close stop chan
+	s.cancelFunc() // finish context
 
 	s.showEndStats()
 
@@ -764,8 +397,24 @@ func (s *LanSrv) Stop() error {
 	return nil
 }
 
+// showEndStats write stats when stop service
 func (s *LanSrv) showEndStats() {
-	log.Printf("Blocks: %d Transactions: %d Utxo count: %d.", s.bc.GetBlockCount(), s.bc.GetBlockCount()*txLimit, s.lastUTxO)
+	log.Printf("Blocks: %d Transactions: %d Utxo count: %d.", s.bc.GetCurrentBlockNum(), s.bc.GetCurrentBlockNum()*common.TxLimitPerBlock, s.lastUTxO)
+
+	s.lock.Lock()
+
+	var avg int64
+	if s.blockStat["count"] > 0 {
+		avg = s.blockStat["sum"] / s.blockStat["count"]
+	} else {
+		avg = 0
+		s.blockStat["max"] = 0
+		s.blockStat["min"] = 0
+	}
+
+	log.Printf("Blocks stat. Max: %d ms Min: %d ms Avg: %d ms.", s.blockStat["max"], s.blockStat["min"], avg)
+
+	s.lock.Unlock()
 
 	if s.readTestFlag {
 		log.Infof("Readed blocks %d.", s.readBlocks)
@@ -788,12 +437,10 @@ func (s *LanSrv) readTest() {
 		case <-s.stop:
 			return
 		default:
-			rand.Seed(time.Now().UnixNano())
-
-			num := rand.Intn(int(s.bc.GetBlockCount())) + 1
+			num := rmath.RandUint64(1, s.bc.GetBlockCount())
 
 			start := time.Now()
-			res, err := s.bc.GetBlockByNum(uint64(num))
+			res, err := s.bc.GetBlockByNum(num)
 			if err != nil {
 				log.Error("Error reading block.", err)
 				return
@@ -813,31 +460,4 @@ func (s *LanSrv) readTest() {
 			s.readBlocks++
 		}
 	}
-}
-
-func hexToByte(h string) []byte {
-	res, err := hex.DecodeString(h)
-	if err != nil {
-		return nil
-	}
-
-	return res
-}
-
-func getFee() uint64 {
-	/*rand.Seed(time.Now().UnixNano())
-
-	return uint64(rand.Intn(maxFee-minFee) + minFee)*/
-
-	// return fix fee for tests
-	return minFee
-}
-
-func RandUint64(min, max uint64) uint64 {
-	rand.Seed(time.Now().UnixNano())
-	rnd := rand.Intn(100) + 1
-
-	res := uint64(rnd)*(max-min)/100 + min
-
-	return res
 }

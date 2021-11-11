@@ -27,9 +27,6 @@ var (
 	}
 )
 
-// AccountNum helps OutputManager check balance correctly
-var AccountNum uint64 = 10
-
 func (bc *BlockChain) insertGenesis() (*prototype.Block, error) {
 	block := bc.getGenesis()
 	if block == nil {
@@ -37,7 +34,7 @@ func (bc *BlockChain) insertGenesis() (*prototype.Block, error) {
 		return nil, errors.New("Error creating Genesis.")
 	}
 
-	err := bc.db.WriteBlockWithNumKey(block)
+	err := bc.db.WriteBlock(block)
 	if err != nil {
 		log.Errorf("Error saving Genesis block: %s", err)
 		return nil, err
