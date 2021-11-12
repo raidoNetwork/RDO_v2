@@ -27,26 +27,40 @@ var (
 	}
 )
 
-func (bc *BlockChain) insertGenesis() (*prototype.Block, error) {
-	block := bc.getGenesis()
-	if block == nil {
-		log.Error("Null Genesis.")
-		return nil, errors.New("Error creating Genesis.")
+// insertGenesis inserts Genesis to the database if it is not exists
+func (bc *BlockChain) insertGenesis() error {
+	block, err := bc.db.GetGenesis()
+	if err != nil {
+		return err
 	}
 
-	err := bc.db.WriteBlock(block)
+	// Genesis already in database
+	if block != nil {
+		bc.genesisBlock = block
+		return nil
+	}
+
+	block = bc.createGenesis()
+	if block == nil {
+		log.Error("Null Genesis.")
+		return errors.New("Error creating Genesis.")
+	}
+
+	err = bc.db.SaveGenesis(block)
 	if err != nil {
 		log.Errorf("Error saving Genesis block: %s", err)
-		return nil, err
+		return err
 	}
+
+	bc.genesisBlock = block
 
 	log.Warn("Genesis block successfully saved.")
 
-	return block, nil
+	return nil
 }
 
-// getGenesis return GenesisBlock
-func (bc *BlockChain) getGenesis() *prototype.Block {
+// createGenesis return GenesisBlock
+func (bc *BlockChain) createGenesis() *prototype.Block {
 	timestamp := time.Now().UnixNano()
 
 	addresses := genesisAddressesBaikals

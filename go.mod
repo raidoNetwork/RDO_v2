@@ -6,7 +6,9 @@ require (
 	contrib.go.opencensus.io/exporter/jaeger v0.2.1
 	github.com/antonfisher/nested-logrus-formatter v1.3.1
 	github.com/ferranbt/fastssz v0.0.0-20210905181407-59cf6761a7d5
+	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/snappy v0.0.4
+	github.com/joho/godotenv v1.4.0
 	github.com/mattn/go-sqlite3 v1.14.8
 	github.com/minio/sha256-simd v1.0.0
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826

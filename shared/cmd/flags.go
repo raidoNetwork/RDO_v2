@@ -20,6 +20,11 @@ var (
 		Name:  "clear-db",
 		Usage: "Prompt for clearing any previously stored data at the data directory",
 	}
+	// SQLConfigPath setups path to the MySQL config file.
+	SQLConfigPath = &cli.StringFlag{
+		Name:  "sql-db-cfg",
+		Usage: "Config file directory with MySQL user and password",
+	}
 	// DataDirFlag defines a path on disk.
 	DataDirFlag = &cli.StringFlag{
 		Name:  "datadir",

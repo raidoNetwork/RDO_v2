@@ -13,3 +13,5 @@ type BlockStorage = iface.BlockStorage
 type OutputStorage = iface.OutputStorage
 
 type OutputDatabase = iface.OutputDatabase
+
+type SQLConfig = iface.SQLConfig

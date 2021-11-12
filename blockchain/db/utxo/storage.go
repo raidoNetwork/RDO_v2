@@ -2,81 +2,70 @@ package utxo
 
 import (
 	"context"
+	"database/sql"
 	"github.com/pkg/errors"
+	"github.com/raidoNetwork/RDO_v2/blockchain/db/iface"
+	"github.com/raidoNetwork/RDO_v2/blockchain/db/utxo/dbshared"
+	"github.com/raidoNetwork/RDO_v2/blockchain/db/utxo/mysql"
+	"github.com/raidoNetwork/RDO_v2/blockchain/db/utxo/sqlite"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
-	"github.com/raidoNetwork/RDO_v2/shared/fileutil"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/sirupsen/logrus"
-	"path/filepath"
 	"sync"
 	"time"
-
-	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
 )
 
-const (
-	utxoPath  = "utxo"
-	utxoFname = "outputs.db"
-)
+var log = logrus.WithField("prefix", "OutputDB")
 
-var (
-	ErrBadUO = errors.New("Wrong utxo given. Please check that all fields have value.")
+func NewStore(ctx context.Context, dbType string, config *iface.SQLConfig) (*Store, error) {
+	var db *sql.DB
+	var err error
+	var schema string
 
-	log = logrus.WithField("prefix", "OutputDB")
-)
-
-type Config struct {
-	ShowFullStat bool
-}
-
-type Store struct {
-	db           *sql.DB
-	databasePath string
-	ctx          context.Context
-
-	tx          map[int]*sql.Tx
-	txStatus    map[int]int
-	txID        int
-	canCreateTx bool
-	lock        sync.RWMutex
-	cfg         *Config
-}
-
-func NewUTxOStore(ctx context.Context, dirPath string, config *Config) (*Store, error) {
-	dbPath := filepath.Join(dirPath, utxoPath)
-	hasDir, err := fileutil.HasDir(dbPath)
-	if err != nil {
-		return nil, err
-	}
-	if !hasDir {
-		if err := fileutil.MkdirAll(dbPath); err != nil {
-			return nil, err
-		}
+	switch dbType {
+	case "mysql":
+		db, schema, err = mysql.NewStore(config)
+	case "sqlite":
+		db, schema, err = sqlite.NewStore(config)
+	default:
+		return nil, errors.Errorf("Unknown database type %s", dbType)
 	}
 
-	fpath := filepath.Join(dbPath, utxoFname)
-	db, err := sql.Open("sqlite3", fpath)
 	if err != nil {
 		return nil, err
 	}
 
-	sqlDB := &Store{
+	str := &Store{
 		db:           db,
-		databasePath: dirPath,
+		databasePath: config.DataDir,
 		ctx:          ctx,
 		txID:         1,
 		tx:           make(map[int]*sql.Tx),
 		txStatus:     make(map[int]int),
 		cfg:          config,
 		canCreateTx:  true,
+		schema:       schema,
 	}
 
-	if err := sqlDB.createSchema(); err != nil {
+	if err := str.createSchema(); err != nil {
 		return nil, err
 	}
 
-	return sqlDB, nil
+	return str, nil
+}
+
+type Store struct {
+	db           *sql.DB
+	databasePath string
+	ctx          context.Context
+	tx           map[int]*sql.Tx
+	txStatus     map[int]int
+	txID         int
+	canCreateTx  bool
+	lock         sync.RWMutex
+	cfg          *iface.SQLConfig
+
+	schema string
 }
 
 // Close - close database connections
@@ -88,14 +77,7 @@ func (s *Store) Close() error {
 
 // createSchema generates needed database structure if not exist.
 func (s *Store) createSchema() error {
-	stmnt, err := s.db.Prepare(utxoSchema)
-	if err != nil {
-		return err
-	}
-
-	defer stmnt.Close()
-
-	_, err = stmnt.Exec()
+	_, err := s.db.Exec(s.schema)
 	if err != nil {
 		return err
 	}
@@ -110,7 +92,7 @@ func (s *Store) DatabasePath() string {
 
 // FindAllUTxO find all addresses' unspent outputs
 func (s *Store) FindAllUTxO(addr string) (uoArr []*types.UTxO, err error) {
-	query := `SELECT id, hash, tx_index, address_from, address_to, amount, spent, timestamp, blockId, tx_type FROM "` + utxoTable + `" WHERE address_to = ? AND spent = ?`
+	query := `SELECT id, hash, tx_index, address_from, address_to, amount, spent, timestamp, blockId, tx_type FROM ` + dbshared.UtxoTable + ` WHERE address_to = ? AND spent = ?`
 
 	start := time.Now()
 	rows, err := s.db.Query(query, addr, common.UnspentTxO)
@@ -170,11 +152,13 @@ func (s *Store) FindAllUTxO(addr string) (uoArr []*types.UTxO, err error) {
 
 // FindLastBlockNum search max block num in the database.
 func (s *Store) FindLastBlockNum() (num uint64, err error) {
-	query := `SELECT IFNULL(MAX(blockId), 0) as maxBlockId FROM ` + utxoTable
+	query := `SELECT IFNULL(MAX(blockId), 0) as maxBlockId FROM ` + dbshared.UtxoTable
 	rows, err := s.db.Query(query)
 	if err != nil {
 		return
 	}
+
+	defer rows.Close()
 
 	num = 0
 	for rows.Next() {
@@ -188,11 +172,13 @@ func (s *Store) FindLastBlockNum() (num uint64, err error) {
 }
 
 func (s *Store) GetTotalAmount() (uint64, error) {
-	query := `SELECT IFNULL(SUM(amount), 0) FROM ` + utxoTable + ` WHERE tx_type != ?`
+	query := `SELECT IFNULL(SUM(amount), 0) FROM ` + dbshared.UtxoTable + ` WHERE tx_type != ?`
 	rows, err := s.db.Query(query, common.RewardTxType)
 	if err != nil {
 		return 0, nil
 	}
+
+	defer rows.Close()
 
 	var sum uint64 = 0
 	for rows.Next() {
@@ -203,8 +189,4 @@ func (s *Store) GetTotalAmount() (uint64, error) {
 	}
 
 	return sum, nil
-}
-
-func (s *Store) FindGenesisOutput(addr string){
-
 }

@@ -10,7 +10,31 @@ import (
 type BlockStorage interface {
 	WriteBlock(*prototype.Block) error
 	CountBlocks() (int, error)
-	ReadBlock(num uint64) (*prototype.Block, error)
+
+	HeadAccessStorage
+	BlockReader
+}
+
+// BlockReader interface to access blocks
+type BlockReader interface {
+	GetBlock(num uint64, hash []byte) (*prototype.Block, error)
+	GetBlockByNum(num uint64) (*prototype.Block, error)
+	GetBlockByHash(hash []byte) (*prototype.Block, error)
+}
+
+type HeadAccessStorage interface {
+	// SaveHeadBlockNum saves head block number to the database
+	SaveHeadBlockNum(uint64) error
+
+	// GetHeadBlockNum returns head block number.
+	// If head block num was not found in the database return error.
+	GetHeadBlockNum() (uint64, error)
+
+	// SaveGenesis saves Genesis block to the storage.
+	SaveGenesis(*prototype.Block) error
+
+	// GetGenesis returns Genesis block
+	GetGenesis() (*prototype.Block, error)
 }
 
 // Database common database interface

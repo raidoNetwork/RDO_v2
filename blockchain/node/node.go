@@ -6,7 +6,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/lansrv"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/kv"
-	"github.com/raidoNetwork/RDO_v2/blockchain/db/utxo"
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
 	"github.com/raidoNetwork/RDO_v2/shared"
 	"github.com/raidoNetwork/RDO_v2/shared/cmd"
@@ -186,7 +185,13 @@ func (r *RDONode) startDB(cliCtx *cli.Context) error {
 
 	r.db = d
 
-	outDB, err := db.NewUTxODB(r.ctx, dbPath, &utxo.Config{})
+	// Prepare SQL database config
+	SQLCfg := db.SQLConfig{
+		ShowFullStat: cliCtx.Bool(flags.LanSrvStat.Name),
+		ConfigPath:   cliCtx.String(cmd.SQLConfigPath.Name),
+		DataDir:      dbPath,
+	}
+	outDB, err := db.NewUTxODB(r.ctx, dbPath, &SQLCfg)
 	if err != nil {
 		return err
 	}

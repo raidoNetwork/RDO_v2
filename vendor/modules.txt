@@ -11,11 +11,17 @@ github.com/cpuguy83/go-md2man/v2/md2man
 # github.com/ferranbt/fastssz v0.0.0-20210905181407-59cf6761a7d5
 ## explicit
 github.com/ferranbt/fastssz
+# github.com/go-sql-driver/mysql v1.6.0
+## explicit
+github.com/go-sql-driver/mysql
 # github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e
 github.com/golang/groupcache/lru
 # github.com/golang/snappy v0.0.4
 ## explicit
 github.com/golang/snappy
+# github.com/joho/godotenv v1.4.0
+## explicit
+github.com/joho/godotenv
 # github.com/klauspost/cpuid/v2 v2.0.4
 github.com/klauspost/cpuid/v2
 # github.com/mattn/go-sqlite3 v1.14.8

@@ -1,8 +1,10 @@
 package rdochain
 
 import (
+	"bytes"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
+	"github.com/raidoNetwork/RDO_v2/blockchain/db/kv"
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
@@ -16,14 +18,11 @@ import (
 )
 
 const (
-	txMinCout = 4 // minimum number of transactions in the block
-
 	GenesisBlockNum = 0
 )
 
 var (
 	GenesisHash = crypto.Keccak256([]byte("genesis-hash"))
-	signSuffix  = crypto.Keccak256([]byte("something"))
 
 	log = logrus.WithField("prefix", "rdochain")
 )
@@ -36,7 +35,7 @@ func NewBlockChain(db db.BlockStorage, ctx *cli.Context) (*BlockChain, error) {
 		db:              db,
 		prevHash:        GenesisHash,
 		currentBlockNum: GenesisBlockNum,
-		blockNum:        GenesisBlockNum + 1,             // block num for the future block
+		blockNum:        GenesisBlockNum + 1,          // block num for the future block
 		fullStatFlag:    ctx.Bool(flags.LanSrvStat.Name), // stat flag
 
 		lock: sync.RWMutex{},
@@ -59,6 +58,7 @@ type BlockChain struct {
 
 	currentBlockNum uint64
 	currentBlock    *prototype.Block
+	genesisBlock    *prototype.Block
 
 	lock sync.RWMutex
 }
@@ -67,34 +67,60 @@ type BlockChain struct {
 func (bc *BlockChain) Init() error {
 	log.Info("Init blockchain data.")
 
-	count, err := bc.db.CountBlocks()
+	// insert Genesis if not exists
+	err := bc.insertGenesis()
 	if err != nil {
 		return err
 	}
 
+	// get head block
+	head, err := bc.db.GetHeadBlockNum()
+	if err != nil {
+		if errors.Is(err, kv.ErrNoHead) {
+			start := time.Now()
+
+			count, err := bc.db.CountBlocks()
+			if err != nil {
+				return err
+			}
+
+			if bc.fullStatFlag {
+				end := time.Since(start)
+				log.Infof("Init: Count KV rows num in %s.", common.StatFmt(end))
+			}
+
+			// save head block link
+			head = uint64(count) - 1 // skip genesis key
+			err = bc.SaveHeadBlockNum(head)
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+
 	var block *prototype.Block
 
-	// Insert Genesis if blockchain has no blocks
-	if count == 0 {
-		block, err = bc.insertGenesis()
-		if err != nil {
-			return err
-		}
-	} else {
-		// update counter according to the database
-		bc.currentBlockNum = uint64(count) - 1 // block num = count - 1 because Genesis has num 0
-		bc.blockNum = bc.currentBlockNum + 1   // future block num
+	// update counter according to the database
+	bc.currentBlockNum = head            // head block number
+	bc.blockNum = bc.currentBlockNum + 1 // future block num
 
+	if head != 0 {
 		// get last block
 		block, err = bc.GetBlockByNum(bc.currentBlockNum)
-		if err != nil {
-			return err
-		}
+	} else {
+		// if head equal to zero return Genesis
+		block, err = bc.db.GetGenesis()
+	}
 
-		if block == nil {
-			log.Errorf("Init: Not found block with num %d.", bc.currentBlockNum)
-			return errors.New("block not found")
-		}
+	if err != nil {
+		return err
+	}
+
+	if block == nil {
+		log.Errorf("Init: Not found block with num %d.", bc.currentBlockNum)
+		return errors.New("block not found")
 	}
 
 	log.Infof("Database has %d blocks. Future block num %d.", bc.currentBlockNum, bc.blockNum)
@@ -181,9 +207,18 @@ func (bc *BlockChain) GenerateBlock(tx []*prototype.Transaction) (*prototype.Blo
 	return block, nil
 }
 
+func (bc *BlockChain) SaveHeadBlockNum(n uint64) error {
+	return bc.db.SaveHeadBlockNum(n)
+}
+
 // SaveBlock stores given block in the database.
 func (bc *BlockChain) SaveBlock(block *prototype.Block) error {
 	err := bc.db.WriteBlock(block)
+	if err != nil {
+		return err
+	}
+
+	err = bc.SaveHeadBlockNum(block.Num)
 	if err != nil {
 		return err
 	}
@@ -196,17 +231,27 @@ func (bc *BlockChain) SaveBlock(block *prototype.Block) error {
 	bc.currentBlock = block
 	bc.lock.Unlock()
 
+	log.Warn("Block data was successfully saved.")
+
 	return nil
 }
 
 // GetBlockByNum returns block from database by block number
 func (bc *BlockChain) GetBlockByNum(num uint64) (*prototype.Block, error) {
-	block, err := bc.db.ReadBlock(num)
-	if err != nil {
-		return nil, err
+	if num == 0 {
+		return bc.genesisBlock, nil
 	}
 
-	return block, nil
+	return bc.db.GetBlockByNum(num)
+}
+
+// GetBlockByHash returns block
+func (bc *BlockChain) GetBlockByHash(hash []byte) (*prototype.Block, error) {
+	if bytes.Equal(hash, GenesisHash) {
+		return bc.genesisBlock, nil
+	}
+
+	return bc.db.GetBlockByHash(hash)
 }
 
 // sign test function for signing some data
@@ -222,6 +267,7 @@ func (bc *BlockChain) sign(prevHash []byte, hash []byte) *prototype.Sign {
 
 	sign := &prototype.Sign{
 		Signature: res,
+		Address:   make([]byte, 32),
 	}
 
 	return sign

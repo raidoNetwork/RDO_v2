@@ -2,14 +2,14 @@ package main
 
 import (
 	nested "github.com/antonfisher/nested-logrus-formatter"
-	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
-	"os"
 	"github.com/raidoNetwork/RDO_v2/blockchain/node"
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
 	"github.com/raidoNetwork/RDO_v2/shared/cmd"
 	"github.com/raidoNetwork/RDO_v2/shared/logutil"
 	"github.com/raidoNetwork/RDO_v2/shared/version"
+	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v2"
+	"os"
 	"runtime"
 	runtimeDebug "runtime/debug"
 )
@@ -60,6 +60,8 @@ var appFlags = []cli.Flag{
 	flags.DBStats,
 	flags.LanSrv,
 	flags.LanSrvStat,
+
+	cmd.SQLConfigPath,
 }
 
 var log = logrus.WithField("prefix", "main")

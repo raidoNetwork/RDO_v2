@@ -12,6 +12,6 @@ func NewDB(ctx context.Context, dirPath string, config *kv.Config) (Database, er
 }
 
 // NewUTxODB initializes a new UTxO DB.
-func NewUTxODB(ctx context.Context, dirPath string, config *utxo.Config) (OutputDatabase, error) {
-	return utxo.NewUTxOStore(ctx, dirPath, config)
+func NewUTxODB(ctx context.Context, dbType string, config *SQLConfig) (OutputDatabase, error) {
+	return utxo.NewStore(ctx, dbType, config)
 }

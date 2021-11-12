@@ -81,6 +81,8 @@ func NewKVStore(ctx context.Context, dirPath string, config *Config) (*Store, er
 		return createBuckets(
 			tx,
 			blocksBucket,
+			blocksHashBucket,
+			blocksNumBucket,
 		)
 	}); err != nil {
 		return nil, err
