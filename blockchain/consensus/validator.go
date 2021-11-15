@@ -37,9 +37,9 @@ type BlockSpecifying interface {
 	// or return error if hash was not found
 	GenTxRoot([]*prototype.Transaction) ([]byte, error)
 
-	// GetBlockByNum return block with given number from blockchain
+	// GetBlockByHash return block with given hash from blockchain
 	// if block not found return nil
-	GetBlockByNum(uint64) (*prototype.Block, error)
+	GetBlockByHash([]byte) (*prototype.Block, error)
 
 	// GetRewardForBlock return reward for block with given number
 	GetRewardForBlock(uint64) uint64

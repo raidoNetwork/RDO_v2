@@ -20,7 +20,7 @@ var (
 
 func NewCryspValidator(bc BlockSpecifying, outDB BalanceReader, stat bool, expStat bool) *CryspValidator {
 	v := CryspValidator{
-		ba:          bc,
+		bs:          bc,
 		br:          outDB,
 		statFlag:    stat,
 		expStatFlag: expStat,
@@ -31,7 +31,7 @@ func NewCryspValidator(bc BlockSpecifying, outDB BalanceReader, stat bool, expSt
 
 type CryspValidator struct {
 	br BalanceReader
-	ba BlockSpecifying
+	bs BlockSpecifying
 
 	statFlag    bool
 	expStatFlag bool
@@ -110,7 +110,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 	}
 
 	// check block tx root
-	txRoot, err := cv.ba.GenTxRoot(block.Transactions)
+	txRoot, err := cv.bs.GenTxRoot(block.Transactions)
 	if err != nil {
 		log.Error("ValidateBlock: error creating tx root.")
 		return err
@@ -128,7 +128,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 	start = time.Now()
 
 	// check if block is already exists in the database
-	b, err := cv.ba.GetBlockByNum(block.Num)
+	b, err := cv.bs.GetBlockByHash(block.Hash)
 	if err != nil {
 		return errors.New("Error reading block from database.")
 	}
@@ -144,10 +144,8 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 
 	start = time.Now()
 
-	// FIXME use prevhash here and create func findByHash
 	// find prevBlock
-	prevBlockNum := block.Num - 1
-	prevBlock, err := cv.ba.GetBlockByNum(prevBlockNum)
+	prevBlock, err := cv.bs.GetBlockByHash(block.Parent)
 	if err != nil {
 		return errors.New("ValidateBlock: Error reading previous block from database.")
 	}
@@ -176,9 +174,6 @@ func (cv *CryspValidator) ValidateTransaction(tx *prototype.Transaction) error {
 	switch tx.Type {
 	case common.NormalTxType:
 		return cv.validateNormalTx(tx)
-	case common.GenesisTxType: // TODO write func for validate it
-		log.Warnf("Validate genesis tx %s.", common.Encode(tx.Hash))
-		return nil
 	default:
 		return errors.New("Undefined tx type.")
 	}
@@ -338,7 +333,7 @@ func (cv *CryspValidator) validateRewardTx(tx *prototype.Transaction, block *pro
 
 	// Find reward for block number equal to tx num.
 	// AwardTx num is always equal to the block number.
-	if tx.Outputs[0].Amount != cv.ba.GetRewardForBlock(block.Num) {
+	if tx.Outputs[0].Amount != cv.bs.GetRewardForBlock(block.Num) {
 		return errors.New("Wrong block reward given.")
 	}
 
@@ -357,12 +352,19 @@ func (cv *CryspValidator) validateTxBalance(tx *prototype.Transaction) error {
 		return errors.Errorf("Empty tx outputs.")
 	}
 
+	// verify tx signature
+	if tx.Type == common.NormalTxType {
+		signer := types.MakeTxSigner("keccak256")
+		err := signer.Verify(tx)
+		if err != nil {
+			return err
+		}
+	}
+
 	// check that inputs and outputs balance with fee are equal
 	var txBalance uint64 = 0
 	for _, in := range tx.Inputs {
 		txBalance += in.Amount
-
-		// TODO add signature validation here
 	}
 
 	for _, out := range tx.Outputs {
@@ -434,8 +436,6 @@ func (cv *CryspValidator) checkInputsData(tx *prototype.Transaction, spentOutput
 		if in.Amount != dbInput.Amount {
 			return nil, errors.Errorf("Amount mismatch with key: %s. Given %d. Expected %d.", key, in.Amount, dbInput.Amount)
 		}
-
-		// TODO check negative amount case
 
 		// mark output as already spent
 		alreadySpent[key] = 1
