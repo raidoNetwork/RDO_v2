@@ -57,3 +57,19 @@ func NewTx(opts TxOptions, key *ecdsa.PrivateKey) (*prototype.Transaction, error
 
 	return tx, nil
 }
+
+// SignTx create transaction signature with given private key
+func SignTx(tx *prototype.Transaction, key *ecdsa.PrivateKey) error {
+	signer := MakeTxSigner("keccak256")
+
+	// signature digest = Keccak256(hash)
+	dgst := GetTxDomain(tx.Hash)
+	sign, err := signer.Sign(dgst, key)
+	if err != nil {
+		return err
+	}
+
+	tx.Signature = sign
+
+	return nil
+}
