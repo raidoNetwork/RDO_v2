@@ -2,6 +2,7 @@ package txgen
 
 import (
 	"context"
+	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"google.golang.org/grpc"
@@ -16,6 +17,8 @@ type Client struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 
+	raidoChainService  prototype.RaidoChainServiceClient
+	attestationService prototype.AttestationServiceClient
 }
 
 func NewClient(endpoint string) (*Client, error) {
@@ -43,6 +46,9 @@ func (c *Client) Start() {
 	}
 
 	c.grpcClient = grpcConn
+
+	c.raidoChainService = prototype.NewRaidoChainServiceClient(c.grpcClient)
+	c.attestationService = prototype.NewAttestationServiceClient(c.grpcClient)
 }
 
 func (c *Client) Stop() {
@@ -51,10 +57,49 @@ func (c *Client) Stop() {
 }
 
 func (c *Client) FindAllUTxO(addr string) ([]*types.UTxO, error) {
-	return nil, nil
+	req := new(prototype.AddressRequest)
+	req.Address = addr
+
+	res, err := c.raidoChainService.GetUTxO(c.ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	data := make([]*types.UTxO, len(res.GetData()))
+
+	for i, item := range res.GetData() {
+		data[i] = cast(item)
+	}
+
+	return data, nil
 }
 
 func (c *Client) SendTx(tx *prototype.Transaction) error {
+	req := new(prototype.SendTxRequest)
+	req.Tx = tx
+
+	resp, err := c.attestationService.SendTx(c.ctx, req)
+	if err != nil {
+		return err
+	}
+
+	if resp.GetError() != "" {
+		return errors.New(resp.GetError())
+	}
+
 	return nil
 }
 
+func cast(puo *prototype.UTxO) *types.UTxO {
+	return types.NewUTxO(
+		puo.Hash,
+		puo.From,
+		puo.To,
+		puo.Node,
+		puo.Index,
+		puo.Amount,
+		puo.BlockNum,
+		int(puo.Txtype),
+		puo.Timestamp,
+	)
+}
