@@ -59,7 +59,7 @@ var appFlags = []cli.Flag{
 	flags.DBReadTest,
 	flags.DBStats,
 	flags.LanSrv,
-	flags.LanSrvStat,
+	flags.SrvStat,
 
 	cmd.SQLConfigPath,
 }

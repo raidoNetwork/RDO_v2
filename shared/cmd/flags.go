@@ -20,6 +20,14 @@ var (
 		Name:  "clear-db",
 		Usage: "Prompt for clearing any previously stored data at the data directory",
 	}
+
+	// SQLType defines SQL database type.
+	SQLType = &cli.StringFlag{
+		Name:  "sql-db-type",
+		Usage: "Set SQL database type to use. When use MySQL, flag with db config path should be given.",
+		Value: "mysql",
+	}
+
 	// SQLConfigPath setups path to the MySQL config file.
 	SQLConfigPath = &cli.StringFlag{
 		Name:  "sql-db-cfg",

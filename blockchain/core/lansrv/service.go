@@ -46,8 +46,8 @@ func NewLanSrv(cliCtx *cli.Context, db db.BlockStorage, outDB db.OutputStorage) 
 		return nil, err
 	}
 
-	statFlag := cliCtx.Bool(flags.LanSrvStat.Name)
-	expStatFlag := cliCtx.Bool(flags.LanSrvExpStat.Name)
+	statFlag := cliCtx.Bool(flags.SrvStat.Name)
+	expStatFlag := cliCtx.Bool(flags.SrvExpStat.Name)
 
 	// output manager
 	outm := rdochain.NewOutputManager(bc, outDB, &rdochain.OutputManagerConfig{

@@ -123,13 +123,13 @@ var (
 		Usage: "Starts lan service",
 	}
 
-	LanSrvStat = &cli.BoolFlag{
-		Name:  "lan-srv-stat",
+	SrvStat = &cli.BoolFlag{
+		Name:  "srv-stat",
 		Usage: "Show full statistics of lan server",
 	}
 
-	LanSrvExpStat = &cli.BoolFlag{
-		Name:  "lan-srv-exp-stat",
+	SrvExpStat = &cli.BoolFlag{
+		Name:  "srv-exp-stat",
 		Usage: "Show exposed statistics of lan server",
 	}
 )

@@ -36,7 +36,7 @@ func NewBlockChain(db db.BlockStorage, ctx *cli.Context) (*BlockChain, error) {
 		prevHash:        GenesisHash,
 		currentBlockNum: GenesisBlockNum,
 		blockNum:        GenesisBlockNum + 1,          // block num for the future block
-		fullStatFlag:    ctx.Bool(flags.LanSrvStat.Name), // stat flag
+		fullStatFlag:    ctx.Bool(flags.SrvStat.Name), // stat flag
 
 		lock: sync.RWMutex{},
 	}

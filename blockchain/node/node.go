@@ -2,11 +2,15 @@ package node
 
 import (
 	"context"
+	"fmt"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/lansrv"
+	"github.com/raidoNetwork/RDO_v2/blockchain/core/rdochain"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/kv"
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
+	"github.com/raidoNetwork/RDO_v2/gateway"
+	"github.com/raidoNetwork/RDO_v2/rpc"
 	"github.com/raidoNetwork/RDO_v2/shared"
 	"github.com/raidoNetwork/RDO_v2/shared/cmd"
 	"github.com/raidoNetwork/RDO_v2/shared/version"
@@ -15,8 +19,14 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
+)
+
+const (
+	statusNotReady = iota
+	statusReady
 )
 
 var log = logrus.WithField("prefix", "node")
@@ -31,8 +41,10 @@ type RDONode struct {
 	services *shared.ServiceRegistry
 	lock     sync.RWMutex
 	stop     chan struct{} // Channel to wait for termination notifications.
-	db       db.Database
+	kvStore       db.Database
 	outDB    db.OutputDatabase
+
+	status int // Node ready status
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -55,6 +67,7 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 		cancel:   cancel,
 		services: registry,
 		stop:     make(chan struct{}),
+		status:   statusNotReady,
 	}
 
 	// create database
@@ -62,18 +75,29 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 		return nil, err
 	}
 
-	// utxo generator service
-	if cliCtx.Bool(flags.LanSrv.Name) {
-		if err := rdo.registerLanService(); err != nil {
-			return nil, err
-		}
+	// register chain service
+	if err := rdo.registerChainService(); err != nil {
+		log.Error("Error register ChainService.")
+		return nil, err
+	}
+
+	// register RPC service
+	if err := rdo.registerRPCservice(); err != nil {
+		log.Error("Error register RPC service.")
+		return nil, err
+	}
+
+	// register gRPC gateway service
+	if err := rdo.registerGatewayService(); err != nil {
+		log.Error("Error register gRPC gateway.")
+		return nil, err
 	}
 
 	return rdo, nil
 }
 
 func (r *RDONode) registerLanService() error {
-	srv, err := lansrv.NewLanSrv(r.cliCtx, r.db, r.outDB)
+	srv, err := lansrv.NewLanSrv(r.cliCtx, r.kvStore, r.outDB)
 	if err != nil {
 		return err
 	}
@@ -90,6 +114,64 @@ func (r *RDONode) registerLanService() error {
 
 	return nil
 }
+
+func (r *RDONode) registerChainService() error {
+	srv, err := rdochain.NewService(r.cliCtx, r.kvStore, r.outDB)
+	if err != nil {
+		return err
+	}
+
+	return r.services.RegisterService(srv)
+}
+
+func (r *RDONode) registerRPCservice() error {
+	var chainService *rdochain.Service
+	err := r.services.FetchService(&chainService)
+	if err != nil {
+		return err
+	}
+
+	host := r.cliCtx.String(flags.RPCHost.Name)
+	port := r.cliCtx.String(flags.RPCPort.Name)
+
+	srv := rpc.NewService(r.ctx, &rpc.Config{
+		Host:               host,
+		Port:               port,
+		ChainService:       chainService,
+		AttestationService: chainService, // TODO change it to another service in future
+		MaxMsgSize:         1 << 22,
+	})
+
+	return r.services.RegisterService(srv)
+}
+
+func (r *RDONode) registerGatewayService() error {
+	var chainService *rdochain.Service
+	err := r.services.FetchService(&chainService)
+	if err != nil {
+		return err
+	}
+
+	host := r.cliCtx.String(flags.GRPCGatewayHost.Name)
+	port := r.cliCtx.Int(flags.GRPCGatewayPort.Name)
+	rpcPort := r.cliCtx.Int(flags.RPCPort.Name)
+	remoteAddr := fmt.Sprintf("%s:%d", host, rpcPort)
+	endpoint := fmt.Sprintf("%s:%d", host, port)
+	allowedOrigins := strings.Split(r.cliCtx.String(flags.GPRCGatewayCorsDomain.Name), ",")
+
+	gatewayConfig := gateway.DefaultConfig()
+
+	// TODO replace last argument with another service in future
+	srv := gateway.NewService(r.ctx,
+		remoteAddr,
+		endpoint,
+		[]gateway.PbMux{gatewayConfig.PbMux},
+		gatewayConfig.Handler,
+		chainService, chainService).WithAllowedOrigins(allowedOrigins)
+
+	return r.services.RegisterService(srv)
+}
+
 
 // Start the RDONode and kicks off every registered service.
 func (r *RDONode) Start() {
@@ -129,7 +211,7 @@ func (r *RDONode) Close() {
 	log.Info("Stopping raido node")
 	r.services.StopAll()
 
-	if err := r.db.Close(); err != nil {
+	if err := r.kvStore.Close(); err != nil {
 		log.Errorf("Failed to close database: %v", err)
 	}
 
@@ -146,10 +228,12 @@ func (r *RDONode) startDB(cliCtx *cli.Context) error {
 	dbPath := filepath.Join(baseDir, kv.RdoNodeDbDirName)
 	clearDB := cliCtx.Bool(cmd.ClearDB.Name)
 	forceClearDB := cliCtx.Bool(cmd.ForceClearDB.Name)
+	dbType := cliCtx.String(cmd.SQLType.Name)
 
 	log.WithField("database-path", dbPath).Info("Checking DB")
 
-	d, err := db.NewDB(r.ctx, dbPath, &kv.Config{
+	// Init key value database
+	kvStore, err := db.NewDB(r.ctx, dbPath, &kv.Config{
 		InitialMMapSize: cliCtx.Int(cmd.BoltMMapInitialSizeFlag.Name),
 	})
 	if err != nil {
@@ -169,34 +253,38 @@ func (r *RDONode) startDB(cliCtx *cli.Context) error {
 
 	if clearDBConfirmed || forceClearDB {
 		log.Warning("Removing database")
-		if err := d.Close(); err != nil {
+		if err := kvStore.Close(); err != nil {
 			return errors.Wrap(err, "could not close db prior to clearing")
 		}
-		if err := d.ClearDB(); err != nil {
+		if err := kvStore.ClearDB(); err != nil {
 			return errors.Wrap(err, "could not clear database")
 		}
-		d, err = db.NewDB(r.ctx, dbPath, &kv.Config{
+		kvStore, err = db.NewDB(r.ctx, dbPath, &kv.Config{
 			InitialMMapSize: cliCtx.Int(cmd.BoltMMapInitialSizeFlag.Name),
 		})
 		if err != nil {
-			return errors.Wrap(err, "could not create new database")
+			return errors.Wrap(err, "could not create new KV database")
 		}
 	}
 
-	r.db = d
+	// save database instance to the node
+	r.kvStore = kvStore
 
 	// Prepare SQL database config
 	SQLCfg := db.SQLConfig{
-		ShowFullStat: cliCtx.Bool(flags.LanSrvStat.Name),
+		ShowFullStat: cliCtx.Bool(flags.SrvStat.Name),
 		ConfigPath:   cliCtx.String(cmd.SQLConfigPath.Name),
 		DataDir:      dbPath,
 	}
-	outDB, err := db.NewUTxODB(r.ctx, dbPath, &SQLCfg)
+
+	// Init SQL database
+	sqlStore, err := db.NewUTxODB(r.ctx, dbType, &SQLCfg)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "could not create new SQL database")
 	}
 
-	r.outDB = outDB
+	// Save database instance to the node
+	r.outDB = sqlStore
 
 	return nil
 }

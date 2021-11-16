@@ -7,8 +7,11 @@ import (
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/txpool"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
+	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/urfave/cli/v2"
+	"google.golang.org/grpc/status"
 	"sync"
 	"time"
 )
@@ -17,8 +20,8 @@ const generatorInterval = 500 * time.Millisecond
 
 // NewService creates new ChainService
 func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (*Service, error) {
-	statFlag := cliCtx.Bool(flags.LanSrvStat.Name)
-	expStatFlag := cliCtx.Bool(flags.LanSrvExpStat.Name)
+	statFlag := cliCtx.Bool(flags.SrvStat.Name)
+	expStatFlag := cliCtx.Bool(flags.SrvExpStat.Name)
 
 	// create blockchain instance
 	bc, err := NewBlockChain(kv, cliCtx)
@@ -225,6 +228,46 @@ func (s *Service) SyncDatabase() error {
 	err = s.outm.CheckBalance()
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+
+// FindAllUTxO returns all address unspent outputs.
+func (s *Service) FindAllUTxO(addr string) ([]*types.UTxO, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.outm.FindAllUTxO(addr)
+}
+
+// GetSyncStatus return sync status of local blockchain with network
+func (s *Service) GetSyncStatus() (string, error) {
+	s.mu.RLock()
+	isNodeReady := s.ready
+	s.mu.RUnlock()
+
+	statusMsg := "Not ready."
+	if isNodeReady {
+		statusMsg = "Ready. Synced."
+	}
+
+	return statusMsg, nil
+}
+
+func (s *Service) GetServiceStatus() (string, error) {
+	return s.GetSyncStatus()
+}
+
+// SendRawTx implements PoolAPI for gRPC gateway // TODO remove it to another service
+func (s *Service) SendRawTx(tx *prototype.Transaction) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	err := s.txPool.SendTx(tx)
+	if err != nil {
+		return status.Error(17, err.Error())
 	}
 
 	return nil

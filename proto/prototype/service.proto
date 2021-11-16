@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+option go_package = "prototype/.;prototype";
+
+package rdo.service;
+
+import "google/protobuf/descriptor.proto";
+import "google/protobuf/empty.proto";
+import "google/api/annotations.proto";
+import "validate/validate.proto";
+import "prototype/transport.proto";
+import "prototype/types.proto";
+
+// RaidoChainService service for work with blockchain
+service RaidoChainService {
+
+  // GetUTxO get all unspent transaction outputs of given address
+  rpc GetUTxO(AddressRequest) returns (UTxOResponse){
+    option (google.api.http) = {
+      get: "/rdo/v1/chain/utxo/{address}"
+    };
+  }
+
+  // GetStatus returns node status
+  rpc GetStatus(google.protobuf.Empty) returns (StatusResponse) {
+    option (google.api.http) = {
+      get: "/rdo/v1/chain/status"
+    };
+  }
+
+}
+
+// AttestationService add new transactions to the pool and gossip transaction to known peers.
+service AttestationService {
+
+  // SendTx send signed transaction to the node.
+  rpc SendTx(SendTxRequest) returns (ErrorResponse) {
+    option (google.api.http) = {
+      post: "/rdo/v1/attestation/send"
+      body: "*"
+    };
+  }
+
+}
+
+message AddressRequest{
+  string address = 1 [(validate.rules).string.len = 42];
+}
+
+message UTxOResponse{
+  repeated rdo.transport.UTxO data = 1;
+}
+
+message StatusResponse{
+  string error = 1;
+  string data = 2;
+}
+
+message SendTxRequest{
+  rdo.prototype.types.Transaction tx = 1;
+}
+
+message ErrorResponse {
+  string error = 1;
+}

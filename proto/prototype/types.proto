@@ -1,11 +1,12 @@
 syntax = "proto3";
 
-option go_package = "github.com/raidoNetwork/RDO_v2/proto/prototype";
+option go_package = "prototype/.;prototype";
 
 package rdo.prototype.types;
 
 import "google/protobuf/descriptor.proto";
 import "ext/options.proto";
+import "validate/validate.proto";
 
 message Block{
   uint64 num = 1;
@@ -26,29 +27,29 @@ message Sign{
 }
 
 message Transaction{
-  uint64 num = 1;
-  uint32 type = 2;
-  uint64 timestamp = 3;
-  bytes hash = 4 [(rdo.ext.opts.ssz_size) = "32"];
-  uint64 fee = 5;
-  bytes data = 6 [(rdo.ext.opts.ssz_max) = "10000"]; // external byte data
+  uint64 num = 1 [(validate.rules).uint64.gte = 0];
+  uint32 type = 2 [(validate.rules).uint32.const = 1];
+  uint64 timestamp = 3 [(validate.rules).uint64.gt = 0];
+  bytes hash = 4 [(rdo.ext.opts.ssz_size) = "32", (validate.rules).bytes.len = 32];
+  uint64 fee = 5 [(validate.rules).uint64.gt = 0];
+  bytes data = 6 [(rdo.ext.opts.ssz_max) = "10000", (validate.rules).bytes.max_len = 10000]; // external byte data
   repeated TxInput inputs = 7 [(rdo.ext.opts.ssz_max) = "20"];
   repeated TxOutput outputs = 8 [(rdo.ext.opts.ssz_max) = "20"];
-  bytes signature = 9 [(rdo.ext.opts.ssz_size) = "65"];
+  bytes signature = 9 [(rdo.ext.opts.ssz_size) = "65", (validate.rules).bytes.len = 65];
 }
 
 message TxInput {
-  bytes hash = 1 [(rdo.ext.opts.ssz_size) = "32"];
+  bytes hash = 1 [(rdo.ext.opts.ssz_size) = "32", (validate.rules).bytes.len = 32];
   uint32 index = 2;
-  bytes address = 3 [(rdo.ext.opts.ssz_size) = "32"];
-  uint64 amount = 4;
-  bytes signature = 5 [(rdo.ext.opts.ssz_size) = "65"]; // deprecated
+  bytes address = 3 [(rdo.ext.opts.ssz_size) = "20", (validate.rules).bytes.len = 20];
+  uint64 amount = 4 [(validate.rules).uint64.gt = 0];
+  bytes signature = 5 [(rdo.ext.opts.ssz_size) = "65", (validate.rules).bytes.len = 65]; // deprecated
 }
 
 message TxOutput{
-  bytes address = 1 [(rdo.ext.opts.ssz_size) = "20"];
-  uint64 amount = 2;
-  optional bytes node = 3 [(rdo.ext.opts.ssz_max) = "32"];
+  bytes address = 1 [(rdo.ext.opts.ssz_size) = "20", (validate.rules).bytes.len = 20];
+  uint64 amount = 2 [(validate.rules).uint64.gt = 0];
+  bytes node = 3 [(rdo.ext.opts.ssz_max) = "32", (validate.rules).bytes.len = 32, (validate.rules).bytes.ignore_empty=true];
 }
 
 
