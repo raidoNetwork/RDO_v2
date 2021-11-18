@@ -146,6 +146,225 @@ var _ interface {
 	ErrorName() string
 } = AddressRequestValidationError{}
 
+// Validate checks the field values on NumRequest with the rules defined in the
+// proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *NumRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on NumRequest with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in NumRequestMultiError, or
+// nil if none found.
+func (m *NumRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *NumRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if m.GetNum() < 0 {
+		err := NumRequestValidationError{
+			field:  "Num",
+			reason: "value must be greater than or equal to 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return NumRequestMultiError(errors)
+	}
+	return nil
+}
+
+// NumRequestMultiError is an error wrapping multiple validation errors
+// returned by NumRequest.ValidateAll() if the designated constraints aren't met.
+type NumRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m NumRequestMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m NumRequestMultiError) AllErrors() []error { return m }
+
+// NumRequestValidationError is the validation error returned by
+// NumRequest.Validate if the designated constraints aren't met.
+type NumRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e NumRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e NumRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e NumRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e NumRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e NumRequestValidationError) ErrorName() string { return "NumRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e NumRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sNumRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = NumRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = NumRequestValidationError{}
+
+// Validate checks the field values on HashRequest with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *HashRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on HashRequest with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in HashRequestMultiError, or
+// nil if none found.
+func (m *HashRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *HashRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if utf8.RuneCountInString(m.GetHash()) != 66 {
+		err := HashRequestValidationError{
+			field:  "Hash",
+			reason: "value length must be 66 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+
+	}
+
+	if len(errors) > 0 {
+		return HashRequestMultiError(errors)
+	}
+	return nil
+}
+
+// HashRequestMultiError is an error wrapping multiple validation errors
+// returned by HashRequest.ValidateAll() if the designated constraints aren't met.
+type HashRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m HashRequestMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m HashRequestMultiError) AllErrors() []error { return m }
+
+// HashRequestValidationError is the validation error returned by
+// HashRequest.Validate if the designated constraints aren't met.
+type HashRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e HashRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e HashRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e HashRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e HashRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e HashRequestValidationError) ErrorName() string { return "HashRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e HashRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sHashRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = HashRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = HashRequestValidationError{}
+
 // Validate checks the field values on UTxOResponse with the rules defined in
 // the proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
@@ -609,3 +828,236 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = ErrorResponseValidationError{}
+
+// Validate checks the field values on BlockResponse with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *BlockResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on BlockResponse with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in BlockResponseMultiError, or
+// nil if none found.
+func (m *BlockResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *BlockResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if all {
+		switch v := interface{}(m.GetBlock()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, BlockResponseValidationError{
+					field:  "Block",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, BlockResponseValidationError{
+					field:  "Block",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetBlock()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return BlockResponseValidationError{
+				field:  "Block",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	// no validation rules for Error
+
+	if len(errors) > 0 {
+		return BlockResponseMultiError(errors)
+	}
+	return nil
+}
+
+// BlockResponseMultiError is an error wrapping multiple validation errors
+// returned by BlockResponse.ValidateAll() if the designated constraints
+// aren't met.
+type BlockResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m BlockResponseMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m BlockResponseMultiError) AllErrors() []error { return m }
+
+// BlockResponseValidationError is the validation error returned by
+// BlockResponse.Validate if the designated constraints aren't met.
+type BlockResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e BlockResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e BlockResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e BlockResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e BlockResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e BlockResponseValidationError) ErrorName() string { return "BlockResponseValidationError" }
+
+// Error satisfies the builtin error interface
+func (e BlockResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sBlockResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = BlockResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = BlockResponseValidationError{}
+
+// Validate checks the field values on BalanceResponse with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *BalanceResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on BalanceResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// BalanceResponseMultiError, or nil if none found.
+func (m *BalanceResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *BalanceResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Balance
+
+	// no validation rules for Error
+
+	if len(errors) > 0 {
+		return BalanceResponseMultiError(errors)
+	}
+	return nil
+}
+
+// BalanceResponseMultiError is an error wrapping multiple validation errors
+// returned by BalanceResponse.ValidateAll() if the designated constraints
+// aren't met.
+type BalanceResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m BalanceResponseMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m BalanceResponseMultiError) AllErrors() []error { return m }
+
+// BalanceResponseValidationError is the validation error returned by
+// BalanceResponse.Validate if the designated constraints aren't met.
+type BalanceResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e BalanceResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e BalanceResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e BalanceResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e BalanceResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e BalanceResponseValidationError) ErrorName() string { return "BalanceResponseValidationError" }
+
+// Error satisfies the builtin error interface
+func (e BalanceResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sBalanceResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = BalanceResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = BalanceResponseValidationError{}

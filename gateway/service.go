@@ -5,8 +5,8 @@ import (
 	"fmt"
 	gwruntime "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/pkg/errors"
-	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/rs/cors"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -17,10 +17,12 @@ import (
 )
 
 type ChainAPI interface {
-	consensus.BalanceReader
-
+	FindAllUTxO(string) ([]*types.UTxO, error)
 	GetSyncStatus() (string, error)
 	GetServiceStatus() (string, error)
+	GetBlockByNum(uint64) (*prototype.Block, error)
+	GetBlockByHash(string) (*prototype.Block, error)
+	GetBalance(string) (uint64, error)
 }
 
 type AttestationAPI interface {

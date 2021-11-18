@@ -272,3 +272,27 @@ func (s *Service) SendRawTx(tx *prototype.Transaction) error {
 
 	return nil
 }
+
+
+func (s *Service) GetBlockByNum(n uint64) (*prototype.Block, error) {
+	return s.bc.GetBlockByNum(n)
+}
+
+func (s *Service) GetBlockByHash(hexHash string) (*prototype.Block, error) {
+	hash := common.HexToHash(hexHash)
+	return s.bc.GetBlockByHash(hash.Bytes())
+}
+
+func (s *Service) GetBalance(addr string) (uint64, error) {
+	utxo, err := s.FindAllUTxO(addr)
+	if err != nil {
+		return 0, err
+	}
+
+	var balance uint64 = 0
+	for _, uo := range utxo {
+		balance += uo.Amount
+	}
+
+	return balance, nil
+}

@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+option go_package = "prototype/.;prototype";
+
+package rdo.chainservice.response;
+
+message BlockValue {
+  uint64 num = 1;
+  string hash = 2;
+  string parent = 3;
+  uint64 timestamp = 4;
+  string proposer = 5;
+  repeated string approvers = 6;
+  repeated string slashers = 7;
+  repeated TxValue transactions = 8;
+}
+
+message TxValue{
+  uint64 num = 1;
+  uint32 type = 2;
+  uint64 timestamp = 3;
+  string hash = 4;
+  uint64 fee = 5;
+  bytes data = 6;
+  repeated TxInputValue inputs = 7;
+  repeated TxOutputValue outputs = 8;
+}
+
+message TxInputValue{
+  string hash = 1;
+  uint32 index = 2;
+  string address = 3;
+  uint64 amount = 4;
+}
+
+message TxOutputValue{
+  string address = 1;
+  uint64 amount = 2;
+  string node = 3;
+}

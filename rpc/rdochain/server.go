@@ -2,6 +2,7 @@ package rdochain
 
 import (
 	"context"
+	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/gateway"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/sirupsen/logrus"
@@ -54,6 +55,88 @@ func (s *Server) GetStatus(ctx context.Context, nothing *emptypb.Empty) (*protot
 	}
 
 	res.Data = data
+
+	return res, nil
+}
+
+
+func (s *Server) GetBlockByNum(ctx context.Context, req *prototype.NumRequest) (*prototype.BlockResponse, error) {
+	res := new(prototype.BlockResponse)
+
+	err := req.Validate()
+	if err != nil {
+		log.Errorf("ChainAPI.GetBlockByNum error: %s", err)
+		res.Error = err.Error()
+		return res, err
+	}
+
+	log.Infof("ChainAPI.GetBlockByNum(%d)", req.GetNum())
+
+	block, err := s.ChainService.GetBlockByNum(req.GetNum())
+	if err != nil {
+		res.Error = err.Error()
+		return res, err
+	}
+
+	if block == nil {
+		err = errors.Errorf("Not found block with num %d", req.GetNum())
+		res.Error = err.Error()
+		return res, err
+	}
+
+	res.Block = convBlock(block)
+
+	return res, nil
+}
+
+func (s *Server) GetBlockByHash(ctx context.Context, req *prototype.HashRequest) (*prototype.BlockResponse, error) {
+	res := new(prototype.BlockResponse)
+
+	err := req.Validate()
+	if err != nil {
+		log.Errorf("ChainAPI.GetBlockByHash error: %s", err)
+		res.Error = err.Error()
+		return res, err
+	}
+
+	log.Infof("ChainAPI.GetBlockByHash(%s)", req.GetHash())
+
+	block, err := s.ChainService.GetBlockByHash(req.GetHash())
+	if err != nil {
+		res.Error = err.Error()
+		return res, err
+	}
+
+	if block == nil {
+		err = errors.Errorf("Not found block with hash %s", req.GetHash())
+		res.Error = err.Error()
+		return res, err
+	}
+
+	res.Block = convBlock(block)
+
+	return res, nil
+}
+
+func (s *Server) GetBalance(ctx context.Context, req *prototype.AddressRequest) (*prototype.BalanceResponse, error) {
+	res := new(prototype.BalanceResponse)
+	err := req.Validate()
+	if err != nil {
+		log.Errorf("ChainAPI.GetBalance error: %s", err)
+		res.Error = err.Error()
+		return nil, err
+	}
+
+	addr := req.GetAddress()
+	log.Infof("ChainAPI.GetBalance(%s)", addr)
+
+	balance, err := s.ChainService.GetBalance(addr)
+	if err != nil {
+		res.Error = err.Error()
+		return res, err
+	}
+
+	res.Balance = balance
 
 	return res, nil
 }

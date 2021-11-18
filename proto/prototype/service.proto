@@ -10,6 +10,7 @@ import "google/api/annotations.proto";
 import "validate/validate.proto";
 import "prototype/transport.proto";
 import "prototype/types.proto";
+import "prototype/chain.service.response.proto";
 
 // RaidoChainService service for work with blockchain
 service RaidoChainService {
@@ -25,6 +26,28 @@ service RaidoChainService {
   rpc GetStatus(google.protobuf.Empty) returns (StatusResponse) {
     option (google.api.http) = {
       get: "/rdo/v1/chain/status"
+    };
+  }
+
+
+  // GetBlockByNum returns block with given number or error if not found.
+  rpc GetBlockByNum(NumRequest) returns (BlockResponse) {
+    option (google.api.http) = {
+      get: "/rdo/v1/chain/block/{num}"
+    };
+  }
+
+  // GetBlockByHash returns block with given hash or error if not found.
+  rpc GetBlockByHash(HashRequest) returns (BlockResponse) {
+    option (google.api.http) = {
+      get: "/rdo/v1/chain/block/hash/{hash}"
+    };
+  }
+
+  // GetBalance returns address balance.
+  rpc GetBalance(AddressRequest) returns (BalanceResponse) {
+    option (google.api.http) = {
+      get: "/rdo/v1/chain/balance/{address}"
     };
   }
 
@@ -47,6 +70,14 @@ message AddressRequest{
   string address = 1 [(validate.rules).string.len = 42];
 }
 
+message NumRequest{
+  uint64 num = 1 [(validate.rules).uint64.gte = 0];
+}
+
+message HashRequest {
+  string hash = 1 [(validate.rules).string.len = 66];
+}
+
 message UTxOResponse{
   repeated rdo.transport.UTxO data = 1;
 }
@@ -62,4 +93,14 @@ message SendTxRequest{
 
 message ErrorResponse {
   string error = 1;
+}
+
+message BlockResponse {
+  rdo.chainservice.response.BlockValue block = 1;
+  string error = 2;
+}
+
+message BalanceResponse {
+  uint64 balance = 1;
+  string error = 2;
 }

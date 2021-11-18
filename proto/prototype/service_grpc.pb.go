@@ -23,6 +23,12 @@ type RaidoChainServiceClient interface {
 	GetUTxO(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*UTxOResponse, error)
 	// GetStatus returns node status
 	GetStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*StatusResponse, error)
+	// GetBlockByNum returns block with given number or error if not found.
+	GetBlockByNum(ctx context.Context, in *NumRequest, opts ...grpc.CallOption) (*BlockResponse, error)
+	// GetBlockByHash returns block with given hash or error if not found.
+	GetBlockByHash(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*BlockResponse, error)
+	// GetBalance returns address balance.
+	GetBalance(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*BalanceResponse, error)
 }
 
 type raidoChainServiceClient struct {
@@ -51,6 +57,33 @@ func (c *raidoChainServiceClient) GetStatus(ctx context.Context, in *emptypb.Emp
 	return out, nil
 }
 
+func (c *raidoChainServiceClient) GetBlockByNum(ctx context.Context, in *NumRequest, opts ...grpc.CallOption) (*BlockResponse, error) {
+	out := new(BlockResponse)
+	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChainService/GetBlockByNum", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *raidoChainServiceClient) GetBlockByHash(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*BlockResponse, error) {
+	out := new(BlockResponse)
+	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChainService/GetBlockByHash", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *raidoChainServiceClient) GetBalance(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*BalanceResponse, error) {
+	out := new(BalanceResponse)
+	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChainService/GetBalance", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RaidoChainServiceServer is the server API for RaidoChainService service.
 // All implementations must embed UnimplementedRaidoChainServiceServer
 // for forward compatibility
@@ -59,6 +92,12 @@ type RaidoChainServiceServer interface {
 	GetUTxO(context.Context, *AddressRequest) (*UTxOResponse, error)
 	// GetStatus returns node status
 	GetStatus(context.Context, *emptypb.Empty) (*StatusResponse, error)
+	// GetBlockByNum returns block with given number or error if not found.
+	GetBlockByNum(context.Context, *NumRequest) (*BlockResponse, error)
+	// GetBlockByHash returns block with given hash or error if not found.
+	GetBlockByHash(context.Context, *HashRequest) (*BlockResponse, error)
+	// GetBalance returns address balance.
+	GetBalance(context.Context, *AddressRequest) (*BalanceResponse, error)
 	mustEmbedUnimplementedRaidoChainServiceServer()
 }
 
@@ -71,6 +110,15 @@ func (UnimplementedRaidoChainServiceServer) GetUTxO(context.Context, *AddressReq
 }
 func (UnimplementedRaidoChainServiceServer) GetStatus(context.Context, *emptypb.Empty) (*StatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetStatus not implemented")
+}
+func (UnimplementedRaidoChainServiceServer) GetBlockByNum(context.Context, *NumRequest) (*BlockResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetBlockByNum not implemented")
+}
+func (UnimplementedRaidoChainServiceServer) GetBlockByHash(context.Context, *HashRequest) (*BlockResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetBlockByHash not implemented")
+}
+func (UnimplementedRaidoChainServiceServer) GetBalance(context.Context, *AddressRequest) (*BalanceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetBalance not implemented")
 }
 func (UnimplementedRaidoChainServiceServer) mustEmbedUnimplementedRaidoChainServiceServer() {}
 
@@ -121,6 +169,60 @@ func _RaidoChainService_GetStatus_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RaidoChainService_GetBlockByNum_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NumRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RaidoChainServiceServer).GetBlockByNum(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rdo.service.RaidoChainService/GetBlockByNum",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RaidoChainServiceServer).GetBlockByNum(ctx, req.(*NumRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RaidoChainService_GetBlockByHash_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HashRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RaidoChainServiceServer).GetBlockByHash(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rdo.service.RaidoChainService/GetBlockByHash",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RaidoChainServiceServer).GetBlockByHash(ctx, req.(*HashRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RaidoChainService_GetBalance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RaidoChainServiceServer).GetBalance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rdo.service.RaidoChainService/GetBalance",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RaidoChainServiceServer).GetBalance(ctx, req.(*AddressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RaidoChainService_ServiceDesc is the grpc.ServiceDesc for RaidoChainService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -135,6 +237,18 @@ var RaidoChainService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetStatus",
 			Handler:    _RaidoChainService_GetStatus_Handler,
+		},
+		{
+			MethodName: "GetBlockByNum",
+			Handler:    _RaidoChainService_GetBlockByNum_Handler,
+		},
+		{
+			MethodName: "GetBlockByHash",
+			Handler:    _RaidoChainService_GetBlockByHash_Handler,
+		},
+		{
+			MethodName: "GetBalance",
+			Handler:    _RaidoChainService_GetBalance_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
