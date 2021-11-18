@@ -323,3 +323,13 @@ func (bc *BlockChain) GetCurrentBlockNum() uint64 {
 
 	return bc.currentBlockNum
 }
+
+// GetTransaction get transaction with given hash from KV.
+func (bc *BlockChain) GetTransaction(hash string) (*prototype.Transaction, error) {
+	tx, err := bc.db.GetTransactionByHash(common.HexToHash(hash).Bytes())
+	if err != nil {
+		return nil, err
+	}
+
+	return tx, nil
+}

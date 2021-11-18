@@ -23,6 +23,7 @@ type ChainAPI interface {
 	GetBlockByNum(uint64) (*prototype.Block, error)
 	GetBlockByHash(string) (*prototype.Block, error)
 	GetBalance(string) (uint64, error)
+	GetTransaction(string) (*prototype.Transaction, error)
 }
 
 type AttestationAPI interface {

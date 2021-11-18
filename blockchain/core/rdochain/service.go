@@ -296,3 +296,7 @@ func (s *Service) GetBalance(addr string) (uint64, error) {
 
 	return balance, nil
 }
+
+func (s *Service) GetTransaction(hash string) (*prototype.Transaction, error) {
+	return s.bc.GetTransaction(hash)
+}

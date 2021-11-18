@@ -12,6 +12,7 @@ import "prototype/transport.proto";
 import "prototype/types.proto";
 import "prototype/chain.service.response.proto";
 
+
 // RaidoChainService service for work with blockchain
 service RaidoChainService {
 
@@ -28,7 +29,6 @@ service RaidoChainService {
       get: "/rdo/v1/chain/status"
     };
   }
-
 
   // GetBlockByNum returns block with given number or error if not found.
   rpc GetBlockByNum(NumRequest) returns (BlockResponse) {
@@ -48,6 +48,13 @@ service RaidoChainService {
   rpc GetBalance(AddressRequest) returns (BalanceResponse) {
     option (google.api.http) = {
       get: "/rdo/v1/chain/balance/{address}"
+    };
+  }
+
+  // GetTransaction returns transaction with given hash.
+  rpc GetTransaction(HashRequest) returns (TransactionResponse) {
+    option (google.api.http) = {
+      get: "/rdo/v1/chain/transaction/{hash}"
     };
   }
 
@@ -97,6 +104,11 @@ message ErrorResponse {
 
 message BlockResponse {
   rdo.chainservice.response.BlockValue block = 1;
+  string error = 2;
+}
+
+message TransactionResponse {
+  rdo.chainservice.response.TxValue tx = 1;
   string error = 2;
 }
 

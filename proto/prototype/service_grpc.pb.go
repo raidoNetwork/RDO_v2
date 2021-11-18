@@ -29,6 +29,8 @@ type RaidoChainServiceClient interface {
 	GetBlockByHash(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*BlockResponse, error)
 	// GetBalance returns address balance.
 	GetBalance(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*BalanceResponse, error)
+	// GetTransaction returns transaction with given hash.
+	GetTransaction(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*TransactionResponse, error)
 }
 
 type raidoChainServiceClient struct {
@@ -84,6 +86,15 @@ func (c *raidoChainServiceClient) GetBalance(ctx context.Context, in *AddressReq
 	return out, nil
 }
 
+func (c *raidoChainServiceClient) GetTransaction(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*TransactionResponse, error) {
+	out := new(TransactionResponse)
+	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChainService/GetTransaction", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RaidoChainServiceServer is the server API for RaidoChainService service.
 // All implementations must embed UnimplementedRaidoChainServiceServer
 // for forward compatibility
@@ -98,6 +109,8 @@ type RaidoChainServiceServer interface {
 	GetBlockByHash(context.Context, *HashRequest) (*BlockResponse, error)
 	// GetBalance returns address balance.
 	GetBalance(context.Context, *AddressRequest) (*BalanceResponse, error)
+	// GetTransaction returns transaction with given hash.
+	GetTransaction(context.Context, *HashRequest) (*TransactionResponse, error)
 	mustEmbedUnimplementedRaidoChainServiceServer()
 }
 
@@ -119,6 +132,9 @@ func (UnimplementedRaidoChainServiceServer) GetBlockByHash(context.Context, *Has
 }
 func (UnimplementedRaidoChainServiceServer) GetBalance(context.Context, *AddressRequest) (*BalanceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBalance not implemented")
+}
+func (UnimplementedRaidoChainServiceServer) GetTransaction(context.Context, *HashRequest) (*TransactionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTransaction not implemented")
 }
 func (UnimplementedRaidoChainServiceServer) mustEmbedUnimplementedRaidoChainServiceServer() {}
 
@@ -223,6 +239,24 @@ func _RaidoChainService_GetBalance_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RaidoChainService_GetTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HashRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RaidoChainServiceServer).GetTransaction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rdo.service.RaidoChainService/GetTransaction",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RaidoChainServiceServer).GetTransaction(ctx, req.(*HashRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RaidoChainService_ServiceDesc is the grpc.ServiceDesc for RaidoChainService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -249,6 +283,10 @@ var RaidoChainService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetBalance",
 			Handler:    _RaidoChainService_GetBalance_Handler,
+		},
+		{
+			MethodName: "GetTransaction",
+			Handler:    _RaidoChainService_GetTransaction_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

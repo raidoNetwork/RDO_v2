@@ -140,3 +140,33 @@ func (s *Server) GetBalance(ctx context.Context, req *prototype.AddressRequest) 
 
 	return res, nil
 }
+
+
+func (s *Server) GetTransaction(ctx context.Context, req *prototype.HashRequest) (*prototype.TransactionResponse, error) {
+	res := new(prototype.TransactionResponse)
+
+	err := req.Validate()
+	if err != nil {
+		log.Errorf("ChainAPI.GetTransaction error: %s", err)
+		res.Error = err.Error()
+		return res, err
+	}
+
+	log.Infof("ChainAPI.GetTransaction(%s)", req.GetHash())
+
+	tx, err := s.ChainService.GetTransaction(req.GetHash())
+	if err != nil {
+		res.Error = err.Error()
+		return res, err
+	}
+
+	if tx == nil {
+		err = errors.Errorf("Not found block with hash %s", req.GetHash())
+		res.Error = err.Error()
+		return res, err
+	}
+
+	res.Tx = convTx(tx)
+
+	return res, nil
+}

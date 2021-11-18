@@ -13,6 +13,7 @@ type BlockStorage interface {
 
 	HeadAccessStorage
 	BlockReader
+	TransactionMapper
 }
 
 // BlockReader interface to access blocks
@@ -35,6 +36,11 @@ type HeadAccessStorage interface {
 
 	// GetGenesis returns Genesis block
 	GetGenesis() (*prototype.Block, error)
+}
+
+type TransactionMapper interface {
+	// GetTransactionByHash find tx with given hash in the database.
+	GetTransactionByHash([]byte) (*prototype.Transaction, error)
 }
 
 // Database common database interface
