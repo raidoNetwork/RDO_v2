@@ -1,4 +1,4 @@
-package rdochain
+package cast
 
 import (
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -6,7 +6,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 )
 
-func convertProtoToInner(uo *types.UTxO) *prototype.UTxO {
+func ConvertProtoToInner(uo *types.UTxO) *prototype.UTxO {
 	uopb := new(prototype.UTxO)
 
 	uopb.BlockNum = uo.BlockNum
@@ -22,58 +22,58 @@ func convertProtoToInner(uo *types.UTxO) *prototype.UTxO {
 	return uopb
 }
 
-func convBlock(block *prototype.Block) *prototype.BlockValue {
+func ConvBlock(block *prototype.Block) *prototype.BlockValue {
 	bv := new(prototype.BlockValue)
 
 	bv.Num = block.Num
-	bv.Hash = convHash(block.Hash)
-	bv.Parent = convHash(block.Parent)
+	bv.Hash = ConvHash(block.Hash)
+	bv.Parent = ConvHash(block.Parent)
 	bv.Timestamp = block.Timestamp
-	bv.Proposer = convSign(block.Proposer)
+	bv.Proposer = ConvSign(block.Proposer)
 
 	size := len(block.Approvers)
 	bv.Approvers = make([]string, size)
 
 	for i := 0; i < size; i++ {
-		bv.Approvers[i] = convSign(block.Approvers[i])
+		bv.Approvers[i] = ConvSign(block.Approvers[i])
 	}
 
 	size = len(block.Slashers)
 	bv.Slashers = make([]string, size)
 
 	for i := 0; i < size; i++ {
-		bv.Slashers[i] = convSign(block.Slashers[i])
+		bv.Slashers[i] = ConvSign(block.Slashers[i])
 	}
 
 	size = len(block.Transactions)
 	bv.Transactions = make([]*prototype.TxValue, size)
 
 	for i := 0; i < size; i++ {
-		bv.Transactions[i] = convTx(block.Transactions[i])
+		bv.Transactions[i] = ConvTx(block.Transactions[i])
 	}
 
 	return bv
 }
 
-func convSign(s *prototype.Sign) string {
-	return convHash(s.Address)
+func ConvSign(s *prototype.Sign) string {
+	return ConvHash(s.Address)
 }
 
-func convAddress(a []byte) string {
+func ConvAddress(a []byte) string {
 	return common.BytesToAddress(a).Hex()
 }
 
-func convHash(h []byte) string {
+func ConvHash(h []byte) string {
 	return common.BytesToHash(h).Hex()
 }
 
-func convTx(tx *prototype.Transaction) *prototype.TxValue {
+func ConvTx(tx *prototype.Transaction) *prototype.TxValue {
 	tv := new(prototype.TxValue)
 
 	tv.Num = tx.Num
 	tv.Type = tx.Type
 	tv.Timestamp = tx.Timestamp
-	tv.Hash = convHash(tx.Hash)
+	tv.Hash = ConvHash(tx.Hash)
 	tv.Fee = tx.Fee
 	tv.Data = tx.Data
 
@@ -81,7 +81,7 @@ func convTx(tx *prototype.Transaction) *prototype.TxValue {
 	tv.Inputs = make([]*prototype.TxInputValue, size)
 
 	for i := 0; i < size; i++ {
-		tv.Inputs[i] = convInput(tx.Inputs[i])
+		tv.Inputs[i] = ConvInput(tx.Inputs[i])
 	}
 
 	size = len(tx.Outputs)
@@ -94,12 +94,12 @@ func convTx(tx *prototype.Transaction) *prototype.TxValue {
 	return tv
 }
 
-func convInput(in *prototype.TxInput) *prototype.TxInputValue {
+func ConvInput(in *prototype.TxInput) *prototype.TxInputValue {
 	inv := new(prototype.TxInputValue)
 
-	inv.Hash = convHash(in.Hash)
+	inv.Hash = ConvHash(in.Hash)
 	inv.Index = in.Index
-	inv.Address = convAddress(in.Address)
+	inv.Address = ConvAddress(in.Address)
 	inv.Amount = in.Amount
 
 	return inv
@@ -108,9 +108,9 @@ func convInput(in *prototype.TxInput) *prototype.TxInputValue {
 func convOutput(out *prototype.TxOutput) *prototype.TxOutputValue {
 	outv := new(prototype.TxOutputValue)
 
-	outv.Address = convAddress(out.Address)
+	outv.Address = ConvAddress(out.Address)
 	outv.Amount = out.Amount
-	outv.Node = convHash(out.Node)
+	outv.Node = ConvHash(out.Node)
 
 	return outv
 }

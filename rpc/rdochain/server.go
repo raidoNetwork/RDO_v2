@@ -3,8 +3,9 @@ package rdochain
 import (
 	"context"
 	"github.com/pkg/errors"
-	"github.com/raidoNetwork/RDO_v2/gateway"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/rpc/api"
+	"github.com/raidoNetwork/RDO_v2/rpc/cast"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -14,9 +15,9 @@ var log = logrus.WithField("prefix", "RPC Server")
 
 type Server struct {
 	Server       *grpc.Server
-	ChainService gateway.ChainAPI
+	Backend api.ChainAPI
 
-	prototype.RaidoChainServiceServer
+	prototype.UnimplementedRaidoChainServiceServer
 }
 
 func (s *Server) GetUTxO(ctx context.Context, request *prototype.AddressRequest) (*prototype.UTxOResponse, error) {
@@ -30,7 +31,7 @@ func (s *Server) GetUTxO(ctx context.Context, request *prototype.AddressRequest)
 
 	log.Infof("ChainAPI.GetUTxO %s", addr)
 
-	arr, err := s.ChainService.FindAllUTxO(addr)
+	arr, err := s.Backend.FindAllUTxO(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +40,7 @@ func (s *Server) GetUTxO(ctx context.Context, request *prototype.AddressRequest)
 	response.Data = make([]*prototype.UTxO, len(arr))
 
 	for i, uo := range arr {
-		response.Data[i] = convertProtoToInner(uo)
+		response.Data[i] = cast.ConvertProtoToInner(uo)
 	}
 
 	return response, nil
@@ -48,7 +49,7 @@ func (s *Server) GetUTxO(ctx context.Context, request *prototype.AddressRequest)
 func (s *Server) GetStatus(ctx context.Context, nothing *emptypb.Empty) (*prototype.StatusResponse, error) {
 	res := new(prototype.StatusResponse)
 
-	data, err := s.ChainService.GetSyncStatus()
+	data, err := s.Backend.GetSyncStatus()
 	if err != nil {
 		res.Error = err.Error()
 		return res, err
@@ -72,7 +73,7 @@ func (s *Server) GetBlockByNum(ctx context.Context, req *prototype.NumRequest) (
 
 	log.Infof("ChainAPI.GetBlockByNum(%d)", req.GetNum())
 
-	block, err := s.ChainService.GetBlockByNum(req.GetNum())
+	block, err := s.Backend.GetBlockByNum(req.GetNum())
 	if err != nil {
 		res.Error = err.Error()
 		return res, err
@@ -84,7 +85,7 @@ func (s *Server) GetBlockByNum(ctx context.Context, req *prototype.NumRequest) (
 		return res, err
 	}
 
-	res.Block = convBlock(block)
+	res.Block = cast.ConvBlock(block)
 
 	return res, nil
 }
@@ -101,7 +102,7 @@ func (s *Server) GetBlockByHash(ctx context.Context, req *prototype.HashRequest)
 
 	log.Infof("ChainAPI.GetBlockByHash(%s)", req.GetHash())
 
-	block, err := s.ChainService.GetBlockByHash(req.GetHash())
+	block, err := s.Backend.GetBlockByHash(req.GetHash())
 	if err != nil {
 		res.Error = err.Error()
 		return res, err
@@ -113,7 +114,7 @@ func (s *Server) GetBlockByHash(ctx context.Context, req *prototype.HashRequest)
 		return res, err
 	}
 
-	res.Block = convBlock(block)
+	res.Block = cast.ConvBlock(block)
 
 	return res, nil
 }
@@ -130,7 +131,7 @@ func (s *Server) GetBalance(ctx context.Context, req *prototype.AddressRequest) 
 	addr := req.GetAddress()
 	log.Infof("ChainAPI.GetBalance(%s)", addr)
 
-	balance, err := s.ChainService.GetBalance(addr)
+	balance, err := s.Backend.GetBalance(addr)
 	if err != nil {
 		res.Error = err.Error()
 		return res, err
@@ -154,7 +155,7 @@ func (s *Server) GetTransaction(ctx context.Context, req *prototype.HashRequest)
 
 	log.Infof("ChainAPI.GetTransaction(%s)", req.GetHash())
 
-	tx, err := s.ChainService.GetTransaction(req.GetHash())
+	tx, err := s.Backend.GetTransaction(req.GetHash())
 	if err != nil {
 		res.Error = err.Error()
 		return res, err
@@ -166,7 +167,7 @@ func (s *Server) GetTransaction(ctx context.Context, req *prototype.HashRequest)
 		return res, err
 	}
 
-	res.Tx = convTx(tx)
+	res.Tx = cast.ConvTx(tx)
 
 	return res, nil
 }

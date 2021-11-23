@@ -3,8 +3,8 @@ package txpool
 import (
 	"context"
 	"github.com/pkg/errors"
-	"github.com/raidoNetwork/RDO_v2/gateway"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/rpc/api"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -12,7 +12,7 @@ import (
 
 type Server struct {
 	Server             *grpc.Server
-	AttestationService gateway.AttestationAPI
+	Backend api.AttestationAPI
 
 	prototype.UnimplementedAttestationServiceServer
 }
@@ -35,7 +35,7 @@ func (s *Server) SendTx(ctx context.Context, request *prototype.SendTxRequest) (
 
 	log.Infof("Got transaction %s", common.BytesToHash(tx.Hash).Hex())
 
-	err = s.AttestationService.SendRawTx(tx)
+	err = s.Backend.SendRawTx(tx)
 	if err != nil {
 		resp.Error = err.Error()
 		return resp, err

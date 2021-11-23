@@ -3,8 +3,8 @@ package rpc
 import (
 	"context"
 	"fmt"
-	"github.com/raidoNetwork/RDO_v2/gateway"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/rpc/api"
 	"github.com/raidoNetwork/RDO_v2/rpc/rdochain"
 	"github.com/raidoNetwork/RDO_v2/rpc/txpool"
 	"github.com/sirupsen/logrus"
@@ -22,8 +22,8 @@ var log = logrus.WithField("prefix", "RPC")
 type Config struct {
 	Host               string
 	Port               string
-	ChainService       gateway.ChainAPI
-	AttestationService gateway.AttestationAPI
+	ChainService       api.ChainAPI
+	AttestationService api.AttestationAPI
 	MaxMsgSize         int
 }
 
@@ -75,12 +75,12 @@ func (s *Service) Start() {
 
 	chainServer := &rdochain.Server{
 		Server:       s.grpcServer,
-		ChainService: s.cfg.ChainService,
+		Backend: s.cfg.ChainService,
 	}
 
 	poolServer := &txpool.Server{
 		Server:             s.grpcServer,
-		AttestationService: s.cfg.AttestationService,
+		Backend: s.cfg.AttestationService,
 	}
 
 	prototype.RegisterRaidoChainServiceServer(s.grpcServer, chainServer)

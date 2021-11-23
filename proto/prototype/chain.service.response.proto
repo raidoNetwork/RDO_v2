@@ -4,6 +4,8 @@ option go_package = "prototype/.;prototype";
 
 package rdo.chainservice.response;
 
+import "validate/validate.proto";
+
 message BlockValue {
   uint64 num = 1;
   string hash = 2;
@@ -27,14 +29,14 @@ message TxValue{
 }
 
 message TxInputValue{
-  string hash = 1;
+  string hash = 1 [(validate.rules).string.len = 66];
   uint32 index = 2;
-  string address = 3;
+  string address = 3 [(validate.rules).string.len = 42];
   uint64 amount = 4;
 }
 
 message TxOutputValue{
-  string address = 1;
+  string address = 1 [(validate.rules).string.len = 42];
   uint64 amount = 2;
-  string node = 3;
+  string node = 3 [(validate.rules).string.len = 66];
 }

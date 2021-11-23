@@ -146,12 +146,6 @@ func (r *RDONode) registerRPCservice() error {
 }
 
 func (r *RDONode) registerGatewayService() error {
-	var chainService *rdochain.Service
-	err := r.services.FetchService(&chainService)
-	if err != nil {
-		return err
-	}
-
 	host := r.cliCtx.String(flags.GRPCGatewayHost.Name)
 	port := r.cliCtx.Int(flags.GRPCGatewayPort.Name)
 	rpcPort := r.cliCtx.Int(flags.RPCPort.Name)
@@ -161,13 +155,11 @@ func (r *RDONode) registerGatewayService() error {
 
 	gatewayConfig := gateway.DefaultConfig()
 
-	// TODO replace last argument with another service in future
 	srv := gateway.NewService(r.ctx,
 		remoteAddr,
 		endpoint,
 		[]gateway.PbMux{gatewayConfig.PbMux},
-		gatewayConfig.Handler,
-		chainService, chainService).WithAllowedOrigins(allowedOrigins)
+		gatewayConfig.Handler).WithAllowedOrigins(allowedOrigins)
 
 	return r.services.RegisterService(srv)
 }

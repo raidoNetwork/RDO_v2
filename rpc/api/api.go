@@ -1,0 +1,46 @@
+package api
+
+import (
+	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared/types"
+)
+
+type ChainAPI interface {
+	/* Address data */
+
+	// GetBalance return address balance in Rei.
+	GetBalance(string) (uint64, error)
+
+	// FindAllUTxO returns unspent outputs of given address.
+	FindAllUTxO(string) ([]*types.UTxO, error)
+
+	/* Block data */
+
+	// GetBlockByHash return block with given hash.
+	GetBlockByHash(string) (*prototype.Block, error)
+
+	// GetBlockByNum return block with given num.
+	GetBlockByNum(uint64) (*prototype.Block, error)
+
+	/* Transaction data */
+
+	// GetTransaction return transaction with given hash.
+	GetTransaction(string) (*prototype.Transaction, error)
+
+	/* Status data */
+
+	// GetSyncStatus return node sync status SQL with KV.
+	GetSyncStatus() (string, error)
+
+	// GetServiceStatus return service status or error if service is offline.
+	GetServiceStatus() (string, error)
+}
+
+type AttestationAPI interface {
+	// SendRawTx send transaction to the TxPool.
+	SendRawTx(transaction *prototype.Transaction) error
+
+	// GetServiceStatus return service status or error if service is offline.
+	GetServiceStatus() (string, error)
+}
+

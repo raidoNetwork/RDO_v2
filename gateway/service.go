@@ -5,8 +5,6 @@ import (
 	"fmt"
 	gwruntime "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/pkg/errors"
-	"github.com/raidoNetwork/RDO_v2/proto/prototype"
-	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/rs/cors"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -16,20 +14,6 @@ import (
 	"time"
 )
 
-type ChainAPI interface {
-	FindAllUTxO(string) ([]*types.UTxO, error)
-	GetSyncStatus() (string, error)
-	GetServiceStatus() (string, error)
-	GetBlockByNum(uint64) (*prototype.Block, error)
-	GetBlockByHash(string) (*prototype.Block, error)
-	GetBalance(string) (uint64, error)
-	GetTransaction(string) (*prototype.Transaction, error)
-}
-
-type AttestationAPI interface {
-	SendRawTx(transaction *prototype.Transaction) error
-	GetServiceStatus() (string, error)
-}
 
 // PbMux serves grpc-gateway requests for selected patterns using registered protobuf handlers.
 type PbMux struct {
@@ -48,8 +32,6 @@ type Gateway struct {
 	conn               *grpc.ClientConn
 	pbHandlers         []PbMux
 	muxHandler         MuxHandler
-	chain              ChainAPI
-	pool               AttestationAPI
 	remoteAddr         string
 	gatewayAddr        string
 	ctx                context.Context
@@ -62,13 +44,11 @@ type Gateway struct {
 	allowedOrigins     []string
 }
 
-func NewService(ctx context.Context, remoteAddr, gatewayAddr string, pbHandlers []PbMux, muxHandler MuxHandler, chain ChainAPI, pool AttestationAPI) *Gateway {
+func NewService(ctx context.Context, remoteAddr, gatewayAddr string, pbHandlers []PbMux, muxHandler MuxHandler) *Gateway {
 	g := &Gateway{
 		ctx:            ctx,
 		remoteAddr:     remoteAddr,
 		gatewayAddr:    gatewayAddr,
-		chain:          chain,
-		pool:           pool,
 		mu:             sync.RWMutex{},
 		pbHandlers:     pbHandlers,
 		muxHandler:     muxHandler,
