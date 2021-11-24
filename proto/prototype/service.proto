@@ -59,15 +59,38 @@ service RaidoChainService {
     };
   }
 
+  // GetStakeDeposits get all unspent transaction outputs of given address
+  rpc GetStakeDeposits(AddressRequest) returns (UTxOResponse){
+    option (google.api.http) = {
+      get: "/rdo/v1/chain/deposits/{address}"
+    };
+  }
+
 }
 
 // AttestationService add new transactions to the pool and gossip transaction to known peers.
 service AttestationService {
 
-  // SendTx send signed transaction to the node.
-  rpc SendTx(SendTxRequest) returns (ErrorResponse) {
+  // SendLegacyTx send transaction data to the node.
+  rpc SendLegacyTx(SendTxRequest) returns (ErrorResponse) {
     option (google.api.http) = {
-      post: "/rdo/v1/attestation/send"
+      post: "/rdo/v1/attestation/send/legacy"
+      body: "*"
+    };
+  }
+
+  // SendStakeTx send stake transaction to the node.
+  rpc SendStakeTx(SendTxRequest) returns (ErrorResponse) {
+    option (google.api.http) = {
+      post: "/rdo/v1/attestation/send/stake"
+      body: "*"
+    };
+  }
+
+  // SendUnstakeTx send stake transaction to the node.
+  rpc SendUnstakeTx(SendTxRequest) returns (ErrorResponse) {
+    option (google.api.http) = {
+      post: "/rdo/v1/attestation/send/unstake"
       body: "*"
     };
   }

@@ -17,6 +17,13 @@ const (
 	GenesisTxType = 2
 	FeeTxType = 3
 	RewardTxType = 4
+	StakeTxType   = 5
+	UnstakeTxType = 6
+)
+
+const (
+	StakeAddress     = "0x0000000000000000000000000000000000000000000000000000000000000000"
+	BlackHoleAddress = "0x0000000000000000000000000000000000000000"
 )
 
 const (

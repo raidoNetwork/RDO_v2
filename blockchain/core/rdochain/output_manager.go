@@ -441,3 +441,13 @@ func (om *OutputManager) CheckBalance() error {
 
 	return nil
 }
+
+// FindStakeDeposits return list of stake deposits actual to the moment of block with given num.
+func (om *OutputManager) FindStakeDeposits() ([]*types.UTxO, error) {
+	return om.db.FindStakeDeposits()
+}
+
+// FindStakeDepositsOfAddress return list of stake deposits actual to the moment of block with given num.
+func (om *OutputManager) FindStakeDepositsOfAddress(address string) ([]*types.UTxO, error) {
+	return om.db.FindStakeDepositsOfAddress(address)
+}

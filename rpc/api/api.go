@@ -14,6 +14,9 @@ type ChainAPI interface {
 	// FindAllUTxO returns unspent outputs of given address.
 	FindAllUTxO(string) ([]*types.UTxO, error)
 
+	// GetStakeDeposits returns address stake deposits.
+	GetStakeDeposits(string) ([]*types.UTxO, error)
+
 	/* Block data */
 
 	// GetBlockByHash return block with given hash.

@@ -85,6 +85,16 @@ type OutputStorage interface {
 	DeleteOutputs(int, uint64) error
 
 	GetTotalAmount() (uint64, error)
+
+	StakeStorage
+}
+
+type StakeStorage interface {
+	// FindStakeDeposits returns list of all actual stake deposits.
+	FindStakeDeposits() ([]*types.UTxO, error)
+
+	// FindStakeDepositsOfAddress returns list of given address actual stake deposits.
+	FindStakeDepositsOfAddress(string) ([]*types.UTxO, error)
 }
 
 type OutputDatabase interface {

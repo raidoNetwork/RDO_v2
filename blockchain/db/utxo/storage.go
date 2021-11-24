@@ -92,62 +92,8 @@ func (s *Store) DatabasePath() string {
 
 // FindAllUTxO find all addresses' unspent outputs
 func (s *Store) FindAllUTxO(addr string) (uoArr []*types.UTxO, err error) {
-	query := `SELECT id, hash, tx_index, address_from, address_to, amount, spent, timestamp, blockId, tx_type FROM ` + dbshared.UtxoTable + ` WHERE address_to = ? AND spent = ?`
-
-	start := time.Now()
-	rows, err := s.db.Query(query, addr, common.UnspentTxO)
-	if err != nil {
-		return nil, err
-	}
-
-	defer rows.Close()
-
-	if s.cfg.ShowFullStat {
-		end := time.Since(start)
-		log.Debugf("Get query result object in %s.", common.StatFmt(end))
-	}
-
-	uoArr = make([]*types.UTxO, 0)
-
-	start = time.Now()
-	showStat := true
-	for rows.Next() {
-		if showStat && s.cfg.ShowFullStat {
-			log.Debugf("First row next in %s", common.StatFmt(time.Since(start)))
-			showStat = false
-		}
-
-		startInner := time.Now()
-
-		var hash, from, to string
-		var id, spent, blockNum, amount, timestamp uint64
-		var index uint32
-		var typev int
-
-		err = rows.Scan(&id, &hash, &index, &from, &to, &amount, &spent, &timestamp, &blockNum, &typev)
-		if err != nil {
-			return
-		}
-
-		uo, err := types.NewUTxOFull(id, hash, from, to, index, amount, blockNum, spent, timestamp, typev)
-		if err != nil {
-			return nil, err
-		}
-
-		uoArr = append(uoArr, uo)
-
-		if s.cfg.ShowFullStat {
-			endInner := time.Since(startInner)
-			log.Debugf("Parse one row in %s.", common.StatFmt(endInner))
-		}
-	}
-
-	if s.cfg.ShowFullStat {
-		end := time.Since(start)
-		log.Debugf("Get query parsed result in %s.", common.StatFmt(end))
-	}
-
-	return uoArr, nil
+	query := `WHERE address_to = ? AND spent = ? AND address_node = ?`
+	return s.getOutputsList(query, addr, common.UnspentTxO, "")
 }
 
 // FindLastBlockNum search max block num in the database.
@@ -189,4 +135,76 @@ func (s *Store) GetTotalAmount() (uint64, error) {
 	}
 
 	return sum, nil
+}
+
+// FindStakeDeposits shows all actual stake deposits and return list of deposit outputs.
+func (s *Store) FindStakeDeposits() (uoArr []*types.UTxO, err error) {
+	query := `WHERE tx_type = ? AND address_node = ?`
+	return s.getOutputsList(query, common.StakeTxType, common.StakeAddress)
+}
+
+// FindStakeDepositsOfAddress shows actual stake deposits of given address
+// and return list of deposit outputs.
+func (s *Store) FindStakeDepositsOfAddress(address string) ([]*types.UTxO, error) {
+	query := `WHERE tx_type = ? AND address_node = ? AND address_to = ?`
+	return s.getOutputsList(query, common.StakeTxType, common.StakeAddress, address)
+}
+
+// getOutputsList return outputs list with given query and params.
+func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*types.UTxO, err error) {
+	start := time.Now()
+	prefix := `SELECT id, hash, tx_index, address_from, address_to, address_node, amount, spent, timestamp, blockId, tx_type FROM ` + dbshared.UtxoTable + ` `
+	rows, err := s.db.Query(prefix+query, params...)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	if s.cfg.ShowFullStat {
+		end := time.Since(start)
+		log.Debugf("Get query result object in %s.", common.StatFmt(end))
+	}
+
+	uoArr = make([]*types.UTxO, 0)
+
+	start = time.Now()
+	showStat := true
+	for rows.Next() {
+		if showStat && s.cfg.ShowFullStat {
+			log.Debugf("First row next in %s", common.StatFmt(time.Since(start)))
+			showStat = false
+		}
+
+		startInner := time.Now()
+
+		var hash, from, to, node string
+		var id, spent, blockNum, amount, timestamp uint64
+		var index uint32
+		var typev int
+
+		err = rows.Scan(&id, &hash, &index, &from, &to, &node, &amount, &spent, &timestamp, &blockNum, &typev)
+		if err != nil {
+			return
+		}
+
+		uo, err := types.NewUTxOFull(id, hash, from, to, node, index, amount, blockNum, spent, timestamp, typev)
+		if err != nil {
+			return nil, err
+		}
+
+		uoArr = append(uoArr, uo)
+
+		if s.cfg.ShowFullStat {
+			endInner := time.Since(startInner)
+			log.Debugf("Parse one row in %s.", common.StatFmt(endInner))
+		}
+	}
+
+	if s.cfg.ShowFullStat {
+		end := time.Since(start)
+		log.Debugf("Get query parsed result in %s.", common.StatFmt(end))
+	}
+
+	return uoArr, nil
 }

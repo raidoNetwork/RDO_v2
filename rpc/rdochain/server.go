@@ -60,7 +60,6 @@ func (s *Server) GetStatus(ctx context.Context, nothing *emptypb.Empty) (*protot
 	return res, nil
 }
 
-
 func (s *Server) GetBlockByNum(ctx context.Context, req *prototype.NumRequest) (*prototype.BlockResponse, error) {
 	res := new(prototype.BlockResponse)
 
@@ -142,7 +141,6 @@ func (s *Server) GetBalance(ctx context.Context, req *prototype.AddressRequest) 
 	return res, nil
 }
 
-
 func (s *Server) GetTransaction(ctx context.Context, req *prototype.HashRequest) (*prototype.TransactionResponse, error) {
 	res := new(prototype.TransactionResponse)
 
@@ -170,4 +168,30 @@ func (s *Server) GetTransaction(ctx context.Context, req *prototype.HashRequest)
 	res.Tx = cast.ConvTx(tx)
 
 	return res, nil
+}
+
+func (s *Server) GetStakeDeposits(ctx context.Context, request *prototype.AddressRequest) (*prototype.UTxOResponse, error) {
+	err := request.Validate()
+	if err != nil {
+		log.Errorf("ChainAPI.GetStakeDeposits error: %s", err)
+		return nil, err
+	}
+
+	addr := request.GetAddress()
+
+	log.Infof("ChainAPI.GetStakeDeposits %s", addr)
+
+	arr, err := s.Backend.GetStakeDeposits(addr)
+	if err != nil {
+		return nil, err
+	}
+
+	response := new(prototype.UTxOResponse)
+	response.Data = make([]*prototype.UTxO, len(arr))
+
+	for i, uo := range arr {
+		response.Data[i] = cast.ConvertProtoToInner(uo)
+	}
+
+	return response, nil
 }

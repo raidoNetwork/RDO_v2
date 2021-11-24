@@ -31,6 +31,8 @@ type RaidoChainServiceClient interface {
 	GetBalance(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*BalanceResponse, error)
 	// GetTransaction returns transaction with given hash.
 	GetTransaction(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*TransactionResponse, error)
+	// GetStakeDeposits get all unspent transaction outputs of given address
+	GetStakeDeposits(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*UTxOResponse, error)
 }
 
 type raidoChainServiceClient struct {
@@ -95,6 +97,15 @@ func (c *raidoChainServiceClient) GetTransaction(ctx context.Context, in *HashRe
 	return out, nil
 }
 
+func (c *raidoChainServiceClient) GetStakeDeposits(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*UTxOResponse, error) {
+	out := new(UTxOResponse)
+	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChainService/GetStakeDeposits", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RaidoChainServiceServer is the server API for RaidoChainService service.
 // All implementations must embed UnimplementedRaidoChainServiceServer
 // for forward compatibility
@@ -111,6 +122,8 @@ type RaidoChainServiceServer interface {
 	GetBalance(context.Context, *AddressRequest) (*BalanceResponse, error)
 	// GetTransaction returns transaction with given hash.
 	GetTransaction(context.Context, *HashRequest) (*TransactionResponse, error)
+	// GetStakeDeposits get all unspent transaction outputs of given address
+	GetStakeDeposits(context.Context, *AddressRequest) (*UTxOResponse, error)
 	mustEmbedUnimplementedRaidoChainServiceServer()
 }
 
@@ -135,6 +148,9 @@ func (UnimplementedRaidoChainServiceServer) GetBalance(context.Context, *Address
 }
 func (UnimplementedRaidoChainServiceServer) GetTransaction(context.Context, *HashRequest) (*TransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTransaction not implemented")
+}
+func (UnimplementedRaidoChainServiceServer) GetStakeDeposits(context.Context, *AddressRequest) (*UTxOResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetStakeDeposits not implemented")
 }
 func (UnimplementedRaidoChainServiceServer) mustEmbedUnimplementedRaidoChainServiceServer() {}
 
@@ -257,6 +273,24 @@ func _RaidoChainService_GetTransaction_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RaidoChainService_GetStakeDeposits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RaidoChainServiceServer).GetStakeDeposits(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rdo.service.RaidoChainService/GetStakeDeposits",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RaidoChainServiceServer).GetStakeDeposits(ctx, req.(*AddressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RaidoChainService_ServiceDesc is the grpc.ServiceDesc for RaidoChainService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -288,6 +322,10 @@ var RaidoChainService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetTransaction",
 			Handler:    _RaidoChainService_GetTransaction_Handler,
 		},
+		{
+			MethodName: "GetStakeDeposits",
+			Handler:    _RaidoChainService_GetStakeDeposits_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "prototype/service.proto",
@@ -297,8 +335,12 @@ var RaidoChainService_ServiceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AttestationServiceClient interface {
-	// SendTx send signed transaction to the node.
-	SendTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error)
+	// SendLegacyTx send transaction data to the node.
+	SendLegacyTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error)
+	// SendStakeTx send stake transaction to the node.
+	SendStakeTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error)
+	// SendUnstakeTx send stake transaction to the node.
+	SendUnstakeTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error)
 }
 
 type attestationServiceClient struct {
@@ -309,9 +351,27 @@ func NewAttestationServiceClient(cc grpc.ClientConnInterface) AttestationService
 	return &attestationServiceClient{cc}
 }
 
-func (c *attestationServiceClient) SendTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error) {
+func (c *attestationServiceClient) SendLegacyTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error) {
 	out := new(ErrorResponse)
-	err := c.cc.Invoke(ctx, "/rdo.service.AttestationService/SendTx", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rdo.service.AttestationService/SendLegacyTx", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *attestationServiceClient) SendStakeTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error) {
+	out := new(ErrorResponse)
+	err := c.cc.Invoke(ctx, "/rdo.service.AttestationService/SendStakeTx", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *attestationServiceClient) SendUnstakeTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error) {
+	out := new(ErrorResponse)
+	err := c.cc.Invoke(ctx, "/rdo.service.AttestationService/SendUnstakeTx", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -322,8 +382,12 @@ func (c *attestationServiceClient) SendTx(ctx context.Context, in *SendTxRequest
 // All implementations must embed UnimplementedAttestationServiceServer
 // for forward compatibility
 type AttestationServiceServer interface {
-	// SendTx send signed transaction to the node.
-	SendTx(context.Context, *SendTxRequest) (*ErrorResponse, error)
+	// SendLegacyTx send transaction data to the node.
+	SendLegacyTx(context.Context, *SendTxRequest) (*ErrorResponse, error)
+	// SendStakeTx send stake transaction to the node.
+	SendStakeTx(context.Context, *SendTxRequest) (*ErrorResponse, error)
+	// SendUnstakeTx send stake transaction to the node.
+	SendUnstakeTx(context.Context, *SendTxRequest) (*ErrorResponse, error)
 	mustEmbedUnimplementedAttestationServiceServer()
 }
 
@@ -331,8 +395,14 @@ type AttestationServiceServer interface {
 type UnimplementedAttestationServiceServer struct {
 }
 
-func (UnimplementedAttestationServiceServer) SendTx(context.Context, *SendTxRequest) (*ErrorResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SendTx not implemented")
+func (UnimplementedAttestationServiceServer) SendLegacyTx(context.Context, *SendTxRequest) (*ErrorResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendLegacyTx not implemented")
+}
+func (UnimplementedAttestationServiceServer) SendStakeTx(context.Context, *SendTxRequest) (*ErrorResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendStakeTx not implemented")
+}
+func (UnimplementedAttestationServiceServer) SendUnstakeTx(context.Context, *SendTxRequest) (*ErrorResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendUnstakeTx not implemented")
 }
 func (UnimplementedAttestationServiceServer) mustEmbedUnimplementedAttestationServiceServer() {}
 
@@ -347,20 +417,56 @@ func RegisterAttestationServiceServer(s grpc.ServiceRegistrar, srv AttestationSe
 	s.RegisterService(&AttestationService_ServiceDesc, srv)
 }
 
-func _AttestationService_SendTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _AttestationService_SendLegacyTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SendTxRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AttestationServiceServer).SendTx(ctx, in)
+		return srv.(AttestationServiceServer).SendLegacyTx(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rdo.service.AttestationService/SendTx",
+		FullMethod: "/rdo.service.AttestationService/SendLegacyTx",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AttestationServiceServer).SendTx(ctx, req.(*SendTxRequest))
+		return srv.(AttestationServiceServer).SendLegacyTx(ctx, req.(*SendTxRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AttestationService_SendStakeTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendTxRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AttestationServiceServer).SendStakeTx(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rdo.service.AttestationService/SendStakeTx",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AttestationServiceServer).SendStakeTx(ctx, req.(*SendTxRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AttestationService_SendUnstakeTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendTxRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AttestationServiceServer).SendUnstakeTx(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rdo.service.AttestationService/SendUnstakeTx",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AttestationServiceServer).SendUnstakeTx(ctx, req.(*SendTxRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -373,8 +479,16 @@ var AttestationService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*AttestationServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "SendTx",
-			Handler:    _AttestationService_SendTx_Handler,
+			MethodName: "SendLegacyTx",
+			Handler:    _AttestationService_SendLegacyTx_Handler,
+		},
+		{
+			MethodName: "SendStakeTx",
+			Handler:    _AttestationService_SendStakeTx_Handler,
+		},
+		{
+			MethodName: "SendUnstakeTx",
+			Handler:    _AttestationService_SendUnstakeTx_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

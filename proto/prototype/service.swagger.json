@@ -28,10 +28,76 @@
     "application/grpc-web-json"
   ],
   "paths": {
-    "/rdo/v1/attestation/send": {
+    "/rdo/v1/attestation/send/legacy": {
       "post": {
-        "summary": "SendTx send signed transaction to the node.",
-        "operationId": "AttestationService_SendTx",
+        "summary": "SendLegacyTx send transaction data to the node.",
+        "operationId": "AttestationService_SendLegacyTx",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/serviceErrorResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/serviceSendTxRequest"
+            }
+          }
+        ],
+        "tags": [
+          "AttestationService"
+        ]
+      }
+    },
+    "/rdo/v1/attestation/send/stake": {
+      "post": {
+        "summary": "SendStakeTx send stake transaction to the node.",
+        "operationId": "AttestationService_SendStakeTx",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/serviceErrorResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/serviceSendTxRequest"
+            }
+          }
+        ],
+        "tags": [
+          "AttestationService"
+        ]
+      }
+    },
+    "/rdo/v1/attestation/send/unstake": {
+      "post": {
+        "summary": "SendUnstakeTx send stake transaction to the node.",
+        "operationId": "AttestationService_SendUnstakeTx",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -148,6 +214,37 @@
             "required": true,
             "type": "string",
             "format": "uint64"
+          }
+        ],
+        "tags": [
+          "RaidoChainService"
+        ]
+      }
+    },
+    "/rdo/v1/chain/deposits/{address}": {
+      "get": {
+        "summary": "GetStakeDeposits get all unspent transaction outputs of given address",
+        "operationId": "RaidoChainService_GetStakeDeposits",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/serviceUTxOResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "type": "string"
           }
         ],
         "tags": [

@@ -69,13 +69,13 @@ func NewUTxO(hash, from, to, node []byte, index uint32, amount uint64, blockNum 
 	return &uo
 }
 
-func NewUTxOFull(id uint64, hash, from, to string, index uint32, amount, blockNum, unspent, timestamp uint64, typev int) (*UTxO, error) {
+func NewUTxOFull(id uint64, hash, from, to, node string, index uint32, amount, blockNum, unspent, timestamp uint64, typev int) (*UTxO, error) {
 	uo := UTxO{
 		ID:        id,
 		Hash:      common.HexToHash(hash),
 		From:      common.HexToAddress(from),
 		To:        common.HexToAddress(to),
-		Node:      common.HexToHash(""),
+		Node:      common.HexToHash(node),
 		Index:     index,
 		Amount:    amount,
 		BlockNum:  blockNum,

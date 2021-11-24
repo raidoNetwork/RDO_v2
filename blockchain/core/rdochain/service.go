@@ -300,3 +300,11 @@ func (s *Service) GetBalance(addr string) (uint64, error) {
 func (s *Service) GetTransaction(hash string) (*prototype.Transaction, error) {
 	return s.bc.GetTransaction(hash)
 }
+
+// GetStakeDeposits returns all address stake deposits.
+func (s *Service) GetStakeDeposits(addr string) ([]*types.UTxO, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.outm.FindStakeDepositsOfAddress(addr)
+}
