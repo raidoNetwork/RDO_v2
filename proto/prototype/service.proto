@@ -11,6 +11,7 @@ import "validate/validate.proto";
 import "prototype/transport.proto";
 import "prototype/types.proto";
 import "prototype/chain.service.response.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
 
 
 // RaidoChainService service for work with blockchain
@@ -116,3 +117,20 @@ message BalanceResponse {
   uint64 balance = 1;
   string error = 2;
 }
+
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info: {
+    title: "Raido blockchain API";
+    version: "1.0";
+    description: "JSON REST API for Raido blockchain.";
+  };
+  host: "localhost:5555"; // for tests
+  schemes: HTTP;
+  consumes: "application/json";
+  consumes: "application/grpc-web-text";
+  consumes: "application/grpc-web-json";
+  produces: "application/json";
+  produces: "application/grpc-web-text";
+  produces: "application/grpc-web-json";
+};
