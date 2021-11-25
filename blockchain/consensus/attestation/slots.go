@@ -30,7 +30,7 @@ var ErrNoStakers = errors.New("No stake deposit is registered.")
 
 func NewValidator(outm consensus.OutputsReader, slotsBound uint64, reward uint64) (Validator, error) {
 	vg := &ValidatorGerm{
-		slots:       map[string]uint64{},
+		slots:       make([]string, 0, slotsBound),
 		mu:          sync.RWMutex{},
 		blockReward: reward,
 		slotsBound:  slotsBound,
@@ -49,7 +49,7 @@ func NewValidator(outm consensus.OutputsReader, slotsBound uint64, reward uint64
 type ValidatorGerm struct {
 	blockReward uint64            // fixed reward per block
 	slotsBound  uint64            // slots limit
-	slots       map[string]uint64 // map address -> slot number
+	slots       []string 		  // address list
 	mu          sync.RWMutex
 
 	outm consensus.OutputsReader
@@ -95,7 +95,7 @@ func (vg *ValidatorGerm) RegisterStake(addr []byte) error {
 	address := common.BytesToAddress(addr)
 
 	vg.mu.Lock()
-	vg.slots[address.Hex()] = emptySlots
+	vg.slots = append(vg.slots, address.Hex())
 	vg.mu.Unlock()
 
 	return nil
@@ -103,19 +103,23 @@ func (vg *ValidatorGerm) RegisterStake(addr []byte) error {
 
 // UnregisterStake open validator slots
 func (vg *ValidatorGerm) UnregisterStake(addr []byte) error {
-	address := common.BytesToAddress(addr)
-
-	vg.mu.RLock()
-	_, exists := vg.slots[address.Hex()]
-	vg.mu.RUnlock()
-
-	if !exists {
-		return errors.Errorf("Undefined staker %s.", address.Hex())
-	}
+	address := common.BytesToAddress(addr).Hex()
 
 	vg.mu.Lock()
-	delete(vg.slots, address.Hex())
-	vg.mu.Unlock()
+	defer vg.mu.Unlock()
+
+	notFound := true
+	for i, a := range vg.slots {
+		if a == address {
+			vg.slots = append(vg.slots[:i], vg.slots[i+1:]...)
+			notFound = false
+			break
+		}
+	}
+
+	if notFound {
+		return errors.Errorf("Undefined staker %s.", address)
+	}
 
 	return nil
 }
@@ -159,7 +163,7 @@ func (vg *ValidatorGerm) createRewardOutputs() []*prototype.TxOutput {
 	// divide reward among all validator slots
 	reward /= uint64(size)
 
-	for addrHex, _ := range slots {
+	for _, addrHex := range slots {
 		addr := common.HexToAddress(addrHex)
 		data = append(data, types.NewOutput(addr.Bytes(), reward, nil))
 	}
