@@ -44,3 +44,15 @@ type BlockSpecifying interface {
 	// GetRewardForBlock return reward for block with given number
 	GetRewardForBlock(uint64) uint64
 }
+
+// OutputsReader checks all address unspent outputs
+type OutputsReader interface {
+	// FindAllUTxO find all address unspent outputs
+	FindAllUTxO(string) ([]*types.UTxO, error)
+
+	// FindStakeDeposits find all block stake deposits
+	FindStakeDeposits() ([]*types.UTxO, error)
+
+	// FindStakeDepositsOfAddress returns all address stake outputs.
+	FindStakeDepositsOfAddress(string) ([]*types.UTxO, error)
+}
