@@ -3,12 +3,14 @@ package rdochain
 import (
 	"context"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
+	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/attestation"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/miner"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/txpool"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/urfave/cli/v2"
 	"google.golang.org/grpc/status"
@@ -22,6 +24,9 @@ const generatorInterval = 500 * time.Millisecond
 func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (*Service, error) {
 	statFlag := cliCtx.Bool(flags.SrvStat.Name)
 	expStatFlag := cliCtx.Bool(flags.SrvExpStat.Name)
+
+	cfg := params.RaidoConfig()
+	slotTime := time.Duration(cfg.SlotTime) * time.Second
 
 	// create blockchain instance
 	bc, err := NewBlockChain(kv, cliCtx)
@@ -40,6 +45,12 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (
 
 	// new tx pool
 	txPool := txpool.NewTxPool(validator) // TODO remove it to another service
+
+	// create new attestation validator
+	avalidator, err := attestation.NewValidator(outm, cfg.ValidatorRegistryLimit, bc.GetBlockReward())
+	if err != nil {
+		return nil, err
+	}
 
 	// new block miner
 	forger := miner.NewMiner(bc, validator, txPool, outm, &miner.MinerConfig{

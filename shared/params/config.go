@@ -1,19 +1,21 @@
 package params
 
-import (
-	"time"
-)
-
 // RDOBlockChainConfig contains constant configs for node to participate in raido blockchain.
 type RDOBlockChainConfig struct {
-	// Initial value constants.
-	ZeroHash [32]byte // ZeroHash is used to represent a zeroed out 32 byte array.
+	SlotTime int64 `yaml:"SLOT_TIME"` // SlotTime setups block generator timeout.
 
-	// RDO constants.
-	DefaultBufferSize        int           // DefaultBufferSize for channels across the RDO repository.
-	RPCSyncCheck             time.Duration // Number of seconds to query the sync service, to find out if the node is synced or not.
-	EmptySignature           [96]byte      // EmptySignature is used to represent a zeroed out BLS Signature.
-	DefaultPageSize          int           // DefaultPageSize defines the default page size for RPC server request.
-	MaxPeersToSync           int           // MaxPeersToSync describes the limit for number of peers in round robin sync.
-	GenesisCountdownInterval time.Duration // How often to log the countdown until the genesis time is reached.
+	// Reward constant
+	RewardBase uint64 `yaml:"REWARD_BASE"` // RewardBase is used to calculate the per block reward. RewardBase use Groi.
+	MinimalFee uint64 `yaml:"MINIMAL_FEE"` // MinimalFee defines the minimal fee per transaction byte.
+	BlockSize  int    `yaml:"BLOCK_SIZE"`  // BlockSize defines block size limit.
+
+	// RDO constants
+	RoiPerRdo  uint64 // RoiPerRdo is the amount of roi corresponding to 1 RDO.
+	KroiPerRdo uint64 // KroiPerRdo is the amount of Groi = 1000 roi corresponding to 1 RDO.
+
+	// Stake config
+	ValidatorRegistryLimit int64  `yaml:"VALIDATOR_REGISTRY_LIMIT"` // ValidatorRegistryLimit defines the maximum count of validators can participate in rdochain.
+	StakeSlotUnit          uint64 `yaml:"STAKE_SLOT_UNIT"`          // StakeSlotUnit defines the amount of RDO needed to fill one stake slot.
+
+	GenesisPath string `yaml:"GENESIS_PATH"` // GenesisPath defines path to the Genesis JSON file.
 }

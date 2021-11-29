@@ -28,12 +28,12 @@ type Validator interface {
 
 var ErrNoStakers = errors.New("No stake deposit is registered.")
 
-func NewValidator(outm consensus.OutputsReader, slotsBound uint64, reward uint64) (Validator, error) {
+func NewValidator(outm consensus.OutputsReader, slotsLimit int64, reward uint64) (Validator, error) {
 	vg := &ValidatorGerm{
-		slots:       make([]string, 0, slotsBound),
+		slots:       make([]string, 0, slotsLimit),
 		mu:          sync.RWMutex{},
 		blockReward: reward,
-		slotsBound:  slotsBound,
+		slotsLimit:  slotsLimit,
 		outm:        outm,
 	}
 
@@ -47,9 +47,9 @@ func NewValidator(outm consensus.OutputsReader, slotsBound uint64, reward uint64
 }
 
 type ValidatorGerm struct {
-	blockReward uint64            // fixed reward per block
-	slotsBound  uint64            // slots limit
-	slots       []string 		  // address list
+	blockReward uint64   // fixed reward per block
+	slotsLimit  int64    // slots limit
+	slots       []string // address list
 	mu          sync.RWMutex
 
 	outm consensus.OutputsReader
@@ -76,19 +76,16 @@ func (vg *ValidatorGerm) LoadSlots() error {
 
 // CanStake shows if there are free slots for staking
 func (vg *ValidatorGerm) CanStake() bool {
-	vg.mu.RLock()
-	defer vg.mu.RUnlock()
+	emptySlots := vg.getEmptySlots()
 
-	return vg.slotsBound-uint64(len(vg.slots)) > 0
+	log.Warnf("Empty Stake slots count: %d", emptySlots)
+
+	return emptySlots > 0
 }
 
 // RegisterStake close validator slots
 func (vg *ValidatorGerm) RegisterStake(addr []byte) error {
-	vg.mu.RLock()
-	emptySlots := vg.slotsBound - uint64(len(vg.slots))
-	vg.mu.RUnlock()
-
-	if emptySlots == 0 {
+	if vg.getEmptySlots() == 0 {
 		return errors.New("Validator slots limit is reached.")
 	}
 
@@ -169,4 +166,11 @@ func (vg *ValidatorGerm) createRewardOutputs() []*prototype.TxOutput {
 	}
 
 	return data
+}
+
+func (vg *ValidatorGerm) getEmptySlots() int64 {
+	vg.mu.RLock()
+	defer vg.mu.RUnlock()
+
+	return vg.slotsLimit - int64(len(vg.slots))
 }
