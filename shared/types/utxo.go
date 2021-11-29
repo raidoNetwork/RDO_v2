@@ -1,7 +1,6 @@
 package types
 
 import (
-	"crypto/ecdsa"
 	"fmt"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
@@ -26,8 +25,8 @@ func (uo *UTxO) ToOutput() *prototype.TxOutput {
 	return NewOutput(uo.To.Bytes(), uo.Amount, uo.Node.Bytes())
 }
 
-func (uo *UTxO) ToInput(key *ecdsa.PrivateKey) *prototype.TxInput {
-	in, err := NewInput(uo.Hash.Bytes(), uo.Index, uo.ToOutput(), key)
+func (uo *UTxO) ToInput() *prototype.TxInput {
+	in, err := NewInput(uo.Hash.Bytes(), uo.Index, uo.ToOutput(), nil)
 	if err != nil {
 		return nil
 	}

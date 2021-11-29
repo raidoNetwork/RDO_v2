@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/pkg/errors"
-	"github.com/raidoNetwork/RDO_v2/blockchain/core/lansrv"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/rdochain"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/kv"
@@ -94,25 +93,6 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 	}
 
 	return rdo, nil
-}
-
-func (r *RDONode) registerLanService() error {
-	srv, err := lansrv.NewLanSrv(r.cliCtx, r.kvStore, r.outDB)
-	if err != nil {
-		return err
-	}
-
-	if srv == nil {
-		return errors.New("Empty Lan service implementation")
-	}
-
-	err = r.services.RegisterService(srv)
-	if err != nil {
-		log.Error("Can't start block gen service", err)
-		return err
-	}
-
-	return nil
 }
 
 func (r *RDONode) registerChainService() error {

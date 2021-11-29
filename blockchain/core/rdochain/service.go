@@ -23,13 +23,13 @@ const generatorInterval = 500 * time.Millisecond
 // NewService creates new ChainService
 func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (*Service, error) {
 	statFlag := cliCtx.Bool(flags.SrvStat.Name)
-	expStatFlag := cliCtx.Bool(flags.SrvExpStat.Name)
+	debugStatFlag := cliCtx.Bool(flags.SrvExpStat.Name)
 
 	cfg := params.RaidoConfig()
 	slotTime := time.Duration(cfg.SlotTime) * time.Second
 
 	// create blockchain instance
-	bc, err := NewBlockChain(kv, cliCtx)
+	bc, err := NewBlockChain(kv, cliCtx, cfg)
 	if err != nil {
 		log.Errorf("Error creating blockchain: %s", err)
 		return nil, err
@@ -40,8 +40,16 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (
 		ShowStat: statFlag,
 	})
 
+	validatorCfg := consensus.CryspValidatorConfig{
+		SlotTime:     slotTime,
+		MinFee:       cfg.MinimalFee,
+		LogStat:      statFlag,
+		LogDebugStat: debugStatFlag,
+		StakeUnit:    cfg.StakeSlotUnit,
+	}
+
 	// new block and tx validator
-	validator := consensus.NewCryspValidator(bc, outm, statFlag, expStatFlag) // TODO remove it to another service
+	validator := consensus.NewCryspValidator(bc, outm, &validatorCfg) // TODO remove it to another service
 
 	// new tx pool
 	txPool := txpool.NewTxPool(validator) // TODO remove it to another service
@@ -53,9 +61,9 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (
 	}
 
 	// new block miner
-	forger := miner.NewMiner(bc, validator, txPool, outm, &miner.MinerConfig{
+	forger := miner.NewMiner(bc, validator, avalidator, txPool, outm, &miner.MinerConfig{
 		ShowStat:     statFlag,
-		ShowFullStat: expStatFlag,
+		ShowFullStat: debugStatFlag,
 	})
 
 	ctx, finish := context.WithCancel(context.Background())
@@ -73,7 +81,7 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (
 
 		// flags
 		fullStatFlag: statFlag,
-		expStatFlag:  expStatFlag,
+		expStatFlag:  debugStatFlag,
 
 		ready: false,
 	}

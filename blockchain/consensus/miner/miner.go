@@ -3,6 +3,7 @@ package miner
 import (
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
+	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/attestation"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/txpool"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
@@ -25,13 +26,14 @@ type MinerConfig struct {
 	ShowFullStat bool
 }
 
-func NewMiner(bc BlockMiner, v consensus.BlockValidator, txPool *txpool.TxPool, outm OutputUpdater, cfg *MinerConfig) *Miner {
+func NewMiner(bc BlockMiner, v consensus.BlockValidator, av attestation.Validator, txPool *txpool.TxPool, outm OutputUpdater, cfg *MinerConfig) *Miner {
 	m := Miner{
 		bc:        bc,
 		validator: v,
 		txPool:    txPool,
 		outm:      outm,
 		cfg:       cfg,
+		attestationValidator: av,
 	}
 
 	return &m
@@ -42,6 +44,7 @@ type Miner struct {
 	outm OutputUpdater
 
 	validator consensus.BlockValidator
+	attestationValidator attestation.Validator
 	txPool    *txpool.TxPool
 
 	cfg  *MinerConfig

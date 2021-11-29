@@ -2,6 +2,7 @@ package rdochain
 
 import (
 	"bytes"
+	"crypto/rand"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/kv"
@@ -11,6 +12,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
 	"github.com/raidoNetwork/RDO_v2/shared/hasher"
 	"github.com/raidoNetwork/RDO_v2/shared/hashutil"
+	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"sync"
@@ -30,7 +32,7 @@ var (
 // nodeAddress hex - a91b3079bdbf477fb8bf39eb329052e286ae47d5e878f5f5d9e70737296cb25b
 var nodeAddress = crypto.Keccak256Hash([]byte("super-node"))
 
-func NewBlockChain(db db.BlockStorage, ctx *cli.Context) (*BlockChain, error) {
+func NewBlockChain(db db.BlockStorage, ctx *cli.Context, cfg *params.RDOBlockChainConfig) (*BlockChain, error) {
 	bc := BlockChain{
 		db:              db,
 		prevHash:        GenesisHash,
@@ -39,6 +41,7 @@ func NewBlockChain(db db.BlockStorage, ctx *cli.Context) (*BlockChain, error) {
 		fullStatFlag:    ctx.Bool(flags.SrvStat.Name), // stat flag
 
 		lock: sync.RWMutex{},
+		cfg: cfg,
 	}
 
 	err := bc.Init()
@@ -61,6 +64,8 @@ type BlockChain struct {
 	genesisBlock    *prototype.Block
 
 	lock sync.RWMutex
+
+	cfg *params.RDOBlockChainConfig
 }
 
 // Init check database and update block num and previous hash
@@ -135,37 +140,19 @@ func (bc *BlockChain) Init() error {
 func (bc *BlockChain) GenerateBlock(tx []*prototype.Transaction) (*prototype.Block, error) {
 	timestamp := time.Now().UnixNano()
 
-	start := time.Now()
-
 	// generate fee tx for block
-	txFee, err := bc.createFeeTx(tx)
-	if err != nil {
-		return nil, err
+	if len(tx) > 0 {
+		txFee, err := bc.createFeeTx(tx)
+		if err != nil {
+			if !errors.Is(err, ErrZeroFeeAmount) {
+				return nil, err
+			}
+		} else {
+			tx = append(tx, txFee)
+		}
 	}
 
-	tx = append(tx, txFee)
-
-	if bc.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("GenerateBlock: Create fee tx for address %s in %s.", nodeAddress, common.StatFmt(end))
-	}
-
-	start = time.Now()
-
-	// generate reward tx for block
-	txReward, err := bc.createRewardTx()
-	if err != nil {
-		return nil, err
-	}
-
-	tx = append(tx, txReward)
-
-	if bc.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("GenerateBlock: Create reward tx for address %s in %s.", nodeAddress, common.StatFmt(end))
-	}
-
-	start = time.Now()
+	start := time.Now()
 
 	// create tx merklee tree root
 	txRoot, err := bc.GenTxRoot(tx)
@@ -191,15 +178,15 @@ func (bc *BlockChain) GenerateBlock(tx []*prototype.Transaction) (*prototype.Blo
 		Parent:    bc.prevHash,
 		Txroot:    txRoot,
 		Timestamp: uint64(timestamp),
-		Proposer:  bc.sign(bc.prevHash, nodeAddress.Bytes()),
+		Proposer:  bc.sign(nodeAddress.Bytes()),
 		Approvers: []*prototype.Sign{
-			bc.sign(bc.prevHash, hash),
-			bc.sign(bc.prevHash, hash),
-			bc.sign(bc.prevHash, hash),
+			bc.sign(hash),
+			bc.sign(hash),
+			bc.sign(hash),
 		},
 		Slashers: []*prototype.Sign{
-			bc.sign(bc.prevHash, hash),
-			bc.sign(bc.prevHash, hash),
+			bc.sign(hash),
+			bc.sign(hash),
 		},
 		Transactions: tx,
 	}
@@ -255,19 +242,13 @@ func (bc *BlockChain) GetBlockByHash(hash []byte) (*prototype.Block, error) {
 }
 
 // sign test function for signing some data
-func (bc *BlockChain) sign(prevHash []byte, hash []byte) *prototype.Sign {
-	res := prevHash[:]
-
-	if len(res) == 0 {
-		res = crypto.Keccak256([]byte("")) // null slice
-	}
-
-	res = append(res, hash...)
-	res = append(res, byte(88))
+func (bc *BlockChain) sign(addr []byte) *prototype.Sign {
+	randSign := make([]byte, crypto.SignatureLength)
+	rand.Read(randSign)
 
 	sign := &prototype.Sign{
-		Signature: res,
-		Address:   make([]byte, 32),
+		Address:   addr,
+		Signature: randSign,
 	}
 
 	return sign

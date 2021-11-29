@@ -16,25 +16,31 @@ var (
 	log = logrus.WithField("prefix", "CryspValidator")
 
 	ErrUtxoSize = errors.New("UTxO count is 0.")
+	ErrSmallFee = errors.New("Too small fee price.")
 )
 
-func NewCryspValidator(bc BlockSpecifying, outDB BalanceReader, stat bool, expStat bool) *CryspValidator {
+type CryspValidatorConfig struct {
+	SlotTime     time.Duration // SlotTime defines main generator ticker timeout.
+	MinFee       uint64        // MinFee setups minimal transaction fee price.
+	StakeUnit    uint64        // StakeUnit roi amount needed for stake.
+	LogStat      bool          // LogStat enables time statistic log entries.
+	LogDebugStat bool          // LogDebugStat enable debug log entries
+}
+
+func NewCryspValidator(bc BlockSpecifying, outDB OutputsReader, cfg *CryspValidatorConfig) *CryspValidator {
 	v := CryspValidator{
-		bs:          bc,
-		br:          outDB,
-		statFlag:    stat,
-		expStatFlag: expStat,
+		blockSpecifying: bc,
+		outputsReader:   outDB,
+		cfg:             cfg,
 	}
 
 	return &v
 }
 
 type CryspValidator struct {
-	br BalanceReader
-	bs BlockSpecifying
-
-	statFlag    bool
-	expStatFlag bool
+	outputsReader   OutputsReader
+	blockSpecifying BlockSpecifying
+	cfg             *CryspValidatorConfig
 }
 
 func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
@@ -104,13 +110,13 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 		return err
 	}
 
-	if cv.statFlag {
+	if cv.cfg.LogStat {
 		end := time.Since(start)
 		log.Infof("ValidateBlock: Count block balance in %s", common.StatFmt(end))
 	}
 
 	// check block tx root
-	txRoot, err := cv.bs.GenTxRoot(block.Transactions)
+	txRoot, err := cv.blockSpecifying.GenTxRoot(block.Transactions)
 	if err != nil {
 		log.Error("ValidateBlock: error creating tx root.")
 		return err
@@ -120,7 +126,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 		return errors.Errorf("Block tx root mismatch. Given: %s. Expected: %s.", common.Encode(block.Txroot), common.Encode(txRoot))
 	}
 
-	tstamp := time.Now().UnixNano() + int64(common.SlotTime)
+	tstamp := time.Now().UnixNano() + int64(cv.cfg.SlotTime)
 	if tstamp < int64(block.Timestamp) {
 		return errors.Errorf("Wrong block timestamp: %d. Timestamp with slot time: %d.", block.Timestamp, tstamp)
 	}
@@ -128,14 +134,14 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 	start = time.Now()
 
 	// check if block is already exists in the database
-	b, err := cv.bs.GetBlockByHash(block.Hash)
+	b, err := cv.blockSpecifying.GetBlockByHash(block.Hash)
 	if err != nil {
 		return errors.New("Error reading block from database.")
 	}
 
-	if cv.statFlag {
+	if cv.cfg.LogStat {
 		end := time.Since(start)
-		log.Infof("ValidateBlock: Get block by num in %s", common.StatFmt(end))
+		log.Infof("ValidateBlock: Get block by hash in %s", common.StatFmt(end))
 	}
 
 	if b != nil {
@@ -145,12 +151,12 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 	start = time.Now()
 
 	// find prevBlock
-	prevBlock, err := cv.bs.GetBlockByHash(block.Parent)
+	prevBlock, err := cv.blockSpecifying.GetBlockByHash(block.Parent)
 	if err != nil {
-		return errors.New("ValidateBlock: Error reading previous block from database.")
+		return errors.Errorf("ValidateBlock: Error reading previous block from database. Hash: %s.", common.BytesToHash(block.Parent))
 	}
 
-	if cv.statFlag {
+	if cv.cfg.LogStat {
 		end := time.Since(start)
 		log.Infof("ValidateBlock: Get prev block in %s", common.StatFmt(end))
 	}
@@ -173,17 +179,26 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 func (cv *CryspValidator) ValidateTransaction(tx *prototype.Transaction) error {
 	switch tx.Type {
 	case common.NormalTxType:
-		return cv.validateNormalTx(tx)
+		fallthrough
+	case common.StakeTxType:
+		fallthrough
+	case common.UnstakeTxType:
+		return cv.validateTxInputs(tx)
 	default:
 		return errors.New("Undefined tx type.")
 	}
 }
 
-// ValidateTransactionData validates transaction balances, signatures and hash. Use only for normal tx type.
-func (cv *CryspValidator) ValidateTransactionData(tx *prototype.Transaction) error {
+// ValidateTransactionStruct validates transaction balances, signatures and hash. Use only for legacy tx type.
+func (cv *CryspValidator) ValidateTransactionStruct(tx *prototype.Transaction) error {
 	// if tx has type different from normal return error
-	if tx.Type != common.NormalTxType {
+	if !common.IsLegacyTx(tx) {
 		return errors.Errorf("Transaction has wrong type: %d.", tx.Type)
+	}
+
+	// check minimal fee value
+	if tx.Fee < cv.cfg.MinFee {
+		return ErrSmallFee
 	}
 
 	// check tx hash
@@ -192,28 +207,22 @@ func (cv *CryspValidator) ValidateTransactionData(tx *prototype.Transaction) err
 		return err
 	}
 
-	start := time.Now()
-
-	// Validate that tx has not empty inputs or outputs
+	// Validate that tx has no empty inputs or outputs
 	// also check that tx has correct balance
 	err = cv.validateTxBalance(tx)
 	if err != nil {
 		return err
 	}
 
-	if cv.expStatFlag {
-		end := time.Since(start)
-		log.Infof("ValidateTransaction: Check tx balance in %s.", common.StatFmt(end))
-	}
-
 	return nil
 }
 
-// validateNormalTx check that transaction is valid
-func (cv *CryspValidator) validateNormalTx(tx *prototype.Transaction) error {
-	// if tx has type different from normal return error
-	if tx.Type != common.NormalTxType {
-		return errors.Errorf("Transaction has wrong type: %d.", tx.Type)
+// validateTxInputs chek that address has given inputs and enough balance.
+// If given normal transaction (send coins from one user to another)
+// makes sure that all address inputs are spent in this transaction.
+func (cv *CryspValidator) validateTxInputs(tx *prototype.Transaction) error {
+	if tx.Num == 0 {
+		return errors.New("Wrong transaction nonce.")
 	}
 
 	// get utxo for transaction
@@ -227,7 +236,7 @@ func (cv *CryspValidator) validateNormalTx(tx *prototype.Transaction) error {
 	inputsSize := len(tx.Inputs)
 
 	if utxoSize != inputsSize {
-		return errors.Errorf("ValidateTransaction: Inputs size mismatch: real - %d given - %d.", utxoSize, inputsSize)
+		return errors.Errorf("ValidateTransaction: Inputs size mismatch: real - %d given - %d. Address: %s", utxoSize, inputsSize)
 	}
 
 	if utxoSize == 0 {
@@ -245,7 +254,7 @@ func (cv *CryspValidator) validateNormalTx(tx *prototype.Transaction) error {
 		key = uo.Hash.Hex() + "_" + indexStr
 
 		// fill map with outputs from db
-		spentOutputsMap[key] = uo.ToInput(nil)
+		spentOutputsMap[key] = uo.ToInput()
 		balance += uo.Amount
 	}
 
@@ -254,7 +263,7 @@ func (cv *CryspValidator) validateNormalTx(tx *prototype.Transaction) error {
 
 	// if balance is equal to zero try to create new transaction
 	if balance == 0 {
-		return errors.Errorf("Account %s has balance 0.", from)
+		return errors.Errorf("Address: %s has balance 0.", from)
 	}
 
 	start := time.Now()
@@ -262,7 +271,7 @@ func (cv *CryspValidator) validateNormalTx(tx *prototype.Transaction) error {
 	// validate each input
 	alreadySpent, err := cv.checkInputsData(tx, spentOutputsMap)
 
-	if cv.statFlag {
+	if cv.cfg.LogStat {
 		end := time.Since(start)
 		log.Infof("ValidateTransaction: Inputs verification. Count: %d. Time: %s.", inputsSize, common.StatFmt(end))
 	}
@@ -276,7 +285,7 @@ func (cv *CryspValidator) validateNormalTx(tx *prototype.Transaction) error {
 		}
 	}
 
-	if cv.expStatFlag {
+	if cv.cfg.LogDebugStat {
 		end := time.Since(start)
 		log.Infof("ValidateTransaction: Verify all inputs are lock for spent in %s.", common.StatFmt(end))
 	}
@@ -322,8 +331,8 @@ func (cv *CryspValidator) validateRewardTx(tx *prototype.Transaction, block *pro
 		return errors.Errorf("Transaction has wrong type: %d.", tx.Type)
 	}
 
-	if len(tx.Outputs) != 1 {
-		return errors.New("Wrong tx reward outputs size.")
+	if len(tx.Outputs) == 0 {
+		return errors.New("Wrong outputs size.")
 	}
 
 	// reward tx num should be equal to the block num
@@ -331,10 +340,41 @@ func (cv *CryspValidator) validateRewardTx(tx *prototype.Transaction, block *pro
 		return errors.New("Wrong tx reward num.")
 	}
 
-	// Find reward for block number equal to tx num.
-	// AwardTx num is always equal to the block number.
-	if tx.Outputs[0].Amount != cv.bs.GetRewardForBlock(block.Num) {
-		return errors.New("Wrong block reward given.")
+	// get stakers from database
+	stakeDeposits, err := cv.outputsReader.FindStakeDeposits()
+	if err != nil {
+		return err
+	}
+
+	targetOutputsLen := len(stakeDeposits)
+	if len(tx.Outputs) != targetOutputsLen {
+		return errors.New("Wrong tx reward outputs size.")
+	}
+
+	receivers := map[string]int{}
+	for _, uo := range stakeDeposits {
+		receivers[uo.To.Hex()] = 1
+	}
+
+	if len(receivers) != targetOutputsLen {
+		return errors.New("Not all stakers have a reward output.")
+	}
+
+	// count reward amount for each staker
+	rewardAmount := cv.blockSpecifying.GetBlockReward() / uint64(targetOutputsLen)
+
+	// check outputs amount and receiver addresses
+	for i, out := range tx.Outputs {
+		addr := common.BytesToAddress(out.Address)
+		addrHex := addr.Hex()
+
+		if _, exists := receivers[addrHex]; !exists {
+			return errors.Errorf("Undefined staker %s", addrHex)
+		}
+
+		if out.Amount != rewardAmount {
+			return errors.Errorf("Wrong reward amount on output %d. Expect: %d. Real: %d.", i, rewardAmount, out.Amount)
+		}
 	}
 
 	return nil
@@ -343,8 +383,7 @@ func (cv *CryspValidator) validateRewardTx(tx *prototype.Transaction, block *pro
 // validateTxBalance validates tx inputs/outputs size
 // and check that total balance of all tx is equal to 0.
 func (cv *CryspValidator) validateTxBalance(tx *prototype.Transaction) error {
-	// FeeTx has no inputs another types must have any inputs.
-	if tx.Type == common.NormalTxType && len(tx.Inputs) == 0 {
+	if len(tx.Inputs) == 0 {
 		return errors.Errorf("Empty tx inputs.")
 	}
 
@@ -353,22 +392,38 @@ func (cv *CryspValidator) validateTxBalance(tx *prototype.Transaction) error {
 	}
 
 	// verify tx signature
-	if tx.Type == common.NormalTxType {
-		signer := types.MakeTxSigner("keccak256")
-		err := signer.Verify(tx)
-		if err != nil {
-			return err
-		}
+	signer := types.MakeTxSigner("keccak256")
+	err := signer.Verify(tx)
+	if err != nil {
+		return err
 	}
 
 	// check that inputs and outputs balance with fee are equal
 	var txBalance uint64 = 0
 	for _, in := range tx.Inputs {
 		txBalance += in.Amount
+
+		if tx.Type == common.UnstakeTxType && in.Amount < cv.cfg.StakeUnit {
+			return errors.New("Too low stake amount value.")
+		}
 	}
 
+	stakeOutputs := 0
 	for _, out := range tx.Outputs {
 		txBalance -= out.Amount
+
+		// check stake outputs in the stake transaction
+		if tx.Type == common.StakeTxType && common.BytesToHash(out.Node).Hex() == common.StakeAddress {
+			if out.Amount < cv.cfg.StakeUnit {
+				return errors.New("Too small stake amount.")
+			}
+
+			stakeOutputs++
+		}
+	}
+
+	if tx.Type == common.StakeTxType && stakeOutputs == 0 {
+		return errors.New("transaction has no stake outputs.")
 	}
 
 	txBalance -= tx.GetRealFee()
@@ -384,17 +439,25 @@ func (cv *CryspValidator) validateTxBalance(tx *prototype.Transaction) error {
 func (cv *CryspValidator) getUTxO(tx *prototype.Transaction) ([]*types.UTxO, error) {
 	start := time.Now()
 
-	from := common.BytesToAddress(tx.Inputs[0].Address)
+	from := common.BytesToAddress(tx.Inputs[0].Address).Hex()
 
-	// get user inputs from DB
-	utxo, err := cv.br.FindAllUTxO(from.Hex())
+	var utxo []*types.UTxO
+	var err error
+
+	if tx.Type == common.UnstakeTxType {
+		utxo, err = cv.outputsReader.FindStakeDepositsOfAddress(from)
+	} else {
+		// get user inputs from DB
+		utxo, err = cv.outputsReader.FindAllUTxO(from)
+	}
+
 	if err != nil {
 		return nil, errors.Wrap(err, "ValidateTransaction")
 	}
 
 	utxoSize := len(utxo)
 
-	if cv.statFlag {
+	if cv.cfg.LogStat {
 		end := time.Since(start)
 		log.Infof("ValidateTransaction: Read all UTxO of user %s Count: %d Time: %s", from, utxoSize, common.StatFmt(end))
 	}

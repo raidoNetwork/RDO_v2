@@ -140,7 +140,7 @@ func (tp *TxPool) validateTx(td *TransactionData) error {
 	txHash := common.Encode(td.GetTx().Hash)
 
 	// validate balance, signatures and hash check
-	err := tp.validator.ValidateTransactionData(td.GetTx())
+	err := tp.validator.ValidateTransactionStruct(td.GetTx())
 	if err != nil {
 		return err
 	}

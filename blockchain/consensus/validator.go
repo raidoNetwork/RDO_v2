@@ -10,8 +10,8 @@ type TxValidator interface {
 	// ValidateTransaction validate transaction and return an error if something is wrong
 	ValidateTransaction(*prototype.Transaction) error
 
-	// ValidateTransactionData validates transaction balances, signatures and hash.
-	ValidateTransactionData(*prototype.Transaction) error
+	// ValidateTransactionStruct validates transaction balances, signatures and hash.
+	ValidateTransactionStruct(*prototype.Transaction) error
 }
 
 // BlockValidator checks only blocks
@@ -41,8 +41,11 @@ type BlockSpecifying interface {
 	// if block not found return nil
 	GetBlockByHash([]byte) (*prototype.Block, error)
 
-	// GetRewardForBlock return reward for block with given number
-	GetRewardForBlock(uint64) uint64
+	// GetBlockReward return reward for block with given number
+	GetBlockReward() uint64
+
+	// GetBlockCount return block count in the blockchain
+	GetBlockCount() uint64
 }
 
 // OutputsReader checks all address unspent outputs
