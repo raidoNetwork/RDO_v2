@@ -149,7 +149,7 @@ func (om *OutputManager) syncBlock(block *prototype.Block, blockTx int) error {
 		for _, out := range tx.Outputs {
 			key := hash.Hex() + "_" + strconv.FormatUint(uint64(index), 10)
 
-			uo := types.NewUTxO(tx.Hash, from, out.Address, out.Node, index, out.Amount, block.Num, int(tx.Type), tx.Timestamp)
+			uo := types.NewUTxO(tx.Hash, from, out.Address, out.Node, index, out.Amount, block.Num, tx.Type, tx.Timestamp)
 
 			arows, err := om.db.VerifyOutput(blockTx, uo)
 			if err != nil {
@@ -404,7 +404,7 @@ func (om *OutputManager) proccessBlockOutputs(blockTx int, tx *prototype.Transac
 	for _, out := range tx.Outputs {
 		startOut := time.Now()
 
-		uo := types.NewUTxO(tx.Hash, from.Bytes(), out.Address, out.Node, index, out.Amount, blockNum, int(tx.Type), tx.Timestamp)
+		uo := types.NewUTxO(tx.Hash, from.Bytes(), out.Address, out.Node, index, out.Amount, blockNum, tx.Type, tx.Timestamp)
 
 		// add output to the database
 		arows, err = om.db.AddOutput(blockTx, uo)

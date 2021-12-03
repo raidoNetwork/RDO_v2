@@ -18,7 +18,7 @@ type UTxO struct {
 	Timestamp uint64         `json:"timestamp"`
 	ID     uint64
 	Spent  uint64
-	TxType int    			 `json:"txType"`
+	TxType uint32    			 `json:"txType"`
 }
 
 func (uo *UTxO) ToOutput() *prototype.TxOutput {
@@ -48,7 +48,7 @@ func (uo *UTxO) ToString() string {
 		uo.Timestamp)
 }
 
-func NewUTxO(hash, from, to, node []byte, index uint32, amount uint64, blockNum uint64, typev int, tstamp uint64) *UTxO {
+func NewUTxO(hash, from, to, node []byte, index uint32, amount uint64, blockNum uint64, typev uint32, tstamp uint64) *UTxO {
 	if tstamp == 0 {
 		tstamp = uint64(time.Now().UnixNano())
 	}
@@ -68,7 +68,7 @@ func NewUTxO(hash, from, to, node []byte, index uint32, amount uint64, blockNum 
 	return &uo
 }
 
-func NewUTxOFull(id uint64, hash, from, to, node string, index uint32, amount, blockNum, unspent, timestamp uint64, typev int) (*UTxO, error) {
+func NewUTxOFull(id uint64, hash, from, to, node string, index uint32, amount, blockNum, unspent, timestamp uint64, typev uint32) (*UTxO, error) {
 	uo := UTxO{
 		ID:        id,
 		Hash:      common.HexToHash(hash),

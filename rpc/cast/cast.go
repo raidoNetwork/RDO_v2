@@ -17,7 +17,7 @@ func ConvertProtoToInner(uo *types.UTxO) *prototype.UTxO {
 	uopb.Node = uo.Node.Bytes()
 	uopb.Amount = uo.Amount
 	uopb.Timestamp = uo.Timestamp
-	uopb.Txtype = int32(uo.TxType)
+	uopb.Txtype = uo.TxType
 
 	return uopb
 }

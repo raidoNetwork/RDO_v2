@@ -180,8 +180,7 @@ func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*ty
 
 		var hash, from, to, node string
 		var id, spent, blockNum, amount, timestamp uint64
-		var index uint32
-		var typev int
+		var index, typev uint32
 
 		err = rows.Scan(&id, &hash, &index, &from, &to, &node, &amount, &spent, &timestamp, &blockNum, &typev)
 		if err != nil {
