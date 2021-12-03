@@ -2,12 +2,15 @@ package txgen
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared/cmd"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/hasher"
 	rmath "github.com/raidoNetwork/RDO_v2/shared/math"
+	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -21,19 +24,18 @@ import (
 )
 
 const (
-	maxFee = 100 // max fee value
-	minFee = 1   // min fee value
+	outputsLimit = 5
 
-	outputsLimit = 4
-
-	generatorInterval   = 7 * time.Second
-	testAccountsNum     = 50
-	testTxLimitPerBlock = 5
-	accountsStep        = 5
+	generatorInterval        = 500 * time.Millisecond
+	txPerTickCount           = 25
+	accountsStep             = 5
+	startAmount       uint64 = 1e12 //10000000000000 // 1 * 10e12
 )
 
 var (
-	ErrEmptyAll = errors.New("All balances are empty.")
+	ErrEmptyAll    = errors.New("All balances are empty.")
+	ErrAccountsNum = errors.New("Too small accounts number.")
+	ErrNullChange  = errors.New("Null change.")
 )
 
 var log = logrus.WithField("prefix", "TxGenerator")
@@ -47,6 +49,7 @@ func NewGenerator(cliCtx *cli.Context) (*TxGenerator, error) {
 
 	host := cliCtx.String(flags.RPCHost.Name)
 	port := cliCtx.String(flags.RPCPort.Name)
+	datadir := cliCtx.String(cmd.DataDirFlag.Name)
 
 	api, err := NewClient(host + ":" + port)
 	if err != nil {
@@ -54,19 +57,28 @@ func NewGenerator(cliCtx *cli.Context) (*TxGenerator, error) {
 		return nil, err
 	}
 
+	// setup default config
+	params.UseMainnetConfig()
+
+	// get custom config
+	cfg := params.RaidoConfig()
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	tg := TxGenerator{
-		nullBalance: 0,
-		accman:      accman,
-		mu:          sync.RWMutex{},
-		ctx:         ctx,
-		cancel:      cancel,
-		cli:         cliCtx,
-		count:       map[string]uint64{},
-		stop:        make(chan struct{}),
-		api:         api,
-		senderIndex: 0,
+		nullBalance:   0,
+		accman:        accman,
+		mu:            sync.RWMutex{},
+		ctx:           ctx,
+		cancel:        cancel,
+		cli:           cliCtx,
+		stop:          make(chan struct{}),
+		api:           api,
+		senderIndex:   0,
+		receiverIndex: 0,
+		dataDir:       datadir,
+		cfg:           cfg,
+		txCounter:     0,
 	}
 
 	return &tg, nil
@@ -88,7 +100,9 @@ func prepareAccounts(ctx *cli.Context) (*types.AccountManager, error) {
 
 	// if keys are not stored create new key pairs and store them
 	if errors.Is(err, types.ErrEmptyKeyDir) {
-		err = accman.CreatePairs(testAccountsNum)
+		log.Warn("Create new accounts.")
+
+		err = accman.CreatePairs(common.AccountNum)
 		if err != nil {
 			log.Error("Error creating accounts.", err)
 			return nil, err
@@ -111,7 +125,6 @@ type TxGenerator struct {
 	nullBalance int
 
 	accman *types.AccountManager // key pair storage
-	count  map[string]uint64     // accounts tx counter
 
 	mu   sync.RWMutex
 	stop chan struct{} // chan for main thread lock
@@ -122,7 +135,15 @@ type TxGenerator struct {
 
 	api *Client // RDO API client
 
-	senderIndex int // current transaction sender index
+	senderIndex   int // current transaction sender index
+	receiverIndex int // current transaction receiver index
+
+	dataDir string
+
+	cfg         *params.RDOBlockChainConfig
+	stakeAmount uint64
+
+	txCounter int
 }
 
 // Start generator service
@@ -132,6 +153,8 @@ func (tg *TxGenerator) Start() {
 	tg.mu.Lock()
 	stop := tg.stop
 	tg.mu.Unlock()
+
+	tg.stakeAmount = tg.cfg.StakeSlotUnit * tg.cfg.RoiPerRdo
 
 	go tg.api.Start()
 
@@ -171,8 +194,6 @@ func (tg *TxGenerator) loop() {
 	ticker := time.NewTicker(generatorInterval)
 	defer ticker.Stop()
 
-	counter := 0
-	step := testAccountsNum / testTxLimitPerBlock
 	for {
 		select {
 		case <-tg.ctx.Done():
@@ -186,102 +207,209 @@ func (tg *TxGenerator) loop() {
 
 				if strings.Contains(err.Error(), "rpc") {
 					go tg.restartGenerator()
+				} else {
+					tg.Stop() // shutdown
 				}
 
 				return
 			}
-
-			if counter%step == 0 {
-				tg.nullBalance = 0
-			}
-
-			counter++
 		}
 	}
 }
 
-// createTx create tx using in-memory inputs
+// createTx create tx
 func (tg *TxGenerator) createTx() (*prototype.Transaction, error) {
-	log.Infof("createTx: Attempt to create tx.")
-
-	if tg.nullBalance >= testAccountsNum {
+	if tg.nullBalance >= common.AccountNum {
+		log.Errorf("Null balances count: %d. Transactions: %d. Current sender: %d", tg.nullBalance, tg.txCounter, tg.senderIndex)
 		return nil, ErrEmptyAll
 	}
 
-	from, receiverIndex := tg.chooseSender()
+	startMain := time.Now()
 
-	start := time.Now()
-	userInputs, err := tg.api.FindAllUTxO(from)
+	// choose transaction sender
+	from, err := tg.chooseSender()
 	if err != nil {
 		return nil, err
 	}
 
+	var txType uint32 = common.NormalTxType
+	var userInputs []*types.UTxO
+	var start time.Time
+	var end time.Duration
+
+	// every number in sequence [1, 100] has a probability to be chosen in 1%.
+	percent := rand.Intn(100) + 1
+	if percent == 1 {
+		start = time.Now()
+
+		userInputs, err = tg.api.FindStakeDeposits(from)
+		if err != nil {
+			return nil, err
+		}
+
+		end = time.Since(start)
+		log.Infof("Address: %s Deposits count: %d Got in: %s.", from, len(userInputs), common.StatFmt(end))
+
+		// if user made stakes earlier create Unstake transaction
+		// otherwise try to stake some money
+		if len(userInputs) > 0 {
+			txType = common.UnstakeTxType
+		} else {
+			txType = common.StakeTxType
+		}
+	}
+
+	start = time.Now()
+
+	if txType != common.UnstakeTxType {
+		userInputs, err = tg.api.FindAllUTxO(from)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// create inputs for unstake tx
 	userInputsLen := len(userInputs)
 	inputsArr := make([]*prototype.TxInput, 0, userInputsLen)
-
-	// get user private key for signing inputs
-	usrKey := tg.accman.GetKey(from)
 
 	// count balance
 	var balance uint64
 	for _, uo := range userInputs {
 		balance += uo.Amount
-
-		inputsArr = append(inputsArr, uo.ToInput(usrKey))
+		inputsArr = append(inputsArr, uo.ToInput())
 	}
 
-	log.Infof("Adress %s UTxO count: %d Balance: %d", from, userInputsLen, balance)
-
-	end := time.Since(start)
-	log.Infof("createTx: Get address balance in %s.", common.StatFmt(end))
+	end = time.Since(start)
+	log.Infof("Address: %s UTxO count: %d SenderIndex %d Get balance in: %s.", from, userInputsLen, tg.senderIndex-1, common.StatFmt(end))
 
 	// if balance is equal to zero try to create new transaction
 	if balance == 0 {
-		log.Warnf("Account %s has balance %d.", from, balance)
+		log.Warnf("Address: %s has balance 0. TxType %d", from, txType)
 		tg.nullBalance++
-		return tg.createTx()
+
+		return nil, errors.New("Zero balance on the wallet.")
 	}
 
 	// if user has balance equal to the minimum fee find another user
-	if balance == minFee {
-		log.Warnf("Account %s has balanc equal to the minimum fee.", from)
+	if balance <= tg.cfg.MinimalFee {
+		log.Warnf("Account %s has low balance equal or smaller than minimum fee.", from)
 		return tg.createTx()
 	}
 
-	fee := getFee() // get price for 1 byte of tx
+	// check address having enough balance for staking
+	// if not create regular transaction
+	if txType == common.StakeTxType && balance <= tg.stakeAmount {
+		log.Warnf("Cann't create stake transaction for %s. Balance too low.", from)
+		txType = common.NormalTxType
+	}
+
+	// get account nonce
+	var nonce uint64 = 1 // TODO add API method GetNonce
+
+	// get transaction fee
+	fee := tg.getFee()
+
+	// create transaction base data
 	opts := types.TxOptions{
 		Fee:    fee,
-		Num:    tg.count[from],
+		Num:    nonce + 1,
 		Data:   []byte{},
-		Type:   common.NormalTxType,
+		Type:   txType,
 		Inputs: inputsArr,
 	}
 
-	// generate random target amount
-	targetAmount := rmath.RandUint64(1, balance)
+	// generate amount to spend for transaction
+	targetAmount := tg.stakeAmount
+	if opts.Type == common.NormalTxType {
+		targetAmount = rmath.RandUint64(1, balance)
+	}
 
-	log.Warnf("Address: %s Balance: %d. Trying to spend: %d.", from, balance, targetAmount)
+	log.Infof("Address: %s Balance: %d. Trying to spend: %d.", from, balance, targetAmount)
 
+	var change uint64
+
+	if txType != common.UnstakeTxType {
+		// count address change and update opts outputs with change one
+		change, err = tg.findChange(from, balance, targetAmount, &opts)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		change = 0
+	}
+
+	// get user private key for signing inputs
+	usrKey := tg.accman.GetKey(from)
+
+	// create and sign transaction
+	tx, err := tg.createTxBody(opts, from, change, targetAmount, usrKey, balance)
+	if err != nil {
+		return nil, err
+	}
+
+	// log message
+	entry := "Generated "
+	if opts.Type == common.StakeTxType {
+		entry += "stake"
+	} else if opts.Type == common.UnstakeTxType {
+		entry += "unstake"
+	} else {
+		entry += "normal"
+	}
+
+	end = time.Since(startMain)
+	log.Warnf(entry+" tx %s in %s.", common.BytesToHash(tx.Hash), common.StatFmt(end))
+
+	tg.txCounter++
+
+	return tx, nil
+}
+
+// findChange count change for transaction and creates change output.
+func (tg *TxGenerator) findChange(from string, balance uint64, targetAmount uint64, opts *types.TxOptions) (uint64, error) {
 	change := balance - targetAmount // user change
 
 	if change == 0 {
-		return nil, errors.Errorf("Null change.")
+		return 0, ErrNullChange
 	}
-
-	var out *prototype.TxOutput
 
 	// create change output
 	addr := common.HexToAddress(from)
-	out = types.NewOutput(addr.Bytes(), change, nil)
+	out := types.NewOutput(addr.Bytes(), change, nil)
 	opts.Outputs = append(opts.Outputs, out)
 
-	start = time.Now()
+	return change, nil
+}
+
+// getStakeOutput creates stake output for given address
+func (tg *TxGenerator) getStakeOutput(from string) *prototype.TxOutput {
+	return types.NewOutput(common.HexToAddress(from).Bytes(),
+		tg.stakeAmount,
+		common.HexToAddress(common.BlackHoleAddress).Bytes())
+}
+
+// getStakeOutput creates stake output for given address
+func (tg *TxGenerator) getUnstakeOutput(from string) *prototype.TxOutput {
+	return types.NewOutput(common.HexToAddress(from).Bytes(),
+		tg.stakeAmount,
+		nil)
+}
+
+// createTxBody generate transaction outputs and create transaction struct. Also sign transaction with address private key.
+func (tg *TxGenerator) createTxBody(opts types.TxOptions,
+	from string,
+	change, targetAmount uint64,
+	usrKey *ecdsa.PrivateKey,
+	balance uint64) (*prototype.Transaction, error) {
 
 	// generate outputs and add it to the tx
-	opts.Outputs = append(opts.Outputs, tg.generateTxOutputs(targetAmount, receiverIndex)...)
-
-	end = time.Since(start)
-	log.Infof("createTx: Generate outputs. Count: %d. Time: %s.", len(opts.Outputs), common.StatFmt(end))
+	if opts.Type == common.NormalTxType {
+		opts.Outputs = append(opts.Outputs, tg.generateTxOutputs(targetAmount)...)
+	} else if opts.Type == common.StakeTxType {
+		opts.Outputs = append(opts.Outputs, tg.getStakeOutput(from))
+	} else {
+		opts.Outputs = append(opts.Outputs, tg.getUnstakeOutput(from))
+	}
 
 	tx, err := types.NewTx(opts, usrKey)
 	if err != nil {
@@ -292,19 +420,15 @@ func (tg *TxGenerator) createTx() (*prototype.Transaction, error) {
 
 	errFeeTooBig := errors.Errorf("tx can't pay fee. Balance: %d. Value: %d. Fee: %d. Change: %d.", balance, targetAmount, realFee, change)
 
-	if change > realFee {
-		change -= realFee
-		tx.Outputs[0].Amount = change
-	} else if len(tx.Outputs) >= 2 {
-		amount := tx.Outputs[1].Amount
-
-		if amount <= realFee {
-			return nil, errFeeTooBig
-		} else {
-			tx.Outputs[1].Amount -= realFee
-		}
+	if opts.Type == common.UnstakeTxType {
+		tx.Outputs[0].Amount -= realFee
 	} else {
-		return nil, errFeeTooBig
+		if change > realFee {
+			change -= realFee
+			tx.Outputs[0].Amount = change
+		} else {
+			return nil, errFeeTooBig
+		}
 	}
 
 	// We change tx outputs so we need to update tx hash.
@@ -323,38 +447,47 @@ func (tg *TxGenerator) createTx() (*prototype.Transaction, error) {
 		return nil, err
 	}
 
-	log.Warnf("Generated tx %s", hash.Hex())
-
 	return tx, nil
 }
 
 // chooseSender choose tx sender and receiver start index
-func (tg *TxGenerator) chooseSender() (string, int) {
+func (tg *TxGenerator) chooseSender() (string, error) {
 	lst := tg.accman.GetPairsList()
+
+	if len(lst) != common.AccountNum {
+		return "", ErrAccountsNum
+	}
+
 	sendPair := lst[tg.senderIndex]
 	from := sendPair.Address
 
-	receiverIndex := tg.senderIndex - accountsStep
-	if receiverIndex < 0 {
-		receiverIndex += testAccountsNum
+	if tg.senderIndex%accountsStep == 0 {
+		tg.receiverIndex = tg.senderIndex - accountsStep
+
+		if tg.receiverIndex < 0 {
+			tg.receiverIndex += common.AccountNum
+		}
 	}
 
 	tg.senderIndex++
-	if tg.senderIndex == testAccountsNum {
+	if tg.senderIndex == common.AccountNum {
 		tg.senderIndex = 0
+		tg.nullBalance = 0 // for fair balances check
 	}
 
-	return from.Hex(), receiverIndex
+	return from.Hex(), nil
 }
 
 // generateTxOutputs create tx outputs with given total amount
-func (tg *TxGenerator) generateTxOutputs(targetAmount uint64, receiverIndex int) []*prototype.TxOutput {
+func (tg *TxGenerator) generateTxOutputs(targetAmount uint64) []*prototype.TxOutput {
 	outAmount := targetAmount
 	lst := tg.accman.GetPairsList()
 	outputCount := rand.Intn(outputsLimit) + 1 // outputs size limit
 
 	var out *prototype.TxOutput
 	res := make([]*prototype.TxOutput, 0)
+
+	receiverIndex := tg.receiverIndex
 
 	for i := 0; i < outputCount; i++ {
 		// all money are spent
@@ -365,7 +498,7 @@ func (tg *TxGenerator) generateTxOutputs(targetAmount uint64, receiverIndex int)
 		pair := lst[receiverIndex] // get account receiver
 		to := pair.Address
 
-		//amount := uint64(rand.Intn(int(outAmount)) + 1) // get random amount
+		// get random amount
 		amount := rmath.RandUint64(1, outAmount)
 
 		if i != outputCount-1 {
@@ -385,7 +518,7 @@ func (tg *TxGenerator) generateTxOutputs(targetAmount uint64, receiverIndex int)
 		outAmount -= amount
 
 		receiverIndex++
-		if receiverIndex == testAccountsNum {
+		if receiverIndex == common.AccountNum {
 			receiverIndex = 0
 		}
 	}
@@ -395,17 +528,19 @@ func (tg *TxGenerator) generateTxOutputs(targetAmount uint64, receiverIndex int)
 
 // sendTxBatch create certain number of transactions and send it to the blockchain.
 func (tg *TxGenerator) sendTxBatch() error {
-	for i := 0; i < testTxLimitPerBlock; i++ {
+	txCounter := 0
+	start := time.Now()
+
+	for i := 0; i < txPerTickCount; i++ {
 		tx, err := tg.createTx()
 		if err != nil {
 			log.Errorf("Error creating tx: %s", err)
 
 			// error with senders: something wrong with balances or rpc error
-			if errors.Is(err, ErrEmptyAll) || strings.Contains(err.Error(), "rpc error") {
+			if errors.Is(err, ErrEmptyAll) || errors.Is(err, ErrAccountsNum) || strings.Contains(err.Error(), "rpc error") {
 				return err
 			}
 
-			i-- // add an attempt to cover current failure
 			continue
 		}
 
@@ -417,12 +552,15 @@ func (tg *TxGenerator) sendTxBatch() error {
 				return err
 			}
 
-			i-- // add an attempt to cover current failure
 			continue
 		}
 
+		txCounter++
 		log.Infof("Tx %s send to the Tx pool.", common.BytesToHash(tx.Hash).Hex())
 	}
+
+	end := time.Since(start)
+	log.Warnf("Create tx batch with size %d in time %s.", txCounter, common.StatFmt(end))
 
 	return nil
 }
@@ -442,6 +580,7 @@ func (tg *TxGenerator) restartGenerator() {
 }
 
 // getFee generates random fee in given amount
-func getFee() uint64 {
-	return rmath.RandUint64(minFee, maxFee)
+func (tg *TxGenerator) getFee() uint64 {
+	maxFee := tg.cfg.MinimalFee + 100
+	return rmath.RandUint64(tg.cfg.MinimalFee, maxFee)
 }

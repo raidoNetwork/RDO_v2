@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"google.golang.org/grpc"
 	"time"
@@ -74,11 +75,42 @@ func (c *Client) FindAllUTxO(addr string) ([]*types.UTxO, error) {
 	return data, nil
 }
 
+func (c *Client) FindStakeDeposits(addr string) ([]*types.UTxO, error) {
+	req := new(prototype.AddressRequest)
+	req.Address = addr
+
+	res, err := c.raidoChainService.GetStakeDeposits(c.ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	data := make([]*types.UTxO, len(res.GetData()))
+
+	for i, item := range res.GetData() {
+		data[i] = cast(item)
+	}
+
+	return data, nil
+}
+
 func (c *Client) SendTx(tx *prototype.Transaction) error {
 	req := new(prototype.SendTxRequest)
 	req.Tx = tx
 
-	resp, err := c.attestationService.SendTx(c.ctx, req)
+	var resp *prototype.ErrorResponse
+	var err error
+
+	switch tx.Type {
+	case common.NormalTxType:
+		resp, err = c.attestationService.SendLegacyTx(c.ctx, req)
+	case common.StakeTxType:
+		resp, err = c.attestationService.SendStakeTx(c.ctx, req)
+	case common.UnstakeTxType:
+		resp, err = c.attestationService.SendUnstakeTx(c.ctx, req)
+	default:
+		return errors.New("Wrong transaction type.")
+	}
+
 	if err != nil {
 		return err
 	}
@@ -99,7 +131,7 @@ func cast(puo *prototype.UTxO) *types.UTxO {
 		puo.Index,
 		puo.Amount,
 		puo.BlockNum,
-		int(puo.Txtype),
+		puo.Txtype,
 		puo.Timestamp,
 	)
 }
