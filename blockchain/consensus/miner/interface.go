@@ -9,6 +9,8 @@ type BlockMiner interface {
 
 	// SaveBlock store block to the blockchain.
 	SaveBlock(*prototype.Block) error
+
+	GetBlockCount() uint64
 }
 
 // OutputUpdater updates block outputs in the SQL and sync KV with SQL if it is need.

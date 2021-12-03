@@ -424,6 +424,7 @@ type TransactionData struct {
 	size    int // counted tx size for sort
 	status  int
 	brother string
+	checked bool
 }
 
 func (td *TransactionData) GetTx() *prototype.Transaction {
@@ -444,6 +445,18 @@ func (td *TransactionData) GetStatus() int {
 
 func (td *TransactionData) SetBro(hash string) {
 	td.brother = hash
+}
+
+func (td *TransactionData) SetChecked() {
+	td.checked = true
+}
+
+func (td *TransactionData) UnsetChecked() {
+	td.checked = false
+}
+
+func (td *TransactionData) IsChecked() bool {
+	return td.checked
 }
 
 func NewTxData(tx *prototype.Transaction) *TransactionData {
