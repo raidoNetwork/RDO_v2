@@ -49,10 +49,10 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (
 	}
 
 	// new block and tx validator
-	validator := consensus.NewCryspValidator(bc, outm, &validatorCfg) // TODO remove it to another service
+	validator := consensus.NewCryspValidator(bc, outm, &validatorCfg)
 
 	// new tx pool
-	txPool := txpool.NewTxPool(validator) // TODO remove it to another service
+	txPool := txpool.NewTxPool(validator)
 
 	// create new attestation validator
 	avalidator, err := attestation.NewValidator(outm, cfg.ValidatorRegistryLimit, bc.GetBlockReward())

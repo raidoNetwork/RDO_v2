@@ -21,7 +21,7 @@ type MinerConfig struct {
 	BlockSize    int
 }
 
-func NewMiner(bc BlockMiner, v consensus.BlockValidator, av attestation.Validator, txPool *txpool.TxPool, outm OutputUpdater, cfg *MinerConfig) *Miner {
+func NewMiner(bc consensus.BlockMiner, v consensus.BlockValidator, av consensus.StakeValidator, txPool *txpool.TxPool, outm consensus.OutputUpdater, cfg *MinerConfig) *Miner {
 	m := Miner{
 		bc:                   bc,
 		validator:            v,
@@ -35,11 +35,11 @@ func NewMiner(bc BlockMiner, v consensus.BlockValidator, av attestation.Validato
 }
 
 type Miner struct {
-	bc   BlockMiner
-	outm OutputUpdater
+	bc   consensus.BlockMiner
+	outm consensus.OutputUpdater
 
 	validator            consensus.BlockValidator
-	attestationValidator attestation.Validator
+	attestationValidator consensus.StakeValidator
 	txPool               *txpool.TxPool
 
 	cfg  *MinerConfig

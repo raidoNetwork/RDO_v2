@@ -12,23 +12,9 @@ import (
 
 var log = logrus.WithField("prefix", "Attestation")
 
-type Validator interface {
-	// RegisterStake add stake balance with data in transaction
-	RegisterStake([]byte) error
-
-	// UnregisterStake unregister stake slots.
-	UnregisterStake([]byte) error
-
-	// CreateRewardTx creates transaction with reward for all stakers.
-	CreateRewardTx(uint64) (*prototype.Transaction, error)
-
-	// CanStake shows stake slots is filled or not.
-	CanStake() bool
-}
-
 var ErrNoStakers = errors.New("No stake deposit is registered.")
 
-func NewValidator(outm consensus.OutputsReader, slotsLimit int64, reward uint64) (Validator, error) {
+func NewValidator(outm consensus.OutputsReader, slotsLimit int64, reward uint64) (consensus.StakeValidator, error) {
 	vg := &ValidatorGerm{
 		slots:       make([]string, 0, slotsLimit),
 		mu:          sync.RWMutex{},
