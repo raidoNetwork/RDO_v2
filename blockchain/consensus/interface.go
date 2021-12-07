@@ -50,8 +50,6 @@ type BlockSpecifying interface {
 
 	// GetBlockCount return block count in the blockchain
 	GetBlockCount() uint64
-
-	GetBlockReward() uint64
 }
 
 type StakeValidator interface {
@@ -66,6 +64,9 @@ type StakeValidator interface {
 
 	// CanStake shows stake slots is filled or not.
 	CanStake() bool
+
+	// GetRewardAmount return amount for reward with given size of filled slots.
+	GetRewardAmount(int) uint64
 }
 
 // BlockMiner interface for any struct that can create and save block to the database

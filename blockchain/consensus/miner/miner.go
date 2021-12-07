@@ -3,7 +3,7 @@ package miner
 import (
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
-	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/attestation"
+	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/validator"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/txpool"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
@@ -69,7 +69,7 @@ func (m *Miner) generateBlockWorker() (*prototype.Block, error) {
 	// create reward transaction for current block
 	rewardTx, err := m.attestationValidator.CreateRewardTx(m.bc.GetBlockCount())
 	if err != nil {
-		if errors.Is(err, attestation.ErrNoStakers) {
+		if errors.Is(err, validator.ErrNoStakers) {
 			log.Warn("No stakers on current block.")
 		} else {
 			return nil, err

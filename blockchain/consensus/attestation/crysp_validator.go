@@ -1,8 +1,9 @@
-package consensus
+package attestation
 
 import (
 	"bytes"
 	"github.com/pkg/errors"
+	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/hasher"
@@ -20,17 +21,19 @@ var (
 )
 
 type CryspValidatorConfig struct {
-	SlotTime     time.Duration // SlotTime defines main generator ticker timeout.
-	MinFee       uint64        // MinFee setups minimal transaction fee price.
-	StakeUnit    uint64        // StakeUnit roi amount needed for stake.
-	LogStat      bool          // LogStat enables time statistic log entries.
-	LogDebugStat bool          // LogDebugStat enable debug log entries
+	SlotTime               time.Duration // SlotTime defines main generator ticker timeout.
+	MinFee                 uint64        // MinFee setups minimal transaction fee price.
+	StakeUnit              uint64        // StakeUnit roi amount needed for stake.
+	LogStat                bool          // LogStat enables time statistic log entries.
+	LogDebugStat           bool          // LogDebugStat enable debug log entries
+	ValidatorRegistryLimit int           // ValidatorRegistryLimit defines validator slots count
 }
 
-func NewCryspValidator(bc BlockSpecifying, outDB OutputsReader, cfg *CryspValidatorConfig) *CryspValidator {
+func NewCryspValidator(bc consensus.BlockSpecifying, outDB consensus.OutputsReader, stakeValidator consensus.StakeValidator, cfg *CryspValidatorConfig) *CryspValidator {
 	v := CryspValidator{
 		blockSpecifying: bc,
 		outputsReader:   outDB,
+		stakeValidator:  stakeValidator,
 		cfg:             cfg,
 	}
 
@@ -38,10 +41,12 @@ func NewCryspValidator(bc BlockSpecifying, outDB OutputsReader, cfg *CryspValida
 }
 
 type CryspValidator struct {
-	outputsReader   OutputsReader
-	blockSpecifying BlockSpecifying
+	outputsReader   consensus.OutputsReader
+	blockSpecifying consensus.BlockSpecifying
+	stakeValidator  consensus.StakeValidator
 	cfg             *CryspValidatorConfig
 }
+
 
 func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
 	// check that block has no double in outputs and inputs
@@ -331,7 +336,7 @@ func (cv *CryspValidator) validateRewardTx(tx *prototype.Transaction, block *pro
 		return errors.Errorf("Transaction has wrong type: %d.", tx.Type)
 	}
 
-	if len(tx.Outputs) == 0 {
+	if len(tx.Outputs) == 0 || len(tx.Outputs) > cv.cfg.ValidatorRegistryLimit {
 		return errors.New("Wrong outputs size.")
 	}
 
@@ -352,23 +357,28 @@ func (cv *CryspValidator) validateRewardTx(tx *prototype.Transaction, block *pro
 	}
 
 	receivers := map[string]int{}
+	var to string
 	for _, uo := range stakeDeposits {
-		receivers[uo.To.Hex()] = 1
-	}
+		to = uo.To.Hex()
 
-	if len(receivers) != targetOutputsLen {
-		return errors.New("Not all stakers have a reward output.")
+		if _, exists := receivers[to]; exists {
+			receivers[to]++
+		} else {
+			receivers[to] = 1
+		}
 	}
 
 	// count reward amount for each staker
-	rewardAmount := cv.blockSpecifying.GetBlockReward() / uint64(targetOutputsLen)
+	rewardAmount := cv.stakeValidator.GetRewardAmount(targetOutputsLen)
 
 	// check outputs amount and receiver addresses
 	for i, out := range tx.Outputs {
 		addr := common.BytesToAddress(out.Address)
 		addrHex := addr.Hex()
 
-		if _, exists := receivers[addrHex]; !exists {
+		if _, exists := receivers[addrHex]; exists {
+			receivers[addrHex]--
+		} else {
 			return errors.Errorf("Undefined staker %s", addrHex)
 		}
 
@@ -376,6 +386,14 @@ func (cv *CryspValidator) validateRewardTx(tx *prototype.Transaction, block *pro
 			return errors.Errorf("Wrong reward amount on output %d. Expect: %d. Real: %d.", i, rewardAmount, out.Amount)
 		}
 	}
+
+	// check that all receivers got their reward correctly
+	for addr, count := range receivers {
+		if count != 0 {
+			return errors.Errorf("Address %s didn't receive reward.", addr)
+		}
+	}
+
 
 	return nil
 }

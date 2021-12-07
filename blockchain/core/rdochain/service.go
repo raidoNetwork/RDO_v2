@@ -2,9 +2,9 @@ package rdochain
 
 import (
 	"context"
-	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/attestation"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/miner"
+	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/validator"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/txpool"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
@@ -40,31 +40,34 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (
 		ShowStat: statFlag,
 	})
 
-	validatorCfg := consensus.CryspValidatorConfig{
-		SlotTime:     slotTime,
-		MinFee:       cfg.MinimalFee,
-		LogStat:      statFlag,
-		LogDebugStat: debugStatFlag,
-		StakeUnit:    cfg.StakeSlotUnit,
-	}
-
-	// new block and tx validator
-	validator := consensus.NewCryspValidator(bc, outm, &validatorCfg)
-
-	// new tx pool
-	txPool := txpool.NewTxPool(validator)
-
 	// create new attestation validator
-	avalidator, err := attestation.NewValidator(outm, cfg.ValidatorRegistryLimit, bc.GetBlockReward())
+	avalidator, err := validator.NewValidator(outm, cfg.ValidatorRegistryLimit, bc.GetBlockReward())
 	if err != nil {
 		return nil, err
 	}
+
+	validatorCfg := attestation.CryspValidatorConfig{
+		SlotTime:               slotTime,
+		MinFee:                 cfg.MinimalFee,
+		LogStat:                statFlag,
+		LogDebugStat:           debugStatFlag,
+		StakeUnit:              cfg.StakeSlotUnit,
+		ValidatorRegistryLimit: cfg.ValidatorRegistryLimit,
+	}
+
+	// new block and tx validator
+	validator := attestation.NewCryspValidator(bc, outm, avalidator, &validatorCfg) // TODO remove it to another service
+
+	// new tx pool
+	txPool := txpool.NewTxPool(validator)
 
 	// new block miner
 	forger := miner.NewMiner(bc, validator, avalidator, txPool, outm, &miner.MinerConfig{
 		ShowStat:     statFlag,
 		ShowFullStat: debugStatFlag,
+		BlockSize:    cfg.BlockSize,
 	})
+
 
 	ctx, finish := context.WithCancel(context.Background())
 
@@ -102,7 +105,7 @@ type Service struct {
 	bc    *BlockChain    // blockchain
 	miner *miner.Miner   // block miner
 
-	txPool *txpool.TxPool // TODO remove it to another service
+	txPool *txpool.TxPool
 
 	// flags
 	fullStatFlag bool

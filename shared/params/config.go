@@ -14,7 +14,7 @@ type RDOBlockChainConfig struct {
 	KroiPerRdo uint64 // KroiPerRdo is the amount of Groi = 1000 roi corresponding to 1 RDO.
 
 	// Stake config
-	ValidatorRegistryLimit int64  `yaml:"VALIDATOR_REGISTRY_LIMIT"` // ValidatorRegistryLimit defines the maximum count of validators can participate in rdochain.
+	ValidatorRegistryLimit int  `yaml:"VALIDATOR_REGISTRY_LIMIT"` // ValidatorRegistryLimit defines the maximum count of validators can participate in rdochain.
 	StakeSlotUnit          uint64 `yaml:"STAKE_SLOT_UNIT"`          // StakeSlotUnit defines the amount of RDO needed to fill one stake slot.
 
 	GenesisPath string `yaml:"GENESIS_PATH"` // GenesisPath defines path to the Genesis JSON file.

@@ -1,4 +1,4 @@
-package attestation
+package validator
 
 import (
 	"github.com/pkg/errors"
@@ -14,7 +14,7 @@ var log = logrus.WithField("prefix", "Attestation")
 
 var ErrNoStakers = errors.New("No stake deposit is registered.")
 
-func NewValidator(outm consensus.OutputsReader, slotsLimit int64, reward uint64) (consensus.StakeValidator, error) {
+func NewValidator(outm consensus.OutputsReader, slotsLimit int, reward uint64) (consensus.StakeValidator, error) {
 	vg := &ValidatorGerm{
 		slots:       make([]string, 0, slotsLimit),
 		mu:          sync.RWMutex{},
@@ -34,7 +34,7 @@ func NewValidator(outm consensus.OutputsReader, slotsLimit int64, reward uint64)
 
 type ValidatorGerm struct {
 	blockReward uint64   // fixed reward per block
-	slotsLimit  int64    // slots limit
+	slotsLimit  int    // slots limit
 	slots       []string // address list
 	mu          sync.RWMutex
 
@@ -154,9 +154,20 @@ func (vg *ValidatorGerm) createRewardOutputs() []*prototype.TxOutput {
 	return data
 }
 
-func (vg *ValidatorGerm) getEmptySlots() int64 {
+func (vg *ValidatorGerm) getEmptySlots() int {
 	vg.mu.RLock()
 	defer vg.mu.RUnlock()
 
-	return vg.slotsLimit - int64(len(vg.slots))
+	return vg.slotsLimit - len(vg.slots)
+}
+
+func (vg *ValidatorGerm) GetRewardAmount(size int) uint64 {
+	vg.mu.RLock()
+	defer vg.mu.RUnlock()
+
+	if size == 0 {
+		return 0
+	}
+
+	return vg.blockReward / uint64(size)
 }
