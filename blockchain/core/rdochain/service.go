@@ -56,13 +56,13 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (
 	}
 
 	// new block and tx validator
-	validator := attestation.NewCryspValidator(bc, outm, avalidator, &validatorCfg) // TODO remove it to another service
+	attestationValidator := attestation.NewCryspValidator(bc, outm, avalidator, &validatorCfg)
 
 	// new tx pool
-	txPool := txpool.NewTxPool(validator)
+	txPool := txpool.NewTxPool(attestationValidator)
 
 	// new block miner
-	forger := miner.NewMiner(bc, validator, avalidator, txPool, outm, &miner.MinerConfig{
+	forger := miner.NewMiner(bc, attestationValidator, avalidator, txPool, outm, &miner.MinerConfig{
 		ShowStat:     statFlag,
 		ShowFullStat: debugStatFlag,
 		BlockSize:    cfg.BlockSize,

@@ -65,6 +65,12 @@ type StakeValidator interface {
 	// CanStake shows stake slots is filled or not.
 	CanStake() bool
 
+	// ReserveSlot mark validator slot as filled until block will be forged.
+	ReserveSlot() error
+
+	// FlushReserved flush all reserved slots
+	FlushReserved()
+
 	// GetRewardAmount return amount for reward with given size of filled slots.
 	GetRewardAmount(int) uint64
 }

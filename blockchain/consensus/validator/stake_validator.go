@@ -12,15 +12,14 @@ import (
 
 var log = logrus.WithField("prefix", "Attestation")
 
-var ErrNoStakers = errors.New("No stake deposit is registered.")
-
 func NewValidator(outm consensus.OutputsReader, slotsLimit int, reward uint64) (consensus.StakeValidator, error) {
 	vg := &ValidatorGerm{
-		slots:       make([]string, 0, slotsLimit),
-		mu:          sync.RWMutex{},
-		blockReward: reward,
-		slotsLimit:  slotsLimit,
-		outm:        outm,
+		slots:         make([]string, 0, slotsLimit),
+		reservedSlots: make([]int, 0),
+		mu:            sync.RWMutex{},
+		blockReward:   reward,
+		slotsLimit:    slotsLimit,
+		outm:          outm,
 	}
 
 	// Load stake deposits data
@@ -33,10 +32,11 @@ func NewValidator(outm consensus.OutputsReader, slotsLimit int, reward uint64) (
 }
 
 type ValidatorGerm struct {
-	blockReward uint64   // fixed reward per block
-	slotsLimit  int    // slots limit
-	slots       []string // address list
-	mu          sync.RWMutex
+	blockReward   uint64   // fixed reward per block
+	slotsLimit    int      // slots limit
+	slots         []string // address list
+	reservedSlots []int
+	mu            sync.RWMutex
 
 	outm consensus.OutputsReader
 }
@@ -62,17 +62,41 @@ func (vg *ValidatorGerm) LoadSlots() error {
 
 // CanStake shows if there are free slots for staking
 func (vg *ValidatorGerm) CanStake() bool {
-	emptySlots := vg.getEmptySlots()
+	vg.mu.RLock()
+	defer vg.mu.RUnlock()
 
-	log.Warnf("Empty Stake slots count: %d", emptySlots)
+	return len(vg.slots)+len(vg.reservedSlots) < vg.slotsLimit
+}
 
-	return emptySlots > 0
+// ReserveSlot add address to reserved slots
+func (vg *ValidatorGerm) ReserveSlot() error {
+	if !vg.CanStake() {
+		return errors.New("All stake slots are filled.")
+	}
+
+	vg.mu.Lock()
+	vg.reservedSlots = append(vg.reservedSlots, 1)
+	vg.mu.Unlock()
+
+	return nil
+}
+
+// FlushReserved flush all reserved validator slots
+func (vg *ValidatorGerm) FlushReserved() {
+	vg.mu.Lock()
+	vg.reservedSlots = make([]int, 0)
+	vg.mu.Unlock()
 }
 
 // RegisterStake close validator slots
 func (vg *ValidatorGerm) RegisterStake(addr []byte) error {
-	if vg.getEmptySlots() == 0 {
+	empty := vg.getEmptySlots()
+	if empty == 0 {
 		return errors.New("Validator slots limit is reached.")
+	}
+
+	if empty < 0 {
+		return errors.New("Validator slots inconsistent.")
 	}
 
 	address := common.BytesToAddress(addr)
@@ -112,7 +136,7 @@ func (vg *ValidatorGerm) CreateRewardTx(blockNum uint64) (*prototype.Transaction
 	outs := vg.createRewardOutputs()
 
 	if len(outs) == 0 {
-		return nil, ErrNoStakers
+		return nil, consensus.ErrNoStakers
 	}
 
 	opts := types.TxOptions{
@@ -135,7 +159,6 @@ func (vg *ValidatorGerm) createRewardOutputs() []*prototype.TxOutput {
 	vg.mu.RLock()
 	size := len(vg.slots)
 	slots := vg.slots
-	reward := vg.blockReward
 	vg.mu.RUnlock()
 
 	data := make([]*prototype.TxOutput, 0, size)
@@ -144,7 +167,7 @@ func (vg *ValidatorGerm) createRewardOutputs() []*prototype.TxOutput {
 	}
 
 	// divide reward among all validator slots
-	reward /= uint64(size)
+	reward := vg.GetRewardAmount(size)
 
 	for _, addrHex := range slots {
 		addr := common.HexToAddress(addrHex)

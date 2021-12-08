@@ -137,7 +137,6 @@ func (om *OutputManager) syncBlock(block *prototype.Block, blockTx int) error {
 			log.Warnf("SyncData: Delete input with key %s_%d.", hash, in.Index)
 		}
 
-		// FIXME for multiple senders
 		if tx.Type == common.NormalTxType {
 			from = tx.Inputs[0].Address
 		} else {
@@ -167,7 +166,6 @@ func (om *OutputManager) syncBlock(block *prototype.Block, blockTx int) error {
 						return om.errorProcess(blockTx, errors.New("SyncData: Inconsistent SQL database."))
 					}
 				} else {
-					// TODO remove doubles
 					return om.errorProcess(blockTx, errors.New("SyncData: Inconsistent SQL database. Check double inputs."))
 				}
 			}

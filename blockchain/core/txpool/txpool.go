@@ -235,17 +235,7 @@ func (tp *TxPool) FlushReserved(cleanInputs bool) {
 	tp.lock.Lock()
 	if cleanInputs {
 		for _, txd := range tp.reservedPool {
-			for _, in := range txd.GetTx().Inputs {
-				key := genKeyFromInput(in)
-				_, exists := tp.lockedInputs[key]
-
-				if !exists {
-					log.Warnf("Trying to delete unexist input key %s.", key)
-					continue
-				}
-
-				delete(tp.lockedInputs, key)
-			}
+			tp.unlockInputs(txd.GetTx())
 		}
 	}
 
@@ -292,6 +282,54 @@ func (tp *TxPool) DeleteFromPricedPool(tx *prototype.Transaction) error {
 	tp.pricedPool.Delete(index)
 
 	return nil
+}
+
+// DeleteTransaction delete transaction from the pool
+func (tp *TxPool) DeleteTransaction(tx *prototype.Transaction) error {
+	hash := common.BytesToHash(tx.Hash).Hex()
+
+	tp.lock.Lock()
+	defer tp.lock.Unlock()
+
+	return tp.deleteTransactionByHash(hash)
+}
+
+
+// deleteTransactionByHash
+func (tp *TxPool) deleteTransactionByHash(hash string) error {
+	td, exists := tp.pool[hash]
+
+	if !exists {
+		return errors.Errorf("Not found tx with hash %s in pool", hash)
+	}
+
+	tx := td.GetTx()
+
+	delete(tp.pool, hash)
+	tp.unlockInputs(tx)
+
+	err := tp.DeleteFromPricedPool(tx)
+	if err != nil {
+		log.Errorf("Error deleting stake transaction %s", hash)
+		return err
+	}
+
+	return nil
+}
+
+// unlockInputs delete transaction inputs
+func (tp *TxPool) unlockInputs(tx *prototype.Transaction) {
+	for _, in := range tx.Inputs {
+		key := genKeyFromInput(in)
+		_, exists := tp.lockedInputs[key]
+
+		if !exists {
+			log.Warnf("Trying to delete unexist input key %s.", key)
+			continue
+		}
+
+		delete(tp.lockedInputs, key)
+	}
 }
 
 // checkTxOut func for verifying tx was deleted from pool correctly

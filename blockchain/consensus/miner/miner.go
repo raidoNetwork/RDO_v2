@@ -3,7 +3,6 @@ package miner
 import (
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
-	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/validator"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/txpool"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
@@ -47,29 +46,17 @@ type Miner struct {
 }
 
 // GenerateBlock create block from tx pool data
-func (m *Miner) GenerateBlock() (block *prototype.Block, err error) {
-	block, err = m.generateBlockWorker() // try to generate block
-
-	if err != nil {
-		log.Errorf("GenerateBlock: %s.", err)
-		return
-	}
-
-	return
-}
-
-// generateBlockWorker tries to create block with given BlockSize limit.
-func (m *Miner) generateBlockWorker() (*prototype.Block, error) {
+func (m *Miner) GenerateBlock() (*prototype.Block, error) {
 	totalSize := 0 // current size of block in bytes
 
 	txList := m.txPool.GetPricedQueue()
 	txListLen := len(txList)
-	txBatch := make([]*prototype.Transaction, 0)
+	txBatch := make([]*prototype.Transaction, 0, txListLen)
 
 	// create reward transaction for current block
 	rewardTx, err := m.attestationValidator.CreateRewardTx(m.bc.GetBlockCount())
 	if err != nil {
-		if errors.Is(err, validator.ErrNoStakers) {
+		if errors.Is(err, consensus.ErrNoStakers) {
 			log.Warn("No stakers on current block.")
 		} else {
 			return nil, err
@@ -79,35 +66,36 @@ func (m *Miner) generateBlockWorker() (*prototype.Block, error) {
 		totalSize += rewardTx.SizeSSZ()
 	}
 
-	stakeCounter := 0
+	// limit tx count in block according to marshaller settings
+	txBatchLimit := 500
+	if txListLen < txBatchLimit {
+		txBatchLimit = txListLen
+	}
 
 	var size int
-	for i := 0; i < txListLen; i++ {
-		// skip already checked transactions
-		if txList[i].IsChecked() {
-			continue
-		}
-
+	for i := 0; i < txBatchLimit; i++ {
 		size = txList[i].Size()
 		totalSize += size
-
-		// mark tx as checked
-		txList[i].SetChecked()
 
 		if totalSize <= m.cfg.BlockSize {
 			tx := txList[i].GetTx()
 
-			// check that stake slots are open
-			if tx.Type == common.StakeTxType && !m.attestationValidator.CanStake() {
-				log.Warnf("Skip stake transaction %s because all slots are filled.", common.BytesToHash(tx.Hash))
+			// check if empty validator slots exists and skip stake tx if not exist
+			if tx.Type == common.StakeTxType {
+				err = m.attestationValidator.ReserveSlot()
+				if err != nil {
+					totalSize -= size // return size of current tx
 
-				// rollback changes
-				txList[i].UnsetChecked()
-				totalSize -= size
+					log.Infof("Skip tx %s", common.Encode(tx.Hash))
 
-				stakeCounter++
+					// Delete stake tx from pool
+					err = m.txPool.DeleteTransaction(tx)
+					if err != nil {
+						return nil, errors.Wrap(err, "Error creating block")
+					}
 
-				continue
+					continue
+				}
 			}
 
 			txBatch = append(txBatch, tx)
@@ -115,11 +103,6 @@ func (m *Miner) generateBlockWorker() (*prototype.Block, error) {
 			// we fill block successfully
 			if totalSize == m.cfg.BlockSize {
 				break
-			}
-
-			// try to add in the block stake transactions skipped above
-			if tx.Type == common.UnstakeTxType && stakeCounter > 0 {
-				i = 0
 			}
 		} else {
 			// tx is too big try for look up another one
@@ -133,8 +116,6 @@ func (m *Miner) generateBlockWorker() (*prototype.Block, error) {
 		if err != nil {
 			return nil, err
 		}
-
-		log.Warnf("Generate block with transactions count: %d. TxPool transactions count: %d. Size: %d kB.", len(txBatch), txListLen, totalSize/1024)
 	}
 
 	// get block instance
@@ -142,6 +123,8 @@ func (m *Miner) generateBlockWorker() (*prototype.Block, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	log.Warnf("Generate block with transactions count: %d. TxPool transactions count: %d. Size: %d kB.", len(txBatch), txListLen, totalSize/1024)
 
 	return block, nil
 }
