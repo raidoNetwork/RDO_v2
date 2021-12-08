@@ -7,6 +7,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/sirupsen/logrus"
 	"sort"
 	"strconv"
@@ -34,11 +35,11 @@ func NewTxPool(v consensus.TxValidator) *TxPool {
 
 	tp := TxPool{
 		validator:      v,
-		pool:           map[string]*TransactionData{},
+		pool:           map[string]*types.TransactionData{},
 		lockedInputs:   map[string]string{},
 		pricedPool:     make(pricedTxPool, 0),
-		reservedPool:   map[string]*TransactionData{},
-		villainousPool: map[string]*TransactionData{},
+		reservedPool:   map[string]*types.TransactionData{},
+		villainousPool: map[string]*types.TransactionData{},
 
 		// ctx
 		ctx:    ctx,
@@ -64,16 +65,16 @@ type TxPool struct {
 	lockedInputs map[string]string
 
 	// valid tx pool map[tx hash] -> tx
-	pool map[string]*TransactionData
+	pool map[string]*types.TransactionData
 
 	// priced list
 	pricedPool pricedTxPool
 
 	// reserved tx list for future block
-	reservedPool map[string]*TransactionData
+	reservedPool map[string]*types.TransactionData
 
 	// double spend tx
-	villainousPool map[string]*TransactionData
+	villainousPool map[string]*types.TransactionData
 
 	dataC chan *prototype.Transaction
 
@@ -106,7 +107,7 @@ func (tp *TxPool) ReadingLoop() {
 
 // RegisterTx validate tx and add it to the pool if it is correct
 func (tp *TxPool) RegisterTx(tx *prototype.Transaction) error {
-	td := NewTxData(tx)
+	td := types.NewTxData(tx)
 
 	err := tp.validateTx(td)
 	if err != nil {
@@ -136,7 +137,7 @@ func (tp *TxPool) RegisterTx(tx *prototype.Transaction) error {
 }
 
 // validateTx validates tx by validator, finds double spends and checks tx exists in the pool
-func (tp *TxPool) validateTx(td *TransactionData) error {
+func (tp *TxPool) validateTx(td *types.TransactionData) error {
 	txHash := common.Encode(td.GetTx().Hash)
 
 	// validate balance, signatures and hash check
@@ -171,7 +172,7 @@ func (tp *TxPool) validateTx(td *TransactionData) error {
 		firstTxHash, exists := tp.lockedInputs[key]
 
 		if exists {
-			td.SetBro(firstTxHash) // link current Transaction to the first tx
+			td.AddAlias(firstTxHash) // link current Transaction to the first tx
 			tp.villainousPool[firstTxHash] = td
 
 			return errors.Errorf("%s Input hash index: %s. Tx hash: %s, double hash: %s", ErrInputExists, key, firstTxHash, hash)
@@ -182,7 +183,7 @@ func (tp *TxPool) validateTx(td *TransactionData) error {
 }
 
 // GetPricedQueue returns all transactions sorted by fee value
-func (tp *TxPool) GetPricedQueue() []*TransactionData {
+func (tp *TxPool) GetPricedQueue() []*types.TransactionData {
 	tp.lock.RLock()
 	defer tp.lock.RUnlock()
 
@@ -239,7 +240,7 @@ func (tp *TxPool) FlushReserved(cleanInputs bool) {
 		}
 	}
 
-	tp.reservedPool = map[string]*TransactionData{}
+	tp.reservedPool = map[string]*types.TransactionData{}
 	tp.lock.Unlock()
 }
 
@@ -384,7 +385,7 @@ func genKeyFromInput(in *prototype.TxInput) string {
 	return common.Encode(in.Hash) + "_" + strconv.Itoa(int(in.Index))
 }
 
-type pricedTxPool []*TransactionData
+type pricedTxPool []*types.TransactionData
 
 func (ptp pricedTxPool) Len() int {
 	return len(ptp)
@@ -393,11 +394,11 @@ func (ptp pricedTxPool) Len() int {
 func (ptp pricedTxPool) Less(i, j int) bool {
 	// if fee price is equal than compare timestamp
 	// bigger timestamp is worse
-	if ptp[i].tx.Fee == ptp[j].tx.Fee {
-		return ptp[i].tx.Timestamp < ptp[j].tx.Timestamp
+	if ptp[i].Fee() == ptp[j].Fee() {
+		return ptp[i].Timestamp() < ptp[j].Timestamp()
 	}
 
-	return ptp[i].tx.Fee > ptp[j].tx.Fee
+	return ptp[i].Fee() > ptp[j].Fee()
 }
 
 func (ptp pricedTxPool) Swap(i, j int) {
@@ -455,53 +456,4 @@ func (ptp *pricedTxPool) Delete(i int) {
 	}
 
 	*ptp = append((*ptp)[:i], (*ptp)[i+1:]...)
-}
-
-type TransactionData struct {
-	tx      *prototype.Transaction
-	size    int // counted tx size for sort
-	status  int
-	brother string
-	checked bool
-}
-
-func (td *TransactionData) GetTx() *prototype.Transaction {
-	return td.tx
-}
-
-func (td *TransactionData) Size() int {
-	return td.size
-}
-
-func (td *TransactionData) SetStatus(code int) {
-	td.status = code
-}
-
-func (td *TransactionData) GetStatus() int {
-	return td.status
-}
-
-func (td *TransactionData) SetBro(hash string) {
-	td.brother = hash
-}
-
-func (td *TransactionData) SetChecked() {
-	td.checked = true
-}
-
-func (td *TransactionData) UnsetChecked() {
-	td.checked = false
-}
-
-func (td *TransactionData) IsChecked() bool {
-	return td.checked
-}
-
-func NewTxData(tx *prototype.Transaction) *TransactionData {
-	td := TransactionData{
-		tx:   tx,
-		size: tx.SizeSSZ(),
-	}
-
-	return &td
 }

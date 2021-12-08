@@ -3,7 +3,6 @@ package miner
 import (
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
-	"github.com/raidoNetwork/RDO_v2/blockchain/core/txpool"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/sirupsen/logrus"
@@ -20,7 +19,7 @@ type MinerConfig struct {
 	BlockSize    int
 }
 
-func NewMiner(bc consensus.BlockMiner, v consensus.BlockValidator, av consensus.StakeValidator, txPool *txpool.TxPool, outm consensus.OutputUpdater, cfg *MinerConfig) *Miner {
+func NewMiner(bc consensus.BlockMiner, v consensus.BlockValidator, av consensus.StakeValidator, txPool consensus.TransactionQueue, outm consensus.OutputUpdater, cfg *MinerConfig) *Miner {
 	m := Miner{
 		bc:                   bc,
 		validator:            v,
@@ -39,7 +38,7 @@ type Miner struct {
 
 	validator            consensus.BlockValidator
 	attestationValidator consensus.StakeValidator
-	txPool               *txpool.TxPool
+	txPool               consensus.TransactionQueue
 
 	cfg  *MinerConfig
 	lock sync.RWMutex
@@ -133,13 +132,11 @@ func (m *Miner) GenerateBlock() (*prototype.Block, error) {
 func (m *Miner) FinalizeBlock(block *prototype.Block) error {
 	start := time.Now()
 
-	// on error return transactions to the pool
-
 	// validate block
 	err := m.validator.ValidateBlock(block)
 	if err != nil {
 		m.txPool.RollbackReserved()
-		return err
+		return errors.Wrap(err, "ValidateBlockError")
 	}
 
 	if m.cfg.ShowStat {
@@ -166,7 +163,7 @@ func (m *Miner) FinalizeBlock(block *prototype.Block) error {
 	// update SQL
 	err = m.outm.ProcessBlock(block)
 	if err != nil {
-		log.Errorf("FinalizeBlock: Error process block: %s.", err)
+		log.Errorf("FinalizeBlock: Error process block: %s", err)
 
 		// try to resync SQL with KV
 		err = m.outm.SyncData()
@@ -175,13 +172,12 @@ func (m *Miner) FinalizeBlock(block *prototype.Block) error {
 		}
 	}
 
-	for i := 0; i < len(block.Transactions); i++ {
-		tx := block.Transactions[i]
-
+	// update stake slots
+	for _, tx := range block.Transactions {
 		if tx.Type == common.StakeTxType {
 			err = m.attestationValidator.RegisterStake(tx.Inputs[0].Address)
 			if err != nil {
-				log.Errorf("Wrong block created!!! Error: %s", err)
+				log.Errorf("Error proccessing stake transaction: %s", err)
 				return err
 			}
 		}
@@ -195,7 +191,10 @@ func (m *Miner) FinalizeBlock(block *prototype.Block) error {
 		}
 	}
 
-	// Reset reserved pool
+	// Reset reserved validator slots
+	m.attestationValidator.FlushReserved()
+
+	// Reset reserved pool and clean all extra staking
 	m.txPool.FlushReserved(true)
 
 	if m.cfg.ShowStat {

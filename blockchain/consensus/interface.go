@@ -95,3 +95,22 @@ type OutputUpdater interface {
 	// SyncData syncs data in the KV with data in the SQL.
 	SyncData() error
 }
+
+// TransactionQueue provides and updates transaction queue.
+type TransactionQueue interface {
+	// GetPricedQueue returns transaction sort queue.
+	GetPricedQueue() []*types.TransactionData
+
+	// DeleteTransaction removes given transaction from pool.
+	DeleteTransaction(transaction *prototype.Transaction) error
+
+	// ReserveTransactions remove given transactions from pool
+	// and mark it as reserved.
+	ReserveTransactions([]*prototype.Transaction) error
+
+	// RollbackReserved returns reserved transactions to the pool.
+	RollbackReserved()
+
+	// FlushReserved removes all reserved transactions from pool.
+	FlushReserved(bool)
+}

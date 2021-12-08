@@ -73,3 +73,59 @@ func SignTx(tx *prototype.Transaction, key *ecdsa.PrivateKey) error {
 
 	return nil
 }
+
+
+func NewTxData(tx *prototype.Transaction) *TransactionData {
+	td := TransactionData{
+		tx:    tx,
+		size:  tx.SizeSSZ(),
+		fee:   tx.Fee,
+		num:   tx.Num,
+		timestamp: tx.Timestamp,
+		alias: make([]string, 0),
+	}
+
+	return &td
+}
+
+type TransactionData struct {
+	tx    *prototype.Transaction
+	size  int
+	fee   uint64
+	num   uint64
+	alias []string
+	timestamp uint64
+	status int
+}
+
+func (td *TransactionData) GetTx() *prototype.Transaction {
+	return td.tx
+}
+
+func (td *TransactionData) Size() int {
+	return td.size
+}
+
+func (td *TransactionData) Fee() uint64 {
+	return td.fee
+}
+
+func (td *TransactionData) Num() uint64 {
+	return td.num
+}
+
+func (td *TransactionData) Timestamp() uint64 {
+	return td.timestamp
+}
+
+func (td *TransactionData) AddAlias(hash string) {
+	td.alias = append(td.alias, hash)
+}
+
+func (td *TransactionData) GetAlias() []string {
+	return td.alias
+}
+
+func (td *TransactionData) SetStatus(s int){
+	td.status = s
+}
