@@ -28,6 +28,29 @@
     "application/grpc-web-json"
   ],
   "paths": {
+    "/rdo/v1/attestation/pending/transactions": {
+      "get": {
+        "summary": "GetPendingTransactions returns pending transactions list.",
+        "operationId": "AttestationService_GetPendingTransactions",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/serviceTransactionsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "AttestationService"
+        ]
+      }
+    },
     "/rdo/v1/attestation/send/legacy": {
       "post": {
         "summary": "SendLegacyTx send transaction data to the node.",
@@ -566,6 +589,20 @@
       "properties": {
         "tx": {
           "$ref": "#/definitions/responseTxValue"
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "serviceTransactionsResponse": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/responseTxValue"
+          }
         },
         "error": {
           "type": "string"

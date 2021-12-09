@@ -102,6 +102,13 @@ service AttestationService {
     };
   }
 
+  // GetPendingTransactions returns pending transactions list.
+  rpc GetPendingTransactions(google.protobuf.Empty) returns (TransactionsResponse) {
+    option (google.api.http) = {
+      get: "/rdo/v1/attestation/pending/transactions"
+    };
+  }
+
 }
 
 message AddressRequest{
@@ -140,6 +147,11 @@ message BlockResponse {
 
 message TransactionResponse {
   rdo.chainservice.response.TxValue tx = 1;
+  string error = 2;
+}
+
+message TransactionsResponse {
+  repeated rdo.chainservice.response.TxValue tx = 1;
   string error = 2;
 }
 

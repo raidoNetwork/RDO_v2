@@ -379,6 +379,8 @@ type AttestationServiceClient interface {
 	SendStakeTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error)
 	// SendUnstakeTx send stake transaction to the node.
 	SendUnstakeTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error)
+	// GetPendingTransactions returns pending transactions list.
+	GetPendingTransactions(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*TransactionsResponse, error)
 }
 
 type attestationServiceClient struct {
@@ -416,6 +418,15 @@ func (c *attestationServiceClient) SendUnstakeTx(ctx context.Context, in *SendTx
 	return out, nil
 }
 
+func (c *attestationServiceClient) GetPendingTransactions(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*TransactionsResponse, error) {
+	out := new(TransactionsResponse)
+	err := c.cc.Invoke(ctx, "/rdo.service.AttestationService/GetPendingTransactions", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AttestationServiceServer is the server API for AttestationService service.
 // All implementations must embed UnimplementedAttestationServiceServer
 // for forward compatibility
@@ -426,6 +437,8 @@ type AttestationServiceServer interface {
 	SendStakeTx(context.Context, *SendTxRequest) (*ErrorResponse, error)
 	// SendUnstakeTx send stake transaction to the node.
 	SendUnstakeTx(context.Context, *SendTxRequest) (*ErrorResponse, error)
+	// GetPendingTransactions returns pending transactions list.
+	GetPendingTransactions(context.Context, *emptypb.Empty) (*TransactionsResponse, error)
 	mustEmbedUnimplementedAttestationServiceServer()
 }
 
@@ -441,6 +454,9 @@ func (UnimplementedAttestationServiceServer) SendStakeTx(context.Context, *SendT
 }
 func (UnimplementedAttestationServiceServer) SendUnstakeTx(context.Context, *SendTxRequest) (*ErrorResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendUnstakeTx not implemented")
+}
+func (UnimplementedAttestationServiceServer) GetPendingTransactions(context.Context, *emptypb.Empty) (*TransactionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPendingTransactions not implemented")
 }
 func (UnimplementedAttestationServiceServer) mustEmbedUnimplementedAttestationServiceServer() {}
 
@@ -509,6 +525,24 @@ func _AttestationService_SendUnstakeTx_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AttestationService_GetPendingTransactions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AttestationServiceServer).GetPendingTransactions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rdo.service.AttestationService/GetPendingTransactions",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AttestationServiceServer).GetPendingTransactions(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AttestationService_ServiceDesc is the grpc.ServiceDesc for AttestationService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -527,6 +561,10 @@ var AttestationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendUnstakeTx",
 			Handler:    _AttestationService_SendUnstakeTx_Handler,
+		},
+		{
+			MethodName: "GetPendingTransactions",
+			Handler:    _AttestationService_GetPendingTransactions_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

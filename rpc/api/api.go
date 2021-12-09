@@ -49,5 +49,8 @@ type AttestationAPI interface {
 
 	// GetServiceStatus return service status or error if service is offline.
 	GetServiceStatus() (string, error)
+
+	// GetPendingTransactions returns list of pending transactions.
+	GetPendingTransactions() ([]*prototype.Transaction, error)
 }
 

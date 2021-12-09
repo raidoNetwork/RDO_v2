@@ -334,3 +334,15 @@ func (s *Service) GetStakeDeposits(addr string) ([]*types.UTxO, error) {
 func (s *Service) GetTransactionsCount(addr string) (uint64, error) {
 	return s.bc.GetTransactionsCount(common.HexToAddress(addr).Bytes())
 }
+
+// GetPendingTransactions returns list of pending transactions.
+func (s *Service) GetPendingTransactions() ([]*prototype.Transaction, error) {
+	queue := s.txPool.GetPricedQueue()
+
+	batch := make([]*prototype.Transaction, len(queue))
+	for i, td := range queue {
+		batch[i] = td.GetTx()
+	}
+
+	return batch, nil
+}
