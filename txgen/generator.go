@@ -304,7 +304,14 @@ func (tg *TxGenerator) createTx() (*prototype.Transaction, error) {
 	}
 
 	// get account nonce
-	var nonce uint64 = 1 // TODO add API method GetNonce
+	nonce, err := tg.api.GetNonce(from)
+	if err != nil {
+		log.Errorf("Error getting account nonce: %s", err)
+		return nil, err
+	}
+
+	// increase nonce
+	nonce += 1
 
 	// get transaction fee
 	fee := tg.getFee()
@@ -312,7 +319,7 @@ func (tg *TxGenerator) createTx() (*prototype.Transaction, error) {
 	// create transaction base data
 	opts := types.TxOptions{
 		Fee:    fee,
-		Num:    nonce + 1,
+		Num:    nonce,
 		Data:   []byte{},
 		Type:   txType,
 		Inputs: inputsArr,

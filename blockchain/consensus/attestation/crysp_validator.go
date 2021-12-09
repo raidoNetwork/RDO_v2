@@ -238,6 +238,16 @@ func (cv *CryspValidator) validateTxInputs(tx *prototype.Transaction) error {
 	// get sender address
 	from := common.BytesToAddress(tx.Inputs[0].Address)
 
+	// get address nonce
+	nonce, err := cv.blockSpecifying.GetTransactionsCount(from.Bytes())
+	if err != nil {
+		return err
+	}
+
+	if tx.Num != nonce+1 {
+		return consensus.ErrBadNonce
+	}
+
 	// get utxo for transaction
 	utxo, err := cv.getTxInputsFromDB(tx)
 	if err != nil {

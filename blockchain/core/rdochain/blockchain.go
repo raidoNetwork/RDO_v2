@@ -314,3 +314,8 @@ func (bc *BlockChain) GetTransaction(hash string) (*prototype.Transaction, error
 
 	return tx, nil
 }
+
+// GetTransactionsCount get address nonce.
+func (bc *BlockChain) GetTransactionsCount(addr []byte) (uint64, error) {
+	return bc.db.GetTransactionsCount(addr)
+}

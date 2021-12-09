@@ -959,45 +959,72 @@ var _ interface {
 	ErrorName() string
 } = BlockResponseValidationError{}
 
-// Validate checks the field values on BalanceResponse with the rules defined
-// in the proto definition for this message. If any rules are violated, the
-// first error encountered is returned, or nil if there are no violations.
-func (m *BalanceResponse) Validate() error {
+// Validate checks the field values on TransactionResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *TransactionResponse) Validate() error {
 	return m.validate(false)
 }
 
-// ValidateAll checks the field values on BalanceResponse with the rules
+// ValidateAll checks the field values on TransactionResponse with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the result is a list of violation errors wrapped in
-// BalanceResponseMultiError, or nil if none found.
-func (m *BalanceResponse) ValidateAll() error {
+// TransactionResponseMultiError, or nil if none found.
+func (m *TransactionResponse) ValidateAll() error {
 	return m.validate(true)
 }
 
-func (m *BalanceResponse) validate(all bool) error {
+func (m *TransactionResponse) validate(all bool) error {
 	if m == nil {
 		return nil
 	}
 
 	var errors []error
 
-	// no validation rules for Balance
+	if all {
+		switch v := interface{}(m.GetTx()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, TransactionResponseValidationError{
+					field:  "Tx",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, TransactionResponseValidationError{
+					field:  "Tx",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetTx()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return TransactionResponseValidationError{
+				field:  "Tx",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
 
 	// no validation rules for Error
 
 	if len(errors) > 0 {
-		return BalanceResponseMultiError(errors)
+		return TransactionResponseMultiError(errors)
 	}
 	return nil
 }
 
-// BalanceResponseMultiError is an error wrapping multiple validation errors
-// returned by BalanceResponse.ValidateAll() if the designated constraints
-// aren't met.
-type BalanceResponseMultiError []error
+// TransactionResponseMultiError is an error wrapping multiple validation
+// errors returned by TransactionResponse.ValidateAll() if the designated
+// constraints aren't met.
+type TransactionResponseMultiError []error
 
 // Error returns a concatenation of all the error messages it wraps.
-func (m BalanceResponseMultiError) Error() string {
+func (m TransactionResponseMultiError) Error() string {
 	var msgs []string
 	for _, err := range m {
 		msgs = append(msgs, err.Error())
@@ -1006,11 +1033,11 @@ func (m BalanceResponseMultiError) Error() string {
 }
 
 // AllErrors returns a list of validation violation errors.
-func (m BalanceResponseMultiError) AllErrors() []error { return m }
+func (m TransactionResponseMultiError) AllErrors() []error { return m }
 
-// BalanceResponseValidationError is the validation error returned by
-// BalanceResponse.Validate if the designated constraints aren't met.
-type BalanceResponseValidationError struct {
+// TransactionResponseValidationError is the validation error returned by
+// TransactionResponse.Validate if the designated constraints aren't met.
+type TransactionResponseValidationError struct {
 	field  string
 	reason string
 	cause  error
@@ -1018,22 +1045,24 @@ type BalanceResponseValidationError struct {
 }
 
 // Field function returns field value.
-func (e BalanceResponseValidationError) Field() string { return e.field }
+func (e TransactionResponseValidationError) Field() string { return e.field }
 
 // Reason function returns reason value.
-func (e BalanceResponseValidationError) Reason() string { return e.reason }
+func (e TransactionResponseValidationError) Reason() string { return e.reason }
 
 // Cause function returns cause value.
-func (e BalanceResponseValidationError) Cause() error { return e.cause }
+func (e TransactionResponseValidationError) Cause() error { return e.cause }
 
 // Key function returns key value.
-func (e BalanceResponseValidationError) Key() bool { return e.key }
+func (e TransactionResponseValidationError) Key() bool { return e.key }
 
 // ErrorName returns error name.
-func (e BalanceResponseValidationError) ErrorName() string { return "BalanceResponseValidationError" }
+func (e TransactionResponseValidationError) ErrorName() string {
+	return "TransactionResponseValidationError"
+}
 
 // Error satisfies the builtin error interface
-func (e BalanceResponseValidationError) Error() string {
+func (e TransactionResponseValidationError) Error() string {
 	cause := ""
 	if e.cause != nil {
 		cause = fmt.Sprintf(" | caused by: %v", e.cause)
@@ -1045,14 +1074,14 @@ func (e BalanceResponseValidationError) Error() string {
 	}
 
 	return fmt.Sprintf(
-		"invalid %sBalanceResponse.%s: %s%s",
+		"invalid %sTransactionResponse.%s: %s%s",
 		key,
 		e.field,
 		e.reason,
 		cause)
 }
 
-var _ error = BalanceResponseValidationError{}
+var _ error = TransactionResponseValidationError{}
 
 var _ interface {
 	Field() string
@@ -1060,4 +1089,107 @@ var _ interface {
 	Key() bool
 	Cause() error
 	ErrorName() string
-} = BalanceResponseValidationError{}
+} = TransactionResponseValidationError{}
+
+// Validate checks the field values on NumberResponse with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *NumberResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on NumberResponse with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in NumberResponseMultiError,
+// or nil if none found.
+func (m *NumberResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *NumberResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Result
+
+	// no validation rules for Error
+
+	if len(errors) > 0 {
+		return NumberResponseMultiError(errors)
+	}
+	return nil
+}
+
+// NumberResponseMultiError is an error wrapping multiple validation errors
+// returned by NumberResponse.ValidateAll() if the designated constraints
+// aren't met.
+type NumberResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m NumberResponseMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m NumberResponseMultiError) AllErrors() []error { return m }
+
+// NumberResponseValidationError is the validation error returned by
+// NumberResponse.Validate if the designated constraints aren't met.
+type NumberResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e NumberResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e NumberResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e NumberResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e NumberResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e NumberResponseValidationError) ErrorName() string { return "NumberResponseValidationError" }
+
+// Error satisfies the builtin error interface
+func (e NumberResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sNumberResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = NumberResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = NumberResponseValidationError{}

@@ -28,11 +28,13 @@ type RaidoChainServiceClient interface {
 	// GetBlockByHash returns block with given hash or error if not found.
 	GetBlockByHash(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*BlockResponse, error)
 	// GetBalance returns address balance.
-	GetBalance(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*BalanceResponse, error)
+	GetBalance(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*NumberResponse, error)
 	// GetTransaction returns transaction with given hash.
 	GetTransaction(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*TransactionResponse, error)
 	// GetStakeDeposits get all unspent transaction outputs of given address
 	GetStakeDeposits(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*UTxOResponse, error)
+	// GetTransactionsCount get number of transactions sent by given address.
+	GetTransactionsCount(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*NumberResponse, error)
 }
 
 type raidoChainServiceClient struct {
@@ -79,8 +81,8 @@ func (c *raidoChainServiceClient) GetBlockByHash(ctx context.Context, in *HashRe
 	return out, nil
 }
 
-func (c *raidoChainServiceClient) GetBalance(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*BalanceResponse, error) {
-	out := new(BalanceResponse)
+func (c *raidoChainServiceClient) GetBalance(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*NumberResponse, error) {
+	out := new(NumberResponse)
 	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChainService/GetBalance", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -106,6 +108,15 @@ func (c *raidoChainServiceClient) GetStakeDeposits(ctx context.Context, in *Addr
 	return out, nil
 }
 
+func (c *raidoChainServiceClient) GetTransactionsCount(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*NumberResponse, error) {
+	out := new(NumberResponse)
+	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChainService/GetTransactionsCount", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RaidoChainServiceServer is the server API for RaidoChainService service.
 // All implementations must embed UnimplementedRaidoChainServiceServer
 // for forward compatibility
@@ -119,11 +130,13 @@ type RaidoChainServiceServer interface {
 	// GetBlockByHash returns block with given hash or error if not found.
 	GetBlockByHash(context.Context, *HashRequest) (*BlockResponse, error)
 	// GetBalance returns address balance.
-	GetBalance(context.Context, *AddressRequest) (*BalanceResponse, error)
+	GetBalance(context.Context, *AddressRequest) (*NumberResponse, error)
 	// GetTransaction returns transaction with given hash.
 	GetTransaction(context.Context, *HashRequest) (*TransactionResponse, error)
 	// GetStakeDeposits get all unspent transaction outputs of given address
 	GetStakeDeposits(context.Context, *AddressRequest) (*UTxOResponse, error)
+	// GetTransactionsCount get number of transactions sent by given address.
+	GetTransactionsCount(context.Context, *AddressRequest) (*NumberResponse, error)
 	mustEmbedUnimplementedRaidoChainServiceServer()
 }
 
@@ -143,7 +156,7 @@ func (UnimplementedRaidoChainServiceServer) GetBlockByNum(context.Context, *NumR
 func (UnimplementedRaidoChainServiceServer) GetBlockByHash(context.Context, *HashRequest) (*BlockResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBlockByHash not implemented")
 }
-func (UnimplementedRaidoChainServiceServer) GetBalance(context.Context, *AddressRequest) (*BalanceResponse, error) {
+func (UnimplementedRaidoChainServiceServer) GetBalance(context.Context, *AddressRequest) (*NumberResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBalance not implemented")
 }
 func (UnimplementedRaidoChainServiceServer) GetTransaction(context.Context, *HashRequest) (*TransactionResponse, error) {
@@ -151,6 +164,9 @@ func (UnimplementedRaidoChainServiceServer) GetTransaction(context.Context, *Has
 }
 func (UnimplementedRaidoChainServiceServer) GetStakeDeposits(context.Context, *AddressRequest) (*UTxOResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetStakeDeposits not implemented")
+}
+func (UnimplementedRaidoChainServiceServer) GetTransactionsCount(context.Context, *AddressRequest) (*NumberResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTransactionsCount not implemented")
 }
 func (UnimplementedRaidoChainServiceServer) mustEmbedUnimplementedRaidoChainServiceServer() {}
 
@@ -291,6 +307,24 @@ func _RaidoChainService_GetStakeDeposits_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RaidoChainService_GetTransactionsCount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RaidoChainServiceServer).GetTransactionsCount(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rdo.service.RaidoChainService/GetTransactionsCount",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RaidoChainServiceServer).GetTransactionsCount(ctx, req.(*AddressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RaidoChainService_ServiceDesc is the grpc.ServiceDesc for RaidoChainService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -325,6 +359,10 @@ var RaidoChainService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetStakeDeposits",
 			Handler:    _RaidoChainService_GetStakeDeposits_Handler,
+		},
+		{
+			MethodName: "GetTransactionsCount",
+			Handler:    _RaidoChainService_GetTransactionsCount_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

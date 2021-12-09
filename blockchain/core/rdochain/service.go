@@ -330,3 +330,7 @@ func (s *Service) GetStakeDeposits(addr string) ([]*types.UTxO, error) {
 
 	return s.outm.FindStakeDepositsOfAddress(addr)
 }
+
+func (s *Service) GetTransactionsCount(addr string) (uint64, error) {
+	return s.bc.GetTransactionsCount(common.HexToAddress(addr).Bytes())
+}

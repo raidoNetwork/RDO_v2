@@ -46,7 +46,7 @@ service RaidoChainService {
   }
 
   // GetBalance returns address balance.
-  rpc GetBalance(AddressRequest) returns (BalanceResponse) {
+  rpc GetBalance(AddressRequest) returns (NumberResponse) {
     option (google.api.http) = {
       get: "/rdo/v1/chain/balance/{address}"
     };
@@ -63,6 +63,13 @@ service RaidoChainService {
   rpc GetStakeDeposits(AddressRequest) returns (UTxOResponse){
     option (google.api.http) = {
       get: "/rdo/v1/chain/deposits/{address}"
+    };
+  }
+
+  // GetTransactionsCount get number of transactions sent by given address.
+  rpc GetTransactionsCount(AddressRequest) returns (NumberResponse) {
+    option (google.api.http) = {
+      get: "/rdo/v1/chain/transaction/count/{address}"
     };
   }
 
@@ -136,8 +143,8 @@ message TransactionResponse {
   string error = 2;
 }
 
-message BalanceResponse {
-  uint64 balance = 1;
+message NumberResponse {
+  uint64 result = 1;
   string error = 2;
 }
 

@@ -118,8 +118,8 @@ func (s *Server) GetBlockByHash(ctx context.Context, req *prototype.HashRequest)
 	return res, nil
 }
 
-func (s *Server) GetBalance(ctx context.Context, req *prototype.AddressRequest) (*prototype.BalanceResponse, error) {
-	res := new(prototype.BalanceResponse)
+func (s *Server) GetBalance(ctx context.Context, req *prototype.AddressRequest) (*prototype.NumberResponse, error) {
+	res := new(prototype.NumberResponse)
 	err := req.Validate()
 	if err != nil {
 		log.Errorf("ChainAPI.GetBalance error: %s", err)
@@ -136,7 +136,7 @@ func (s *Server) GetBalance(ctx context.Context, req *prototype.AddressRequest) 
 		return res, err
 	}
 
-	res.Balance = balance
+	res.Result = balance
 
 	return res, nil
 }
@@ -195,3 +195,27 @@ func (s *Server) GetStakeDeposits(ctx context.Context, request *prototype.Addres
 
 	return response, nil
 }
+
+func (s *Server) GetTransactionsCount(ctx context.Context, request *prototype.AddressRequest) (*prototype.NumberResponse, error) {
+	err := request.Validate()
+	if err != nil {
+		log.Errorf("ChainAPI.GetTransactionsCount error: %s", err)
+		return nil, err
+	}
+
+	addr := request.GetAddress()
+
+	log.Infof("ChainAPI.GetTransactionsCount %s", addr)
+
+	response := new(prototype.NumberResponse)
+	nonce, err := s.Backend.GetTransactionsCount(addr)
+	if err != nil {
+		response.Error = err.Error()
+		return response, err
+	}
+
+	response.Result = nonce
+
+	return response, nil
+}
+

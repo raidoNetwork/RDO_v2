@@ -17,6 +17,10 @@ type ChainAPI interface {
 	// GetStakeDeposits returns address stake deposits.
 	GetStakeDeposits(string) ([]*types.UTxO, error)
 
+	// GetTransactionsCount returns number of transactions
+	// sent by given address.
+	GetTransactionsCount(string) (uint64, error)
+
 	/* Block data */
 
 	// GetBlockByHash return block with given hash.

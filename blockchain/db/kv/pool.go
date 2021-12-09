@@ -81,7 +81,68 @@ func (s *Store) GetTransactionByHash(hash []byte) (*prototype.Transaction, error
 	return txRes, nil
 }
 
+// updateBlockAccountState updates transaction map for all block data.
+func (s *Store) updateBlockAccountState(tx *bolt.Tx, block *prototype.Block) error {
+	//blockKey := genBlockKey(block.Num, block.Hash)
+
+	bkt := tx.Bucket(addressBucket)
+
+	for _, transaction := range block.Transactions {
+		if transaction.Type == common.FeeTxType || transaction.Type == common.RewardTxType {
+			continue
+		}
+
+		addr := transaction.Inputs[0].Address
+		key := genAddrKey(addr)
+
+		buf := bkt.Get(key)
+		if buf == nil {
+			buf = make([]byte, 0, 8)
+			buf = ssz.MarshalUint64(buf, transaction.Num)
+		} else {
+			nonce := ssz.UnmarshallUint64(buf)
+
+			if nonce != transaction.Num && nonce+1 != transaction.Num {
+				return errors.Errorf("Wrong nonce given: %d. Expected: %d or %d", transaction.Num, nonce, nonce+1)
+			}
+
+			buf = ssz.MarshalUint64(nil, nonce)
+		}
+
+		err := bkt.Put(key, buf)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+
+// GetTransactionsCount return nonce of given address
+func (s *Store) GetTransactionsCount(addr []byte) (uint64, error) {
+	key := genAddrKey(addr)
+	var nonce uint64 = 0
+
+	err := s.db.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(addressBucket)
+		data := bkt.Get(key)
+
+		if data == nil {
+			return nil
+		}
+
+		nonce = ssz.UnmarshallUint64(data)
+		return nil
+	})
+
+	return nonce, err
+}
+
 func genTxHashKey(hash []byte) []byte {
 	return append(transactionPrefix, hash...)
 }
 
+func genAddrKey(addr []byte) []byte {
+	return append(addressPrefix, addr...)
+}

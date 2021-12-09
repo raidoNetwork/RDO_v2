@@ -36,20 +36,50 @@ func (s *Store) WriteBlock(block *prototype.Block) error {
 			return errors.Errorf("block #%s already exists", hex.EncodeToString(key))
 		}
 
+		start = time.Now()
 		if err := bkt.Put(key, data); err != nil {
 			log.Error("Error saving block into db.")
 			return err
 		}
 
+		end = time.Since(start)
+		log.Infof("WriteBlock: Insert block in %s", common.StatFmt(end))
+
+		start = time.Now()
+		if err := s.updateBlockAccountState(tx, block); err != nil {
+			log.Error("Error updating block accounts state.")
+			return err
+		}
+
+		end = time.Since(start)
+		log.Infof("WriteBlock: Update accounts state in %s", common.StatFmt(end))
+
+		start = time.Now()
 		if err := s.saveBlockNum(tx, block.Num, block.Hash); err != nil {
 			log.Error("Error saving block num into db.")
 			return err
 		}
 
+		end = time.Since(start)
+		log.Infof("WriteBlock: Save block num in %s", common.StatFmt(end))
+
+		start = time.Now()
 		if err := s.saveBlockHash(tx, block.Num, block.Hash); err != nil {
 			log.Error("Error saving block hash into db.")
 			return err
 		}
+
+		end = time.Since(start)
+		log.Infof("WriteBlock: Save block hash in %s", common.StatFmt(end))
+
+		start = time.Now()
+		if err := s.saveTransactions(tx, block); err != nil {
+			log.Error("Error saving block transactions map.")
+			return err
+		}
+
+		end = time.Since(start)
+		log.Infof("WriteBlock: Save transaction in hash map in %s", common.StatFmt(end))
 
 		return nil
 	})

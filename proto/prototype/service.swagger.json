@@ -135,7 +135,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/serviceBalanceResponse"
+              "$ref": "#/definitions/serviceNumberResponse"
             }
           },
           "default": {
@@ -270,6 +270,37 @@
             }
           }
         },
+        "tags": [
+          "RaidoChainService"
+        ]
+      }
+    },
+    "/rdo/v1/chain/transaction/count/{address}": {
+      "get": {
+        "summary": "GetTransactionsCount get number of transactions sent by given address.",
+        "operationId": "RaidoChainService_GetTransactionsCount",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/serviceNumberResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
         "tags": [
           "RaidoChainService"
         ]
@@ -480,18 +511,6 @@
         }
       }
     },
-    "serviceBalanceResponse": {
-      "type": "object",
-      "properties": {
-        "balance": {
-          "type": "string",
-          "format": "uint64"
-        },
-        "error": {
-          "type": "string"
-        }
-      }
-    },
     "serviceBlockResponse": {
       "type": "object",
       "properties": {
@@ -506,6 +525,18 @@
     "serviceErrorResponse": {
       "type": "object",
       "properties": {
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "serviceNumberResponse": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "type": "string",
+          "format": "uint64"
+        },
         "error": {
           "type": "string"
         }
@@ -589,7 +620,7 @@
         },
         "txtype": {
           "type": "integer",
-          "format": "int32"
+          "format": "int64"
         }
       }
     },

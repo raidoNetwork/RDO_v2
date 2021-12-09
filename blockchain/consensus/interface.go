@@ -50,6 +50,9 @@ type BlockSpecifying interface {
 
 	// GetBlockCount return block count in the blockchain
 	GetBlockCount() uint64
+
+	// GetTransactionsCount returns address nonce
+	GetTransactionsCount([]byte) (uint64, error)
 }
 
 type StakeValidator interface {

@@ -122,6 +122,18 @@ func (c *Client) SendTx(tx *prototype.Transaction) error {
 	return nil
 }
 
+func (c *Client) GetNonce(addr string) (uint64, error) {
+	req := new(prototype.AddressRequest)
+	req.Address = addr
+
+	res, err := c.raidoChainService.GetTransactionsCount(c.ctx, req)
+	if err != nil {
+		return 0, err
+	}
+
+	return res.Result, nil
+}
+
 func cast(puo *prototype.UTxO) *types.UTxO {
 	return types.NewUTxO(
 		puo.Hash,
