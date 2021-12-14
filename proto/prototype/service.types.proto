@@ -2,7 +2,7 @@ syntax = "proto3";
 
 option go_package = "prototype/.;prototype";
 
-package rdo.chainservice.response;
+package rdo.service.types;
 
 import "validate/validate.proto";
 
@@ -21,7 +21,7 @@ message TxValue{
   uint64 num = 1;
   uint32 type = 2;
   uint64 timestamp = 3;
-  string hash = 4;
+  string hash = 4 [(validate.rules).string.len = 66];
   uint64 fee = 5;
   bytes data = 6;
   repeated TxInputValue inputs = 7;
@@ -38,5 +38,22 @@ message TxInputValue{
 message TxOutputValue{
   string address = 1 [(validate.rules).string.len = 42];
   uint64 amount = 2;
-  string node = 3 [(validate.rules).string.len = 66];
+  string node = 3 [(validate.rules).string.max_len = 42];
+}
+
+message SignedTxValue {
+  TxValue data = 1;
+  string signature = 2 [(validate.rules).string.len = 132];
+}
+
+message UTxO{
+  uint64 blockNum = 1;
+  string hash = 2;
+  uint32 index = 3;
+  string from = 4;
+  string to = 5;
+  string node = 6;
+  uint64 amount = 7;
+  uint64 timestamp = 8;
+  uint32 txtype = 9;
 }

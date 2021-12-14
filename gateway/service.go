@@ -14,7 +14,6 @@ import (
 	"time"
 )
 
-
 // PbMux serves grpc-gateway requests for selected patterns using registered protobuf handlers.
 type PbMux struct {
 	Registrations []PbHandlerRegistration // Protobuf registrations to be registered in Mux.
@@ -37,14 +36,14 @@ type Gateway struct {
 	ctx                context.Context
 	cancel             context.CancelFunc
 	mu                 sync.RWMutex
-	maxCallRecvMsgSize uint64
+	maxCallRecvMsgSize int
 	startFailure       error
 	mux                *http.ServeMux
 	server             *http.Server
 	allowedOrigins     []string
 }
 
-func NewService(ctx context.Context, remoteAddr, gatewayAddr string, pbHandlers []PbMux, muxHandler MuxHandler) *Gateway {
+func NewService(ctx context.Context, remoteAddr, gatewayAddr string, maxCallSize int, pbHandlers []PbMux, muxHandler MuxHandler) *Gateway {
 	g := &Gateway{
 		ctx:            ctx,
 		remoteAddr:     remoteAddr,
@@ -55,7 +54,7 @@ func NewService(ctx context.Context, remoteAddr, gatewayAddr string, pbHandlers 
 		mux:            http.NewServeMux(),
 		allowedOrigins: make([]string, 0),
 
-		maxCallRecvMsgSize: 1 << 22,
+		maxCallRecvMsgSize: maxCallSize,
 	}
 
 	return g
@@ -163,7 +162,7 @@ func (g *Gateway) dial(ctx context.Context, addr string) (*grpc.ClientConn, erro
 	security := grpc.WithInsecure()
 	opts := []grpc.DialOption{
 		security,
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(int(g.maxCallRecvMsgSize))),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(g.maxCallRecvMsgSize)),
 	}
 
 	return grpc.DialContext(ctx, addr, opts...)

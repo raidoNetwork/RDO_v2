@@ -7,10 +7,13 @@
   },
   "tags": [
     {
-      "name": "RaidoChainService"
+      "name": "RaidoChain"
     },
     {
-      "name": "AttestationService"
+      "name": "Attestation"
+    },
+    {
+      "name": "Generator"
     }
   ],
   "host": "localhost:5555",
@@ -28,10 +31,33 @@
     "application/grpc-web-json"
   ],
   "paths": {
+    "/rdo/v1/attestation/fee": {
+      "get": {
+        "summary": "GetFee returns minimal fee price needed to add transaction to the future block.",
+        "operationId": "Attestation_GetFee",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/serviceNumberResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "Attestation"
+        ]
+      }
+    },
     "/rdo/v1/attestation/pending/transactions": {
       "get": {
         "summary": "GetPendingTransactions returns pending transactions list.",
-        "operationId": "AttestationService_GetPendingTransactions",
+        "operationId": "Attestation_GetPendingTransactions",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -47,14 +73,14 @@
           }
         },
         "tags": [
-          "AttestationService"
+          "Attestation"
         ]
       }
     },
     "/rdo/v1/attestation/send/legacy": {
       "post": {
         "summary": "SendLegacyTx send transaction data to the node.",
-        "operationId": "AttestationService_SendLegacyTx",
+        "operationId": "Attestation_SendLegacyTx",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -80,14 +106,14 @@
           }
         ],
         "tags": [
-          "AttestationService"
+          "Attestation"
         ]
       }
     },
     "/rdo/v1/attestation/send/stake": {
       "post": {
         "summary": "SendStakeTx send stake transaction to the node.",
-        "operationId": "AttestationService_SendStakeTx",
+        "operationId": "Attestation_SendStakeTx",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -113,14 +139,14 @@
           }
         ],
         "tags": [
-          "AttestationService"
+          "Attestation"
         ]
       }
     },
     "/rdo/v1/attestation/send/unstake": {
       "post": {
         "summary": "SendUnstakeTx send stake transaction to the node.",
-        "operationId": "AttestationService_SendUnstakeTx",
+        "operationId": "Attestation_SendUnstakeTx",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -146,14 +172,14 @@
           }
         ],
         "tags": [
-          "AttestationService"
+          "Attestation"
         ]
       }
     },
     "/rdo/v1/chain/balance/{address}": {
       "get": {
         "summary": "GetBalance returns address balance.",
-        "operationId": "RaidoChainService_GetBalance",
+        "operationId": "RaidoChain_GetBalance",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -177,14 +203,14 @@
           }
         ],
         "tags": [
-          "RaidoChainService"
+          "RaidoChain"
         ]
       }
     },
     "/rdo/v1/chain/block/hash/{hash}": {
       "get": {
         "summary": "GetBlockByHash returns block with given hash or error if not found.",
-        "operationId": "RaidoChainService_GetBlockByHash",
+        "operationId": "RaidoChain_GetBlockByHash",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -208,14 +234,14 @@
           }
         ],
         "tags": [
-          "RaidoChainService"
+          "RaidoChain"
         ]
       }
     },
     "/rdo/v1/chain/block/{num}": {
       "get": {
         "summary": "GetBlockByNum returns block with given number or error if not found.",
-        "operationId": "RaidoChainService_GetBlockByNum",
+        "operationId": "RaidoChain_GetBlockByNum",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -235,19 +261,18 @@
             "name": "num",
             "in": "path",
             "required": true,
-            "type": "string",
-            "format": "uint64"
+            "type": "string"
           }
         ],
         "tags": [
-          "RaidoChainService"
+          "RaidoChain"
         ]
       }
     },
     "/rdo/v1/chain/deposits/{address}": {
       "get": {
         "summary": "GetStakeDeposits get all unspent transaction outputs of given address",
-        "operationId": "RaidoChainService_GetStakeDeposits",
+        "operationId": "RaidoChain_GetStakeDeposits",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -271,14 +296,14 @@
           }
         ],
         "tags": [
-          "RaidoChainService"
+          "RaidoChain"
         ]
       }
     },
     "/rdo/v1/chain/status": {
       "get": {
         "summary": "GetStatus returns node status",
-        "operationId": "RaidoChainService_GetStatus",
+        "operationId": "RaidoChain_GetStatus",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -294,14 +319,14 @@
           }
         },
         "tags": [
-          "RaidoChainService"
+          "RaidoChain"
         ]
       }
     },
     "/rdo/v1/chain/transaction/count/{address}": {
       "get": {
         "summary": "GetTransactionsCount get number of transactions sent by given address.",
-        "operationId": "RaidoChainService_GetTransactionsCount",
+        "operationId": "RaidoChain_GetTransactionsCount",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -325,14 +350,14 @@
           }
         ],
         "tags": [
-          "RaidoChainService"
+          "RaidoChain"
         ]
       }
     },
     "/rdo/v1/chain/transaction/{hash}": {
       "get": {
         "summary": "GetTransaction returns transaction with given hash.",
-        "operationId": "RaidoChainService_GetTransaction",
+        "operationId": "RaidoChain_GetTransaction",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -356,14 +381,14 @@
           }
         ],
         "tags": [
-          "RaidoChainService"
+          "RaidoChain"
         ]
       }
     },
     "/rdo/v1/chain/utxo/{address}": {
       "get": {
         "summary": "GetUTxO get all unspent transaction outputs of given address",
-        "operationId": "RaidoChainService_GetUTxO",
+        "operationId": "RaidoChain_GetUTxO",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -387,7 +412,106 @@
           }
         ],
         "tags": [
-          "RaidoChainService"
+          "RaidoChain"
+        ]
+      }
+    },
+    "/rdo/v1/generate/transaction/legacy": {
+      "post": {
+        "summary": "CreateTx generates signed transaction with given options.",
+        "operationId": "Generator_CreateTx",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/serviceTxBodyResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/serviceTxOptionsRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Generator"
+        ]
+      }
+    },
+    "/rdo/v1/generate/transaction/stake": {
+      "post": {
+        "summary": "CreateStakeTx generates signed stake transaction with given options.",
+        "operationId": "Generator_CreateStakeTx",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/serviceTxBodyResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/serviceTxOptionsStakeRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Generator"
+        ]
+      }
+    },
+    "/rdo/v1/generate/transaction/unstake": {
+      "post": {
+        "summary": "CreateUnstakeTx generate signed unstake transaction with given options.",
+        "operationId": "Generator_CreateUnstakeTx",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/serviceTxBodyResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/serviceTxOptionsStakeRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Generator"
         ]
       }
     }
@@ -402,7 +526,149 @@
       },
       "additionalProperties": {}
     },
-    "responseBlockValue": {
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "serviceBlockResponse": {
+      "type": "object",
+      "properties": {
+        "block": {
+          "$ref": "#/definitions/typesBlockValue"
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "serviceErrorResponse": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "serviceNumberResponse": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "serviceSendTxRequest": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "$ref": "#/definitions/typesSignedTxValue"
+        }
+      }
+    },
+    "serviceStatusResponse": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "data": {
+          "type": "string"
+        }
+      }
+    },
+    "serviceTransactionResponse": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "$ref": "#/definitions/typesTxValue"
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "serviceTransactionsResponse": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/typesTxValue"
+          }
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "serviceTxBodyResponse": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "$ref": "#/definitions/typesSignedTxValue"
+        }
+      }
+    },
+    "serviceTxOptionsRequest": {
+      "type": "object",
+      "properties": {
+        "fee": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/typesTxOutputValue"
+          }
+        },
+        "key": {
+          "type": "string"
+        }
+      }
+    },
+    "serviceTxOptionsStakeRequest": {
+      "type": "object",
+      "properties": {
+        "fee": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "key": {
+          "type": "string"
+        }
+      }
+    },
+    "serviceUTxOResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/typesUTxO"
+          }
+        }
+      }
+    },
+    "typesBlockValue": {
       "type": "object",
       "properties": {
         "num": {
@@ -437,12 +703,23 @@
         "transactions": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/responseTxValue"
+            "$ref": "#/definitions/typesTxValue"
           }
         }
       }
     },
-    "responseTxInputValue": {
+    "typesSignedTxValue": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "$ref": "#/definitions/typesTxValue"
+        },
+        "signature": {
+          "type": "string"
+        }
+      }
+    },
+    "typesTxInputValue": {
       "type": "object",
       "properties": {
         "hash": {
@@ -461,7 +738,7 @@
         }
       }
     },
-    "responseTxOutputValue": {
+    "typesTxOutputValue": {
       "type": "object",
       "properties": {
         "address": {
@@ -476,7 +753,7 @@
         }
       }
     },
-    "responseTxValue": {
+    "typesTxValue": {
       "type": "object",
       "properties": {
         "num": {
@@ -505,122 +782,18 @@
         "inputs": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/responseTxInputValue"
+            "$ref": "#/definitions/typesTxInputValue"
           }
         },
         "outputs": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/responseTxOutputValue"
+            "$ref": "#/definitions/typesTxOutputValue"
           }
         }
       }
     },
-    "rpcStatus": {
-      "type": "object",
-      "properties": {
-        "code": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "message": {
-          "type": "string"
-        },
-        "details": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/protobufAny"
-          }
-        }
-      }
-    },
-    "serviceBlockResponse": {
-      "type": "object",
-      "properties": {
-        "block": {
-          "$ref": "#/definitions/responseBlockValue"
-        },
-        "error": {
-          "type": "string"
-        }
-      }
-    },
-    "serviceErrorResponse": {
-      "type": "object",
-      "properties": {
-        "error": {
-          "type": "string"
-        }
-      }
-    },
-    "serviceNumberResponse": {
-      "type": "object",
-      "properties": {
-        "result": {
-          "type": "string",
-          "format": "uint64"
-        },
-        "error": {
-          "type": "string"
-        }
-      }
-    },
-    "serviceSendTxRequest": {
-      "type": "object",
-      "properties": {
-        "tx": {
-          "$ref": "#/definitions/typesTransaction"
-        }
-      }
-    },
-    "serviceStatusResponse": {
-      "type": "object",
-      "properties": {
-        "error": {
-          "type": "string"
-        },
-        "data": {
-          "type": "string"
-        }
-      }
-    },
-    "serviceTransactionResponse": {
-      "type": "object",
-      "properties": {
-        "tx": {
-          "$ref": "#/definitions/responseTxValue"
-        },
-        "error": {
-          "type": "string"
-        }
-      }
-    },
-    "serviceTransactionsResponse": {
-      "type": "object",
-      "properties": {
-        "tx": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/responseTxValue"
-          }
-        },
-        "error": {
-          "type": "string"
-        }
-      }
-    },
-    "serviceUTxOResponse": {
-      "type": "object",
-      "properties": {
-        "data": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/transportUTxO"
-          }
-        }
-      }
-    },
-    "transportUTxO": {
+    "typesUTxO": {
       "type": "object",
       "properties": {
         "blockNum": {
@@ -628,24 +801,20 @@
           "format": "uint64"
         },
         "hash": {
-          "type": "string",
-          "format": "byte"
+          "type": "string"
         },
         "index": {
           "type": "integer",
           "format": "int64"
         },
         "from": {
-          "type": "string",
-          "format": "byte"
+          "type": "string"
         },
         "to": {
-          "type": "string",
-          "format": "byte"
+          "type": "string"
         },
         "node": {
-          "type": "string",
-          "format": "byte"
+          "type": "string"
         },
         "amount": {
           "type": "string",
@@ -658,93 +827,6 @@
         "txtype": {
           "type": "integer",
           "format": "int64"
-        }
-      }
-    },
-    "typesTransaction": {
-      "type": "object",
-      "properties": {
-        "num": {
-          "type": "string",
-          "format": "uint64"
-        },
-        "type": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "timestamp": {
-          "type": "string",
-          "format": "uint64"
-        },
-        "hash": {
-          "type": "string",
-          "format": "byte"
-        },
-        "fee": {
-          "type": "string",
-          "format": "uint64"
-        },
-        "data": {
-          "type": "string",
-          "format": "byte"
-        },
-        "inputs": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/typesTxInput"
-          }
-        },
-        "outputs": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/typesTxOutput"
-          }
-        },
-        "signature": {
-          "type": "string",
-          "format": "byte"
-        }
-      }
-    },
-    "typesTxInput": {
-      "type": "object",
-      "properties": {
-        "hash": {
-          "type": "string",
-          "format": "byte"
-        },
-        "index": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "address": {
-          "type": "string",
-          "format": "byte"
-        },
-        "amount": {
-          "type": "string",
-          "format": "uint64"
-        },
-        "signature": {
-          "type": "string",
-          "format": "byte"
-        }
-      }
-    },
-    "typesTxOutput": {
-      "type": "object",
-      "properties": {
-        "address": {
-          "type": "string",
-          "format": "byte"
-        },
-        "amount": {
-          "type": "string",
-          "format": "uint64"
-        },
-        "node": {
-          "type": "string",
-          "format": "byte"
         }
       }
     }

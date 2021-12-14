@@ -409,10 +409,10 @@ func (m *Transaction) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
-	if m.GetType() != 1 {
+	if _, ok := _Transaction_Type_InLookup[m.GetType()]; !ok {
 		err := TransactionValidationError{
 			field:  "Type",
-			reason: "value must equal 1",
+			reason: "value must be in list [1 5 6]",
 		}
 		if !all {
 			return err
@@ -619,6 +619,12 @@ var _ interface {
 	ErrorName() string
 } = TransactionValidationError{}
 
+var _Transaction_Type_InLookup = map[uint32]struct{}{
+	1: {},
+	5: {},
+	6: {},
+}
+
 // Validate checks the field values on TxInput with the rules defined in the
 // proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
@@ -668,17 +674,6 @@ func (m *TxInput) validate(all bool) error {
 		err := TxInputValidationError{
 			field:  "Amount",
 			reason: "value must be greater than 0",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-	}
-
-	if len(m.GetSignature()) != 65 {
-		err := TxInputValidationError{
-			field:  "Signature",
-			reason: "value length must be 65 bytes",
 		}
 		if !all {
 			return err
@@ -808,10 +803,10 @@ func (m *TxOutput) validate(all bool) error {
 
 	if len(m.GetNode()) > 0 {
 
-		if len(m.GetNode()) != 32 {
+		if len(m.GetNode()) != 20 {
 			err := TxOutputValidationError{
 				field:  "Node",
-				reason: "value length must be 32 bytes",
+				reason: "value length must be 20 bytes",
 			}
 			if !all {
 				return err

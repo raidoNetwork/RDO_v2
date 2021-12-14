@@ -3,10 +3,10 @@ package main
 import (
 	nested "github.com/antonfisher/nested-logrus-formatter"
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
+	"github.com/raidoNetwork/RDO_v2/generator"
 	"github.com/raidoNetwork/RDO_v2/shared/cmd"
 	"github.com/raidoNetwork/RDO_v2/shared/logutil"
 	"github.com/raidoNetwork/RDO_v2/shared/version"
-	"github.com/raidoNetwork/RDO_v2/txgen"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"os"
@@ -17,6 +17,7 @@ import (
 var appFlags = []cli.Flag{
 	cmd.DataDirFlag,
 	cmd.LogFileName,
+	cmd.ChainConfigFileFlag,
 
 	flags.RPCHost,
 	flags.RPCPort,
@@ -48,8 +49,6 @@ func main() {
 			}
 		}
 
-		// runtimeDebug.SetGCPercent(100)
-
 		runtime.GOMAXPROCS(runtime.NumCPU())
 
 		return cmd.ValidateNoArgs(ctx)
@@ -68,7 +67,7 @@ func main() {
 }
 
 func startGenerator(ctx *cli.Context) error {
-	gen, err := txgen.NewGenerator(ctx)
+	gen, err := generator.NewGenerator(ctx)
 	if err != nil {
 		return err
 	}

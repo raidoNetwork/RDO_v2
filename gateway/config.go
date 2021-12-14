@@ -15,8 +15,9 @@ type MuxConfig struct {
 // DefaultConfig returns a fully configured MuxConfig with standard gateway behavior.
 func DefaultConfig() MuxConfig {
 	v1Registrations := []PbHandlerRegistration{
-		prototype.RegisterRaidoChainServiceHandler,
-		prototype.RegisterAttestationServiceHandler,
+		prototype.RegisterRaidoChainHandler,
+		prototype.RegisterAttestationHandler,
+		prototype.RegisterGeneratorHandler,
 	}
 
 	v1Mux := gwruntime.NewServeMux(

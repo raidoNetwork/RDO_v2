@@ -1,9 +1,10 @@
-package txgen
+package generator
 
 import (
 	"context"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/rpc/cast"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"google.golang.org/grpc"
@@ -18,8 +19,8 @@ type Client struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 
-	raidoChainService  prototype.RaidoChainServiceClient
-	attestationService prototype.AttestationServiceClient
+	raidoChainService  prototype.RaidoChainClient
+	attestationService prototype.AttestationClient
 }
 
 func NewClient(endpoint string) (*Client, error) {
@@ -48,8 +49,8 @@ func (c *Client) Start() {
 
 	c.grpcClient = grpcConn
 
-	c.raidoChainService = prototype.NewRaidoChainServiceClient(c.grpcClient)
-	c.attestationService = prototype.NewAttestationServiceClient(c.grpcClient)
+	c.raidoChainService = prototype.NewRaidoChainClient(c.grpcClient)
+	c.attestationService = prototype.NewAttestationClient(c.grpcClient)
 }
 
 func (c *Client) Stop() {
@@ -69,7 +70,7 @@ func (c *Client) FindAllUTxO(addr string) ([]*types.UTxO, error) {
 	data := make([]*types.UTxO, len(res.GetData()))
 
 	for i, item := range res.GetData() {
-		data[i] = cast(item)
+		data[i] = castUTxO(item)
 	}
 
 	return data, nil
@@ -87,7 +88,7 @@ func (c *Client) FindStakeDeposits(addr string) ([]*types.UTxO, error) {
 	data := make([]*types.UTxO, len(res.GetData()))
 
 	for i, item := range res.GetData() {
-		data[i] = cast(item)
+		data[i] = castUTxO(item)
 	}
 
 	return data, nil
@@ -95,7 +96,7 @@ func (c *Client) FindStakeDeposits(addr string) ([]*types.UTxO, error) {
 
 func (c *Client) SendTx(tx *prototype.Transaction) error {
 	req := new(prototype.SendTxRequest)
-	req.Tx = tx
+	req.Tx = cast.SignedTxValue(tx)
 
 	var resp *prototype.ErrorResponse
 	var err error
@@ -134,12 +135,12 @@ func (c *Client) GetNonce(addr string) (uint64, error) {
 	return res.Result, nil
 }
 
-func cast(puo *prototype.UTxO) *types.UTxO {
+func castUTxO(puo *prototype.UTxO) *types.UTxO {
 	return types.NewUTxO(
-		puo.Hash,
-		puo.From,
-		puo.To,
-		puo.Node,
+		common.HexToHash(puo.Hash),
+		common.HexToAddress(puo.From),
+		common.HexToAddress(puo.To),
+		common.HexToAddress(puo.Node),
 		puo.Index,
 		puo.Amount,
 		puo.BlockNum,

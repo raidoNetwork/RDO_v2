@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/rpc/api"
+	"github.com/raidoNetwork/RDO_v2/rpc/attestation"
+	"github.com/raidoNetwork/RDO_v2/rpc/generator"
 	"github.com/raidoNetwork/RDO_v2/rpc/rdochain"
-	"github.com/raidoNetwork/RDO_v2/rpc/txpool"
 	"github.com/sirupsen/logrus"
 	"go.opencensus.io/plugin/ocgrpc"
 	"google.golang.org/grpc"
@@ -24,6 +25,7 @@ type Config struct {
 	Port               string
 	ChainService       api.ChainAPI
 	AttestationService api.AttestationAPI
+	GeneratorService   api.GeneratorAPI
 	MaxMsgSize         int
 }
 
@@ -74,17 +76,23 @@ func (s *Service) Start() {
 	s.connectionMu.Unlock()
 
 	chainServer := &rdochain.Server{
-		Server:       s.grpcServer,
+		Server:  s.grpcServer,
 		Backend: s.cfg.ChainService,
 	}
 
-	poolServer := &txpool.Server{
-		Server:             s.grpcServer,
+	poolServer := &attestation.Server{
+		Server:  s.grpcServer,
 		Backend: s.cfg.AttestationService,
 	}
 
-	prototype.RegisterRaidoChainServiceServer(s.grpcServer, chainServer)
-	prototype.RegisterAttestationServiceServer(s.grpcServer, poolServer)
+	generatorServer := &generator.Server{
+		Server:  s.grpcServer,
+		Backend: s.cfg.GeneratorService,
+	}
+
+	prototype.RegisterRaidoChainServer(s.grpcServer, chainServer)
+	prototype.RegisterAttestationServer(s.grpcServer, poolServer)
+	prototype.RegisterGeneratorServer(s.grpcServer, generatorServer)
 
 	go func() {
 		if s.listener != nil {

@@ -29,6 +29,9 @@ type ChainAPI interface {
 	// GetBlockByNum return block with given num.
 	GetBlockByNum(uint64) (*prototype.Block, error)
 
+	// GetLatestBlock
+	GetLatestBlock() (*prototype.Block, error)
+
 	/* Transaction data */
 
 	// GetTransaction return transaction with given hash.
@@ -47,6 +50,9 @@ type AttestationAPI interface {
 	// SendRawTx send transaction to the TxPool.
 	SendRawTx(transaction *prototype.Transaction) error
 
+	// GetFee return minimal fee needed for adding transaction to the block.
+	GetFee() uint64
+
 	// GetServiceStatus return service status or error if service is offline.
 	GetServiceStatus() (string, error)
 
@@ -54,3 +60,10 @@ type AttestationAPI interface {
 	GetPendingTransactions() ([]*prototype.Transaction, error)
 }
 
+type GeneratorAPI interface {
+	GenerateTx([]*prototype.TxOutput, uint64, string) (*prototype.Transaction, error)
+
+	GenerateStakeTx(uint64, string) (*prototype.Transaction, error)
+
+	GenerateUnstakeTx(uint64, string) (*prototype.Transaction, error)
+}

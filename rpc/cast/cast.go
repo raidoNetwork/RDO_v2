@@ -6,15 +6,15 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 )
 
-func ConvertProtoToInner(uo *types.UTxO) *prototype.UTxO {
+func ProtoUTxO(uo *types.UTxO) *prototype.UTxO {
 	uopb := new(prototype.UTxO)
 
 	uopb.BlockNum = uo.BlockNum
-	uopb.Hash = uo.Hash.Bytes()
+	uopb.Hash = uo.Hash.Hex()
 	uopb.Index = uo.Index
-	uopb.From = uo.From.Bytes()
-	uopb.To = uo.To.Bytes()
-	uopb.Node = uo.Node.Bytes()
+	uopb.From = uo.From.Hex()
+	uopb.To = uo.To.Hex()
+	uopb.Node = uo.Node.Hex()
 	uopb.Amount = uo.Amount
 	uopb.Timestamp = uo.Timestamp
 	uopb.Txtype = uo.TxType
@@ -22,12 +22,12 @@ func ConvertProtoToInner(uo *types.UTxO) *prototype.UTxO {
 	return uopb
 }
 
-func ConvBlock(block *prototype.Block) *prototype.BlockValue {
+func BlockValue(block *prototype.Block) *prototype.BlockValue {
 	bv := new(prototype.BlockValue)
 
 	bv.Num = block.Num
-	bv.Hash = ConvHash(block.Hash)
-	bv.Parent = ConvHash(block.Parent)
+	bv.Hash = HashString(block.Hash)
+	bv.Parent = HashString(block.Parent)
 	bv.Timestamp = block.Timestamp
 	bv.Proposer = ConvSign(block.Proposer)
 
@@ -49,31 +49,31 @@ func ConvBlock(block *prototype.Block) *prototype.BlockValue {
 	bv.Transactions = make([]*prototype.TxValue, size)
 
 	for i := 0; i < size; i++ {
-		bv.Transactions[i] = ConvTx(block.Transactions[i])
+		bv.Transactions[i] = TxValue(block.Transactions[i])
 	}
 
 	return bv
 }
 
 func ConvSign(s *prototype.Sign) string {
-	return ConvHash(s.Address)
+	return AddressString(s.Address)
 }
 
-func ConvAddress(a []byte) string {
+func AddressString(a []byte) string {
 	return common.BytesToAddress(a).Hex()
 }
 
-func ConvHash(h []byte) string {
+func HashString(h []byte) string {
 	return common.BytesToHash(h).Hex()
 }
 
-func ConvTx(tx *prototype.Transaction) *prototype.TxValue {
+func TxValue(tx *prototype.Transaction) *prototype.TxValue {
 	tv := new(prototype.TxValue)
 
 	tv.Num = tx.Num
 	tv.Type = tx.Type
 	tv.Timestamp = tx.Timestamp
-	tv.Hash = ConvHash(tx.Hash)
+	tv.Hash = HashString(tx.Hash)
 	tv.Fee = tx.Fee
 	tv.Data = tx.Data
 
@@ -81,36 +81,93 @@ func ConvTx(tx *prototype.Transaction) *prototype.TxValue {
 	tv.Inputs = make([]*prototype.TxInputValue, size)
 
 	for i := 0; i < size; i++ {
-		tv.Inputs[i] = ConvInput(tx.Inputs[i])
+		tv.Inputs[i] = TxInputValue(tx.Inputs[i])
 	}
 
 	size = len(tx.Outputs)
 	tv.Outputs = make([]*prototype.TxOutputValue, size)
 
 	for i := 0; i < size; i++ {
-		tv.Outputs[i] = convOutput(tx.Outputs[i])
+		tv.Outputs[i] = TxOutputValue(tx.Outputs[i])
 	}
 
 	return tv
 }
 
-func ConvInput(in *prototype.TxInput) *prototype.TxInputValue {
+func TxInputValue(in *prototype.TxInput) *prototype.TxInputValue {
 	inv := new(prototype.TxInputValue)
 
-	inv.Hash = ConvHash(in.Hash)
+	inv.Hash = HashString(in.Hash)
 	inv.Index = in.Index
-	inv.Address = ConvAddress(in.Address)
+	inv.Address = AddressString(in.Address)
 	inv.Amount = in.Amount
 
 	return inv
 }
 
-func convOutput(out *prototype.TxOutput) *prototype.TxOutputValue {
+func TxOutputValue(out *prototype.TxOutput) *prototype.TxOutputValue {
 	outv := new(prototype.TxOutputValue)
 
-	outv.Address = ConvAddress(out.Address)
+	outv.Address = AddressString(out.Address)
 	outv.Amount = out.Amount
-	outv.Node = ConvHash(out.Node)
+	outv.Node = AddressString(out.Node)
 
 	return outv
+}
+
+func TxOutput(outv *prototype.TxOutputValue) *prototype.TxOutput {
+	out := types.NewOutput(
+		common.HexToAddress(outv.Address).Bytes(),
+		outv.Amount,
+		common.HexToAddress(outv.Node).Bytes(),
+	)
+
+	return out
+}
+
+func TxInput(inv *prototype.TxInputValue) *prototype.TxInput {
+	in := new(prototype.TxInput)
+
+	in.Index = inv.Index
+	in.Amount = inv.Amount
+	in.Hash = common.HexToHash(inv.Hash).Bytes()
+	in.Address = common.HexToAddress(inv.Address).Bytes()
+
+	return in
+}
+
+func SignedTxValue(tx *prototype.Transaction) *prototype.SignedTxValue {
+	txv := new(prototype.SignedTxValue)
+	txv.Data = TxValue(tx)
+	txv.Signature = common.Encode(tx.Signature)
+	return txv
+}
+
+func TxFromTxValue(txv *prototype.SignedTxValue) *prototype.Transaction {
+	tx := new(prototype.Transaction)
+
+	if txv.Data == nil {
+		return nil
+	}
+
+	tx.Num = txv.Data.Num
+	tx.Type = txv.Data.Type
+	tx.Fee = txv.Data.Fee
+	tx.Timestamp = txv.Data.Timestamp
+	tx.Data = txv.Data.Data
+	tx.Hash = common.HexToHash(txv.Data.Hash).Bytes()
+
+	tx.Inputs = make([]*prototype.TxInput, len(txv.Data.Inputs))
+	for i, inv := range txv.Data.Inputs {
+		tx.Inputs[i] = TxInput(inv)
+	}
+
+	tx.Outputs = make([]*prototype.TxOutput, len(txv.Data.Outputs))
+	for i, out := range txv.Data.Outputs {
+		tx.Outputs[i] = TxOutput(out)
+	}
+
+	tx.Signature = common.FromHex(txv.Signature)
+
+	return tx
 }

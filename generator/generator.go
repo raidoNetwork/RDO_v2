@@ -1,14 +1,16 @@
-package txgen
+package generator
 
 import (
 	"context"
 	"crypto/ecdsa"
 	"github.com/pkg/errors"
+	"github.com/raidoNetwork/RDO_v2/blockchain/core/settings"
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/cmd"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/hasher"
+	"github.com/raidoNetwork/RDO_v2/shared/keystore"
 	rmath "github.com/raidoNetwork/RDO_v2/shared/math"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
@@ -26,11 +28,12 @@ import (
 const (
 	outputsLimit = 5
 
-	generatorInterval        = 500 * time.Millisecond
-	txPerTickCount           = 25
-	accountsStep             = 5
-	startAmount       uint64 = 1e12 //10000000000000 // 1 * 10e12
+	generatorInterval = 500 * time.Millisecond
+	txPerTickCount    = 25
+	accountsStep      = 5
 )
+
+const xPoint = 195
 
 var (
 	ErrEmptyAll    = errors.New("All balances are empty.")
@@ -60,6 +63,9 @@ func NewGenerator(cliCtx *cli.Context) (*TxGenerator, error) {
 	// setup default config
 	params.UseMainnetConfig()
 
+	// load chain config from file if special file has been given
+	settings.ConfigureChainConfig(cliCtx)
+
 	// get custom config
 	cfg := params.RaidoConfig()
 
@@ -84,8 +90,8 @@ func NewGenerator(cliCtx *cli.Context) (*TxGenerator, error) {
 	return &tg, nil
 }
 
-func prepareAccounts(ctx *cli.Context) (*types.AccountManager, error) {
-	accman, err := types.NewAccountManager(ctx)
+func prepareAccounts(ctx *cli.Context) (*keystore.AccountManager, error) {
+	accman, err := keystore.NewAccountManager(ctx)
 	if err != nil {
 		log.Error("Error creating account manager.", err)
 		return nil, err
@@ -93,13 +99,13 @@ func prepareAccounts(ctx *cli.Context) (*types.AccountManager, error) {
 
 	// update accman store with key pairs stored in the file
 	err = accman.LoadFromDisk()
-	if err != nil && !errors.Is(err, types.ErrEmptyKeyDir) {
+	if err != nil && !errors.Is(err, keystore.ErrEmptyKeyDir) {
 		log.Errorf("Error loading accounts: %s", err)
 		return nil, err
 	}
 
 	// if keys are not stored create new key pairs and store them
-	if errors.Is(err, types.ErrEmptyKeyDir) {
+	if errors.Is(err, keystore.ErrEmptyKeyDir) {
 		log.Warn("Create new accounts.")
 
 		err = accman.CreatePairs(common.AccountNum)
@@ -124,7 +130,7 @@ func prepareAccounts(ctx *cli.Context) (*types.AccountManager, error) {
 type TxGenerator struct {
 	nullBalance int
 
-	accman *types.AccountManager // key pair storage
+	accman *keystore.AccountManager // key pair storage
 
 	mu   sync.RWMutex
 	stop chan struct{} // chan for main thread lock
@@ -149,6 +155,14 @@ type TxGenerator struct {
 // Start generator service
 func (tg *TxGenerator) Start() {
 	log.Warn("Start tx generator.")
+
+	// create Genesis JSON with Account manager data
+	/*
+		err := types.CreateGenesisJSON(tg.accman, tg.dataDir)
+		if err != nil {
+			log.Error(err)
+		}
+	*/
 
 	tg.mu.Lock()
 	stop := tg.stop
@@ -326,7 +340,7 @@ func (tg *TxGenerator) createTx() (*prototype.Transaction, error) {
 	}
 
 	// generate amount to spend for transaction
-	targetAmount := tg.stakeAmount
+	targetAmount := (balance / tg.stakeAmount) * tg.stakeAmount // try to set max slots value
 	if opts.Type == common.NormalTxType {
 		targetAmount = rmath.RandUint64(1, balance)
 	}
@@ -505,6 +519,10 @@ func (tg *TxGenerator) generateTxOutputs(targetAmount uint64) []*prototype.TxOut
 		pair := lst[receiverIndex] // get account receiver
 		to := pair.Address
 
+		/*if receiverIndex == 500 {
+			to = common.HexToAddress("0xeb6d2a58af1d19a3d3870a444e72e0f74f7e91d2")
+		} */
+
 		// get random amount
 		amount := rmath.RandUint64(1, outAmount)
 
@@ -562,6 +580,13 @@ func (tg *TxGenerator) sendTxBatch() error {
 			continue
 		}
 
+		if tg.senderIndex == xPoint+1 {
+			err = tg.sendDoubles(tx)
+			if err != nil {
+				log.Errorf("Error sending doubles: %s", err)
+			}
+		}
+
 		txCounter++
 		log.Infof("Tx %s send to the Tx pool.", common.BytesToHash(tx.Hash).Hex())
 	}
@@ -590,4 +615,93 @@ func (tg *TxGenerator) restartGenerator() {
 func (tg *TxGenerator) getFee() uint64 {
 	maxFee := tg.cfg.MinimalFee + 100
 	return rmath.RandUint64(tg.cfg.MinimalFee, maxFee)
+}
+
+func (tg *TxGenerator) sendDoubles(tx *prototype.Transaction) error {
+	if tx.Type == common.StakeTxType || tx.Type == common.UnstakeTxType {
+		return nil
+	}
+
+	// Send tx with the same inputs
+	tx.Timestamp = uint64(time.Now().UnixNano())
+
+	key := tg.accman.GetPairsList()[xPoint]
+	hash, err := hasher.TxHash(tx)
+	if err != nil {
+		return err
+	}
+
+	tx.Hash = hash.Bytes()
+	err = types.SignTx(tx, key.Private)
+	if err != nil {
+		return err
+	}
+
+	err = tg.sendTx(tx)
+	if err != nil {
+		log.Error("Error sending double spend:", err)
+	}
+
+	// prepare fee values
+	fee := tx.Fee
+	fee1 := fee - 1
+	fee2 := fee + 1
+	amount := tx.Outputs[0].Amount
+
+	if tx.Fee == tg.cfg.MinimalFee {
+		fee1 = tx.Fee + 2
+	}
+
+	// Send tx with smaller fee
+	fee = tx.GetRealFee()
+	tx.Fee = fee1
+
+	// update tx fee
+	realFee := tx.GetRealFee() - fee
+	tx.Outputs[0].Amount -= realFee
+
+	hash, err = hasher.TxHash(tx)
+	if err != nil {
+		return err
+	}
+
+	tx.Hash = hash.Bytes()
+	err = types.SignTx(tx, key.Private)
+	if err != nil {
+		return err
+	}
+
+	err = tg.sendTx(tx)
+	if err != nil {
+		log.Error("Error sending double spend:", err)
+	}
+
+	log.Infof("Send double tx %s.", hash.Hex())
+
+	// Send tx with bigger fee
+	tx.Fee = fee2
+	realFee = tx.GetRealFee() - fee
+	tx.Outputs[0].Amount = amount - realFee
+
+	log.Warnf("Fee: %d", fee)
+
+	hash, err = hasher.TxHash(tx)
+	if err != nil {
+		return err
+	}
+
+	tx.Hash = hash.Bytes()
+	err = types.SignTx(tx, key.Private)
+	if err != nil {
+		return err
+	}
+
+	err = tg.sendTx(tx)
+	if err != nil {
+		log.Error("Error sending double spend:", err)
+	}
+
+	log.Infof("Send double tx %s.", hash.Hex())
+
+	return nil
 }

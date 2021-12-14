@@ -19,48 +19,31 @@ var appFlags = []cli.Flag{
 	flags.RPCHost,
 	flags.RPCPort,
 
-	// gRPC flags
+	// gRPC gateway flags
 	flags.GRPCGatewayHost,
 	flags.GRPCGatewayPort,
 	flags.GPRCGatewayCorsDomain,
+	cmd.GrpcMaxCallRecvMsgSizeFlag,
 
-	// tls flags
-	flags.CertFlag,
-	flags.KeyFlag,
-
-	flags.MinSyncPeers,
-	flags.HeadSync,
-	flags.DisableSync,
-	flags.BlockBatchLimit,
-	flags.BlockBatchLimitBurstFactor,
-	flags.ChainID,
-	flags.NetworkID,
-	flags.GenesisStatePath,
+	// data storage directories
 	cmd.DataDirFlag,
-	flags.MonitoringPortFlag,
 	cmd.LogFileName,
+
+	// config flags
 	cmd.ConfigFileFlag,
 	cmd.ChainConfigFileFlag,
-	cmd.GrpcMaxCallRecvMsgSizeFlag,
 
 	// db flags
 	cmd.BoltMMapInitialSizeFlag,
 	cmd.ClearDB,
 	cmd.ForceClearDB,
 
-	// Jaeger config flags
-	cmd.EnableTracingFlag,
-	cmd.TracingProcessNameFlag,
-	cmd.TracingEndpointFlag,
-	cmd.TraceSampleFractionFlag,
-
-	// Database test flags
-	flags.DBWriteTest,
-	flags.DBReadTest,
-	flags.DBStats,
-	flags.LanSrv,
+	// Logging flags
 	flags.SrvStat,
+	flags.SrvDebugStat,
 
+	// SQL config
+	cmd.SQLType,
 	cmd.SQLConfigPath,
 }
 
@@ -88,6 +71,11 @@ func main() {
 			TimestampFormat: "2006-01-02 15:04:05.000",
 		})
 
+		// init debug logs with stat flag
+		if ctx.Bool(flags.SrvDebugStat.Name) {
+			logrus.SetLevel(logrus.DebugLevel)
+		}
+
 		logFileName := ctx.String(cmd.LogFileName.Name)
 		if logFileName != "" {
 			if err := logutil.ConfigurePersistentLogging(logFileName); err != nil {
@@ -95,10 +83,7 @@ func main() {
 			}
 		}
 
-		logrus.SetLevel(logrus.DebugLevel)
-
-		// runtimeDebug.SetGCPercent(100)
-
+		runtimeDebug.SetGCPercent(100)
 		runtime.GOMAXPROCS(runtime.NumCPU())
 
 		return cmd.ValidateNoArgs(ctx)
@@ -121,6 +106,8 @@ func startNode(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
+	log.Warn("Created node")
 
 	rdo.Start()
 	return nil

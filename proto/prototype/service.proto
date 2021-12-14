@@ -8,14 +8,11 @@ import "google/protobuf/descriptor.proto";
 import "google/protobuf/empty.proto";
 import "google/api/annotations.proto";
 import "validate/validate.proto";
-import "prototype/transport.proto";
-import "prototype/types.proto";
-import "prototype/chain.service.response.proto";
+import "prototype/service.types.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
 
-
-// RaidoChainService service for work with blockchain
-service RaidoChainService {
+// RaidoChain service for work with blockchain
+service RaidoChain {
 
   // GetUTxO get all unspent transaction outputs of given address
   rpc GetUTxO(AddressRequest) returns (UTxOResponse){
@@ -31,7 +28,7 @@ service RaidoChainService {
     };
   }
 
-  // GetBlockByNum returns block with given number or error if not found.
+ // GetBlockByNum returns block with given number or error if not found.
   rpc GetBlockByNum(NumRequest) returns (BlockResponse) {
     option (google.api.http) = {
       get: "/rdo/v1/chain/block/{num}"
@@ -75,8 +72,8 @@ service RaidoChainService {
 
 }
 
-// AttestationService add new transactions to the pool and gossip transaction to known peers.
-service AttestationService {
+// Attestation add new transactions to the pool and gossip transaction to known peers.
+service Attestation {
 
   // SendLegacyTx send transaction data to the node.
   rpc SendLegacyTx(SendTxRequest) returns (ErrorResponse) {
@@ -102,6 +99,13 @@ service AttestationService {
     };
   }
 
+  // GetFee returns minimal fee price needed to add transaction to the future block.
+  rpc GetFee(google.protobuf.Empty) returns (NumberResponse) {
+    option (google.api.http) = {
+      get: "/rdo/v1/attestation/fee"
+    };
+  }
+
   // GetPendingTransactions returns pending transactions list.
   rpc GetPendingTransactions(google.protobuf.Empty) returns (TransactionsResponse) {
     option (google.api.http) = {
@@ -111,12 +115,39 @@ service AttestationService {
 
 }
 
+// Generator service creating new signed transactions.
+service Generator {
+  // CreateTx generates signed transaction with given options.
+  rpc CreateTx(TxOptionsRequest) returns (TxBodyResponse) {
+    option (google.api.http) = {
+      post: "/rdo/v1/generate/transaction/legacy"
+      body: "*"
+    };
+  }
+
+  // CreateStakeTx generates signed stake transaction with given options.
+  rpc CreateStakeTx(TxOptionsStakeRequest) returns (TxBodyResponse) {
+    option (google.api.http) = {
+      post: "/rdo/v1/generate/transaction/stake"
+      body: "*"
+    };
+  }
+
+  // CreateUnstakeTx generate signed unstake transaction with given options.
+  rpc CreateUnstakeTx(TxOptionsStakeRequest) returns (TxBodyResponse) {
+    option (google.api.http) = {
+      post: "/rdo/v1/generate/transaction/unstake"
+      body: "*"
+    };
+  }
+}
+
 message AddressRequest{
   string address = 1 [(validate.rules).string.len = 42];
 }
 
 message NumRequest{
-  uint64 num = 1 [(validate.rules).uint64.gte = 0];
+  string num = 1 [(validate.rules).string.min_len = 1];
 }
 
 message HashRequest {
@@ -124,7 +155,7 @@ message HashRequest {
 }
 
 message UTxOResponse{
-  repeated rdo.transport.UTxO data = 1;
+  repeated rdo.service.types.UTxO data = 1;
 }
 
 message StatusResponse{
@@ -133,7 +164,7 @@ message StatusResponse{
 }
 
 message SendTxRequest{
-  rdo.prototype.types.Transaction tx = 1;
+  rdo.service.types.SignedTxValue tx = 1;
 }
 
 message ErrorResponse {
@@ -141,17 +172,17 @@ message ErrorResponse {
 }
 
 message BlockResponse {
-  rdo.chainservice.response.BlockValue block = 1;
+  rdo.service.types.BlockValue block = 1;
   string error = 2;
 }
 
 message TransactionResponse {
-  rdo.chainservice.response.TxValue tx = 1;
+  rdo.service.types.TxValue tx = 1;
   string error = 2;
 }
 
 message TransactionsResponse {
-  repeated rdo.chainservice.response.TxValue tx = 1;
+  repeated rdo.service.types.TxValue tx = 1;
   string error = 2;
 }
 
@@ -160,19 +191,33 @@ message NumberResponse {
   string error = 2;
 }
 
+message TxOptionsRequest {
+   uint64 fee = 1;
+   repeated rdo.service.types.TxOutputValue outputs = 2;
+   string key = 3 [(validate.rules).string.len = 66];
+}
+
+message TxOptionsStakeRequest {
+  uint64 fee = 1;
+  string key = 2 [(validate.rules).string.len = 66];
+}
+
+message TxBodyResponse {
+  rdo.service.types.SignedTxValue tx = 1;
+}
 
 option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
-  info: {
-    title: "Raido blockchain API";
-    version: "1.0";
-    description: "JSON REST API for Raido blockchain.";
-  };
-  host: "localhost:5555"; // for tests
-  schemes: HTTP;
-  consumes: "application/json";
-  consumes: "application/grpc-web-text";
-  consumes: "application/grpc-web-json";
-  produces: "application/json";
-  produces: "application/grpc-web-text";
-  produces: "application/grpc-web-json";
+    info: {
+      title: "Raido blockchain API";
+      version: "1.0";
+      description: "JSON REST API for Raido blockchain.";
+    };
+    host: "localhost:5555";
+      schemes: HTTP;
+      consumes: "application/json";
+      consumes: "application/grpc-web-text";
+      consumes: "application/grpc-web-json";
+      produces: "application/json";
+      produces: "application/grpc-web-text";
+      produces: "application/grpc-web-json";
 };

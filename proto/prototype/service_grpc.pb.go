@@ -15,10 +15,10 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-// RaidoChainServiceClient is the client API for RaidoChainService service.
+// RaidoChainClient is the client API for RaidoChain service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type RaidoChainServiceClient interface {
+type RaidoChainClient interface {
 	// GetUTxO get all unspent transaction outputs of given address
 	GetUTxO(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*UTxOResponse, error)
 	// GetStatus returns node status
@@ -37,90 +37,90 @@ type RaidoChainServiceClient interface {
 	GetTransactionsCount(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*NumberResponse, error)
 }
 
-type raidoChainServiceClient struct {
+type raidoChainClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewRaidoChainServiceClient(cc grpc.ClientConnInterface) RaidoChainServiceClient {
-	return &raidoChainServiceClient{cc}
+func NewRaidoChainClient(cc grpc.ClientConnInterface) RaidoChainClient {
+	return &raidoChainClient{cc}
 }
 
-func (c *raidoChainServiceClient) GetUTxO(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*UTxOResponse, error) {
+func (c *raidoChainClient) GetUTxO(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*UTxOResponse, error) {
 	out := new(UTxOResponse)
-	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChainService/GetUTxO", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChain/GetUTxO", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *raidoChainServiceClient) GetStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*StatusResponse, error) {
+func (c *raidoChainClient) GetStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*StatusResponse, error) {
 	out := new(StatusResponse)
-	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChainService/GetStatus", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChain/GetStatus", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *raidoChainServiceClient) GetBlockByNum(ctx context.Context, in *NumRequest, opts ...grpc.CallOption) (*BlockResponse, error) {
+func (c *raidoChainClient) GetBlockByNum(ctx context.Context, in *NumRequest, opts ...grpc.CallOption) (*BlockResponse, error) {
 	out := new(BlockResponse)
-	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChainService/GetBlockByNum", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChain/GetBlockByNum", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *raidoChainServiceClient) GetBlockByHash(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*BlockResponse, error) {
+func (c *raidoChainClient) GetBlockByHash(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*BlockResponse, error) {
 	out := new(BlockResponse)
-	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChainService/GetBlockByHash", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChain/GetBlockByHash", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *raidoChainServiceClient) GetBalance(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*NumberResponse, error) {
+func (c *raidoChainClient) GetBalance(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*NumberResponse, error) {
 	out := new(NumberResponse)
-	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChainService/GetBalance", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChain/GetBalance", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *raidoChainServiceClient) GetTransaction(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*TransactionResponse, error) {
+func (c *raidoChainClient) GetTransaction(ctx context.Context, in *HashRequest, opts ...grpc.CallOption) (*TransactionResponse, error) {
 	out := new(TransactionResponse)
-	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChainService/GetTransaction", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChain/GetTransaction", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *raidoChainServiceClient) GetStakeDeposits(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*UTxOResponse, error) {
+func (c *raidoChainClient) GetStakeDeposits(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*UTxOResponse, error) {
 	out := new(UTxOResponse)
-	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChainService/GetStakeDeposits", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChain/GetStakeDeposits", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *raidoChainServiceClient) GetTransactionsCount(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*NumberResponse, error) {
+func (c *raidoChainClient) GetTransactionsCount(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*NumberResponse, error) {
 	out := new(NumberResponse)
-	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChainService/GetTransactionsCount", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChain/GetTransactionsCount", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// RaidoChainServiceServer is the server API for RaidoChainService service.
-// All implementations must embed UnimplementedRaidoChainServiceServer
+// RaidoChainServer is the server API for RaidoChain service.
+// All implementations must embed UnimplementedRaidoChainServer
 // for forward compatibility
-type RaidoChainServiceServer interface {
+type RaidoChainServer interface {
 	// GetUTxO get all unspent transaction outputs of given address
 	GetUTxO(context.Context, *AddressRequest) (*UTxOResponse, error)
 	// GetStatus returns node status
@@ -137,434 +137,636 @@ type RaidoChainServiceServer interface {
 	GetStakeDeposits(context.Context, *AddressRequest) (*UTxOResponse, error)
 	// GetTransactionsCount get number of transactions sent by given address.
 	GetTransactionsCount(context.Context, *AddressRequest) (*NumberResponse, error)
-	mustEmbedUnimplementedRaidoChainServiceServer()
+	mustEmbedUnimplementedRaidoChainServer()
 }
 
-// UnimplementedRaidoChainServiceServer must be embedded to have forward compatible implementations.
-type UnimplementedRaidoChainServiceServer struct {
+// UnimplementedRaidoChainServer must be embedded to have forward compatible implementations.
+type UnimplementedRaidoChainServer struct {
 }
 
-func (UnimplementedRaidoChainServiceServer) GetUTxO(context.Context, *AddressRequest) (*UTxOResponse, error) {
+func (UnimplementedRaidoChainServer) GetUTxO(context.Context, *AddressRequest) (*UTxOResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUTxO not implemented")
 }
-func (UnimplementedRaidoChainServiceServer) GetStatus(context.Context, *emptypb.Empty) (*StatusResponse, error) {
+func (UnimplementedRaidoChainServer) GetStatus(context.Context, *emptypb.Empty) (*StatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetStatus not implemented")
 }
-func (UnimplementedRaidoChainServiceServer) GetBlockByNum(context.Context, *NumRequest) (*BlockResponse, error) {
+func (UnimplementedRaidoChainServer) GetBlockByNum(context.Context, *NumRequest) (*BlockResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBlockByNum not implemented")
 }
-func (UnimplementedRaidoChainServiceServer) GetBlockByHash(context.Context, *HashRequest) (*BlockResponse, error) {
+func (UnimplementedRaidoChainServer) GetBlockByHash(context.Context, *HashRequest) (*BlockResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBlockByHash not implemented")
 }
-func (UnimplementedRaidoChainServiceServer) GetBalance(context.Context, *AddressRequest) (*NumberResponse, error) {
+func (UnimplementedRaidoChainServer) GetBalance(context.Context, *AddressRequest) (*NumberResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBalance not implemented")
 }
-func (UnimplementedRaidoChainServiceServer) GetTransaction(context.Context, *HashRequest) (*TransactionResponse, error) {
+func (UnimplementedRaidoChainServer) GetTransaction(context.Context, *HashRequest) (*TransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTransaction not implemented")
 }
-func (UnimplementedRaidoChainServiceServer) GetStakeDeposits(context.Context, *AddressRequest) (*UTxOResponse, error) {
+func (UnimplementedRaidoChainServer) GetStakeDeposits(context.Context, *AddressRequest) (*UTxOResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetStakeDeposits not implemented")
 }
-func (UnimplementedRaidoChainServiceServer) GetTransactionsCount(context.Context, *AddressRequest) (*NumberResponse, error) {
+func (UnimplementedRaidoChainServer) GetTransactionsCount(context.Context, *AddressRequest) (*NumberResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTransactionsCount not implemented")
 }
-func (UnimplementedRaidoChainServiceServer) mustEmbedUnimplementedRaidoChainServiceServer() {}
+func (UnimplementedRaidoChainServer) mustEmbedUnimplementedRaidoChainServer() {}
 
-// UnsafeRaidoChainServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to RaidoChainServiceServer will
+// UnsafeRaidoChainServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to RaidoChainServer will
 // result in compilation errors.
-type UnsafeRaidoChainServiceServer interface {
-	mustEmbedUnimplementedRaidoChainServiceServer()
+type UnsafeRaidoChainServer interface {
+	mustEmbedUnimplementedRaidoChainServer()
 }
 
-func RegisterRaidoChainServiceServer(s grpc.ServiceRegistrar, srv RaidoChainServiceServer) {
-	s.RegisterService(&RaidoChainService_ServiceDesc, srv)
+func RegisterRaidoChainServer(s grpc.ServiceRegistrar, srv RaidoChainServer) {
+	s.RegisterService(&RaidoChain_ServiceDesc, srv)
 }
 
-func _RaidoChainService_GetUTxO_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RaidoChain_GetUTxO_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddressRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RaidoChainServiceServer).GetUTxO(ctx, in)
+		return srv.(RaidoChainServer).GetUTxO(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rdo.service.RaidoChainService/GetUTxO",
+		FullMethod: "/rdo.service.RaidoChain/GetUTxO",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RaidoChainServiceServer).GetUTxO(ctx, req.(*AddressRequest))
+		return srv.(RaidoChainServer).GetUTxO(ctx, req.(*AddressRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RaidoChainService_GetStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RaidoChain_GetStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RaidoChainServiceServer).GetStatus(ctx, in)
+		return srv.(RaidoChainServer).GetStatus(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rdo.service.RaidoChainService/GetStatus",
+		FullMethod: "/rdo.service.RaidoChain/GetStatus",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RaidoChainServiceServer).GetStatus(ctx, req.(*emptypb.Empty))
+		return srv.(RaidoChainServer).GetStatus(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RaidoChainService_GetBlockByNum_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RaidoChain_GetBlockByNum_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(NumRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RaidoChainServiceServer).GetBlockByNum(ctx, in)
+		return srv.(RaidoChainServer).GetBlockByNum(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rdo.service.RaidoChainService/GetBlockByNum",
+		FullMethod: "/rdo.service.RaidoChain/GetBlockByNum",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RaidoChainServiceServer).GetBlockByNum(ctx, req.(*NumRequest))
+		return srv.(RaidoChainServer).GetBlockByNum(ctx, req.(*NumRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RaidoChainService_GetBlockByHash_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RaidoChain_GetBlockByHash_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(HashRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RaidoChainServiceServer).GetBlockByHash(ctx, in)
+		return srv.(RaidoChainServer).GetBlockByHash(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rdo.service.RaidoChainService/GetBlockByHash",
+		FullMethod: "/rdo.service.RaidoChain/GetBlockByHash",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RaidoChainServiceServer).GetBlockByHash(ctx, req.(*HashRequest))
+		return srv.(RaidoChainServer).GetBlockByHash(ctx, req.(*HashRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RaidoChainService_GetBalance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RaidoChain_GetBalance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddressRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RaidoChainServiceServer).GetBalance(ctx, in)
+		return srv.(RaidoChainServer).GetBalance(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rdo.service.RaidoChainService/GetBalance",
+		FullMethod: "/rdo.service.RaidoChain/GetBalance",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RaidoChainServiceServer).GetBalance(ctx, req.(*AddressRequest))
+		return srv.(RaidoChainServer).GetBalance(ctx, req.(*AddressRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RaidoChainService_GetTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RaidoChain_GetTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(HashRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RaidoChainServiceServer).GetTransaction(ctx, in)
+		return srv.(RaidoChainServer).GetTransaction(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rdo.service.RaidoChainService/GetTransaction",
+		FullMethod: "/rdo.service.RaidoChain/GetTransaction",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RaidoChainServiceServer).GetTransaction(ctx, req.(*HashRequest))
+		return srv.(RaidoChainServer).GetTransaction(ctx, req.(*HashRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RaidoChainService_GetStakeDeposits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RaidoChain_GetStakeDeposits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddressRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RaidoChainServiceServer).GetStakeDeposits(ctx, in)
+		return srv.(RaidoChainServer).GetStakeDeposits(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rdo.service.RaidoChainService/GetStakeDeposits",
+		FullMethod: "/rdo.service.RaidoChain/GetStakeDeposits",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RaidoChainServiceServer).GetStakeDeposits(ctx, req.(*AddressRequest))
+		return srv.(RaidoChainServer).GetStakeDeposits(ctx, req.(*AddressRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _RaidoChainService_GetTransactionsCount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _RaidoChain_GetTransactionsCount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddressRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RaidoChainServiceServer).GetTransactionsCount(ctx, in)
+		return srv.(RaidoChainServer).GetTransactionsCount(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rdo.service.RaidoChainService/GetTransactionsCount",
+		FullMethod: "/rdo.service.RaidoChain/GetTransactionsCount",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RaidoChainServiceServer).GetTransactionsCount(ctx, req.(*AddressRequest))
+		return srv.(RaidoChainServer).GetTransactionsCount(ctx, req.(*AddressRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// RaidoChainService_ServiceDesc is the grpc.ServiceDesc for RaidoChainService service.
+// RaidoChain_ServiceDesc is the grpc.ServiceDesc for RaidoChain service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var RaidoChainService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "rdo.service.RaidoChainService",
-	HandlerType: (*RaidoChainServiceServer)(nil),
+var RaidoChain_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "rdo.service.RaidoChain",
+	HandlerType: (*RaidoChainServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "GetUTxO",
-			Handler:    _RaidoChainService_GetUTxO_Handler,
+			Handler:    _RaidoChain_GetUTxO_Handler,
 		},
 		{
 			MethodName: "GetStatus",
-			Handler:    _RaidoChainService_GetStatus_Handler,
+			Handler:    _RaidoChain_GetStatus_Handler,
 		},
 		{
 			MethodName: "GetBlockByNum",
-			Handler:    _RaidoChainService_GetBlockByNum_Handler,
+			Handler:    _RaidoChain_GetBlockByNum_Handler,
 		},
 		{
 			MethodName: "GetBlockByHash",
-			Handler:    _RaidoChainService_GetBlockByHash_Handler,
+			Handler:    _RaidoChain_GetBlockByHash_Handler,
 		},
 		{
 			MethodName: "GetBalance",
-			Handler:    _RaidoChainService_GetBalance_Handler,
+			Handler:    _RaidoChain_GetBalance_Handler,
 		},
 		{
 			MethodName: "GetTransaction",
-			Handler:    _RaidoChainService_GetTransaction_Handler,
+			Handler:    _RaidoChain_GetTransaction_Handler,
 		},
 		{
 			MethodName: "GetStakeDeposits",
-			Handler:    _RaidoChainService_GetStakeDeposits_Handler,
+			Handler:    _RaidoChain_GetStakeDeposits_Handler,
 		},
 		{
 			MethodName: "GetTransactionsCount",
-			Handler:    _RaidoChainService_GetTransactionsCount_Handler,
+			Handler:    _RaidoChain_GetTransactionsCount_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "prototype/service.proto",
 }
 
-// AttestationServiceClient is the client API for AttestationService service.
+// AttestationClient is the client API for Attestation service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type AttestationServiceClient interface {
+type AttestationClient interface {
 	// SendLegacyTx send transaction data to the node.
 	SendLegacyTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error)
 	// SendStakeTx send stake transaction to the node.
 	SendStakeTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error)
 	// SendUnstakeTx send stake transaction to the node.
 	SendUnstakeTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error)
+	// GetFee returns minimal fee price needed to add transaction to the future block.
+	GetFee(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*NumberResponse, error)
 	// GetPendingTransactions returns pending transactions list.
 	GetPendingTransactions(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*TransactionsResponse, error)
 }
 
-type attestationServiceClient struct {
+type attestationClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewAttestationServiceClient(cc grpc.ClientConnInterface) AttestationServiceClient {
-	return &attestationServiceClient{cc}
+func NewAttestationClient(cc grpc.ClientConnInterface) AttestationClient {
+	return &attestationClient{cc}
 }
 
-func (c *attestationServiceClient) SendLegacyTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error) {
+func (c *attestationClient) SendLegacyTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error) {
 	out := new(ErrorResponse)
-	err := c.cc.Invoke(ctx, "/rdo.service.AttestationService/SendLegacyTx", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rdo.service.Attestation/SendLegacyTx", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *attestationServiceClient) SendStakeTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error) {
+func (c *attestationClient) SendStakeTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error) {
 	out := new(ErrorResponse)
-	err := c.cc.Invoke(ctx, "/rdo.service.AttestationService/SendStakeTx", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rdo.service.Attestation/SendStakeTx", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *attestationServiceClient) SendUnstakeTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error) {
+func (c *attestationClient) SendUnstakeTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error) {
 	out := new(ErrorResponse)
-	err := c.cc.Invoke(ctx, "/rdo.service.AttestationService/SendUnstakeTx", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rdo.service.Attestation/SendUnstakeTx", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *attestationServiceClient) GetPendingTransactions(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*TransactionsResponse, error) {
+func (c *attestationClient) GetFee(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*NumberResponse, error) {
+	out := new(NumberResponse)
+	err := c.cc.Invoke(ctx, "/rdo.service.Attestation/GetFee", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *attestationClient) GetPendingTransactions(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*TransactionsResponse, error) {
 	out := new(TransactionsResponse)
-	err := c.cc.Invoke(ctx, "/rdo.service.AttestationService/GetPendingTransactions", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rdo.service.Attestation/GetPendingTransactions", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// AttestationServiceServer is the server API for AttestationService service.
-// All implementations must embed UnimplementedAttestationServiceServer
+// AttestationServer is the server API for Attestation service.
+// All implementations must embed UnimplementedAttestationServer
 // for forward compatibility
-type AttestationServiceServer interface {
+type AttestationServer interface {
 	// SendLegacyTx send transaction data to the node.
 	SendLegacyTx(context.Context, *SendTxRequest) (*ErrorResponse, error)
 	// SendStakeTx send stake transaction to the node.
 	SendStakeTx(context.Context, *SendTxRequest) (*ErrorResponse, error)
 	// SendUnstakeTx send stake transaction to the node.
 	SendUnstakeTx(context.Context, *SendTxRequest) (*ErrorResponse, error)
+	// GetFee returns minimal fee price needed to add transaction to the future block.
+	GetFee(context.Context, *emptypb.Empty) (*NumberResponse, error)
 	// GetPendingTransactions returns pending transactions list.
 	GetPendingTransactions(context.Context, *emptypb.Empty) (*TransactionsResponse, error)
-	mustEmbedUnimplementedAttestationServiceServer()
+	mustEmbedUnimplementedAttestationServer()
 }
 
-// UnimplementedAttestationServiceServer must be embedded to have forward compatible implementations.
-type UnimplementedAttestationServiceServer struct {
+// UnimplementedAttestationServer must be embedded to have forward compatible implementations.
+type UnimplementedAttestationServer struct {
 }
 
-func (UnimplementedAttestationServiceServer) SendLegacyTx(context.Context, *SendTxRequest) (*ErrorResponse, error) {
+func (UnimplementedAttestationServer) SendLegacyTx(context.Context, *SendTxRequest) (*ErrorResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendLegacyTx not implemented")
 }
-func (UnimplementedAttestationServiceServer) SendStakeTx(context.Context, *SendTxRequest) (*ErrorResponse, error) {
+func (UnimplementedAttestationServer) SendStakeTx(context.Context, *SendTxRequest) (*ErrorResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendStakeTx not implemented")
 }
-func (UnimplementedAttestationServiceServer) SendUnstakeTx(context.Context, *SendTxRequest) (*ErrorResponse, error) {
+func (UnimplementedAttestationServer) SendUnstakeTx(context.Context, *SendTxRequest) (*ErrorResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendUnstakeTx not implemented")
 }
-func (UnimplementedAttestationServiceServer) GetPendingTransactions(context.Context, *emptypb.Empty) (*TransactionsResponse, error) {
+func (UnimplementedAttestationServer) GetFee(context.Context, *emptypb.Empty) (*NumberResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetFee not implemented")
+}
+func (UnimplementedAttestationServer) GetPendingTransactions(context.Context, *emptypb.Empty) (*TransactionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPendingTransactions not implemented")
 }
-func (UnimplementedAttestationServiceServer) mustEmbedUnimplementedAttestationServiceServer() {}
+func (UnimplementedAttestationServer) mustEmbedUnimplementedAttestationServer() {}
 
-// UnsafeAttestationServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to AttestationServiceServer will
+// UnsafeAttestationServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AttestationServer will
 // result in compilation errors.
-type UnsafeAttestationServiceServer interface {
-	mustEmbedUnimplementedAttestationServiceServer()
+type UnsafeAttestationServer interface {
+	mustEmbedUnimplementedAttestationServer()
 }
 
-func RegisterAttestationServiceServer(s grpc.ServiceRegistrar, srv AttestationServiceServer) {
-	s.RegisterService(&AttestationService_ServiceDesc, srv)
+func RegisterAttestationServer(s grpc.ServiceRegistrar, srv AttestationServer) {
+	s.RegisterService(&Attestation_ServiceDesc, srv)
 }
 
-func _AttestationService_SendLegacyTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Attestation_SendLegacyTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SendTxRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AttestationServiceServer).SendLegacyTx(ctx, in)
+		return srv.(AttestationServer).SendLegacyTx(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rdo.service.AttestationService/SendLegacyTx",
+		FullMethod: "/rdo.service.Attestation/SendLegacyTx",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AttestationServiceServer).SendLegacyTx(ctx, req.(*SendTxRequest))
+		return srv.(AttestationServer).SendLegacyTx(ctx, req.(*SendTxRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AttestationService_SendStakeTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Attestation_SendStakeTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SendTxRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AttestationServiceServer).SendStakeTx(ctx, in)
+		return srv.(AttestationServer).SendStakeTx(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rdo.service.AttestationService/SendStakeTx",
+		FullMethod: "/rdo.service.Attestation/SendStakeTx",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AttestationServiceServer).SendStakeTx(ctx, req.(*SendTxRequest))
+		return srv.(AttestationServer).SendStakeTx(ctx, req.(*SendTxRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AttestationService_SendUnstakeTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Attestation_SendUnstakeTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SendTxRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AttestationServiceServer).SendUnstakeTx(ctx, in)
+		return srv.(AttestationServer).SendUnstakeTx(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rdo.service.AttestationService/SendUnstakeTx",
+		FullMethod: "/rdo.service.Attestation/SendUnstakeTx",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AttestationServiceServer).SendUnstakeTx(ctx, req.(*SendTxRequest))
+		return srv.(AttestationServer).SendUnstakeTx(ctx, req.(*SendTxRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AttestationService_GetPendingTransactions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Attestation_GetFee_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AttestationServiceServer).GetPendingTransactions(ctx, in)
+		return srv.(AttestationServer).GetFee(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rdo.service.AttestationService/GetPendingTransactions",
+		FullMethod: "/rdo.service.Attestation/GetFee",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AttestationServiceServer).GetPendingTransactions(ctx, req.(*emptypb.Empty))
+		return srv.(AttestationServer).GetFee(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// AttestationService_ServiceDesc is the grpc.ServiceDesc for AttestationService service.
+func _Attestation_GetPendingTransactions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AttestationServer).GetPendingTransactions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rdo.service.Attestation/GetPendingTransactions",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AttestationServer).GetPendingTransactions(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// Attestation_ServiceDesc is the grpc.ServiceDesc for Attestation service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var AttestationService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "rdo.service.AttestationService",
-	HandlerType: (*AttestationServiceServer)(nil),
+var Attestation_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "rdo.service.Attestation",
+	HandlerType: (*AttestationServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "SendLegacyTx",
-			Handler:    _AttestationService_SendLegacyTx_Handler,
+			Handler:    _Attestation_SendLegacyTx_Handler,
 		},
 		{
 			MethodName: "SendStakeTx",
-			Handler:    _AttestationService_SendStakeTx_Handler,
+			Handler:    _Attestation_SendStakeTx_Handler,
 		},
 		{
 			MethodName: "SendUnstakeTx",
-			Handler:    _AttestationService_SendUnstakeTx_Handler,
+			Handler:    _Attestation_SendUnstakeTx_Handler,
+		},
+		{
+			MethodName: "GetFee",
+			Handler:    _Attestation_GetFee_Handler,
 		},
 		{
 			MethodName: "GetPendingTransactions",
-			Handler:    _AttestationService_GetPendingTransactions_Handler,
+			Handler:    _Attestation_GetPendingTransactions_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "prototype/service.proto",
+}
+
+// GeneratorClient is the client API for Generator service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type GeneratorClient interface {
+	// CreateTx generates signed transaction with given options.
+	CreateTx(ctx context.Context, in *TxOptionsRequest, opts ...grpc.CallOption) (*TxBodyResponse, error)
+	// CreateStakeTx generates signed stake transaction with given options.
+	CreateStakeTx(ctx context.Context, in *TxOptionsStakeRequest, opts ...grpc.CallOption) (*TxBodyResponse, error)
+	// CreateUnstakeTx generate signed unstake transaction with given options.
+	CreateUnstakeTx(ctx context.Context, in *TxOptionsStakeRequest, opts ...grpc.CallOption) (*TxBodyResponse, error)
+}
+
+type generatorClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewGeneratorClient(cc grpc.ClientConnInterface) GeneratorClient {
+	return &generatorClient{cc}
+}
+
+func (c *generatorClient) CreateTx(ctx context.Context, in *TxOptionsRequest, opts ...grpc.CallOption) (*TxBodyResponse, error) {
+	out := new(TxBodyResponse)
+	err := c.cc.Invoke(ctx, "/rdo.service.Generator/CreateTx", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *generatorClient) CreateStakeTx(ctx context.Context, in *TxOptionsStakeRequest, opts ...grpc.CallOption) (*TxBodyResponse, error) {
+	out := new(TxBodyResponse)
+	err := c.cc.Invoke(ctx, "/rdo.service.Generator/CreateStakeTx", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *generatorClient) CreateUnstakeTx(ctx context.Context, in *TxOptionsStakeRequest, opts ...grpc.CallOption) (*TxBodyResponse, error) {
+	out := new(TxBodyResponse)
+	err := c.cc.Invoke(ctx, "/rdo.service.Generator/CreateUnstakeTx", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// GeneratorServer is the server API for Generator service.
+// All implementations must embed UnimplementedGeneratorServer
+// for forward compatibility
+type GeneratorServer interface {
+	// CreateTx generates signed transaction with given options.
+	CreateTx(context.Context, *TxOptionsRequest) (*TxBodyResponse, error)
+	// CreateStakeTx generates signed stake transaction with given options.
+	CreateStakeTx(context.Context, *TxOptionsStakeRequest) (*TxBodyResponse, error)
+	// CreateUnstakeTx generate signed unstake transaction with given options.
+	CreateUnstakeTx(context.Context, *TxOptionsStakeRequest) (*TxBodyResponse, error)
+	mustEmbedUnimplementedGeneratorServer()
+}
+
+// UnimplementedGeneratorServer must be embedded to have forward compatible implementations.
+type UnimplementedGeneratorServer struct {
+}
+
+func (UnimplementedGeneratorServer) CreateTx(context.Context, *TxOptionsRequest) (*TxBodyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateTx not implemented")
+}
+func (UnimplementedGeneratorServer) CreateStakeTx(context.Context, *TxOptionsStakeRequest) (*TxBodyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateStakeTx not implemented")
+}
+func (UnimplementedGeneratorServer) CreateUnstakeTx(context.Context, *TxOptionsStakeRequest) (*TxBodyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateUnstakeTx not implemented")
+}
+func (UnimplementedGeneratorServer) mustEmbedUnimplementedGeneratorServer() {}
+
+// UnsafeGeneratorServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to GeneratorServer will
+// result in compilation errors.
+type UnsafeGeneratorServer interface {
+	mustEmbedUnimplementedGeneratorServer()
+}
+
+func RegisterGeneratorServer(s grpc.ServiceRegistrar, srv GeneratorServer) {
+	s.RegisterService(&Generator_ServiceDesc, srv)
+}
+
+func _Generator_CreateTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TxOptionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GeneratorServer).CreateTx(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rdo.service.Generator/CreateTx",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GeneratorServer).CreateTx(ctx, req.(*TxOptionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Generator_CreateStakeTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TxOptionsStakeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GeneratorServer).CreateStakeTx(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rdo.service.Generator/CreateStakeTx",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GeneratorServer).CreateStakeTx(ctx, req.(*TxOptionsStakeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Generator_CreateUnstakeTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TxOptionsStakeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GeneratorServer).CreateUnstakeTx(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rdo.service.Generator/CreateUnstakeTx",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GeneratorServer).CreateUnstakeTx(ctx, req.(*TxOptionsStakeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// Generator_ServiceDesc is the grpc.ServiceDesc for Generator service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var Generator_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "rdo.service.Generator",
+	HandlerType: (*GeneratorServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CreateTx",
+			Handler:    _Generator_CreateTx_Handler,
+		},
+		{
+			MethodName: "CreateStakeTx",
+			Handler:    _Generator_CreateStakeTx_Handler,
+		},
+		{
+			MethodName: "CreateUnstakeTx",
+			Handler:    _Generator_CreateUnstakeTx_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -8,16 +8,18 @@ import (
 	"github.com/raidoNetwork/RDO_v2/rpc/cast"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/status"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
+	"strconv"
 )
 
-var log = logrus.WithField("prefix", "RPC Server")
+var log = logrus.WithField("prefix", "RPC ChainServer")
 
 type Server struct {
-	Server       *grpc.Server
+	Server  *grpc.Server
 	Backend api.ChainAPI
 
-	prototype.UnimplementedRaidoChainServiceServer
+	prototype.UnimplementedRaidoChainServer
 }
 
 func (s *Server) GetUTxO(ctx context.Context, request *prototype.AddressRequest) (*prototype.UTxOResponse, error) {
@@ -40,7 +42,7 @@ func (s *Server) GetUTxO(ctx context.Context, request *prototype.AddressRequest)
 	response.Data = make([]*prototype.UTxO, len(arr))
 
 	for i, uo := range arr {
-		response.Data[i] = cast.ConvertProtoToInner(uo)
+		response.Data[i] = cast.ProtoUTxO(uo)
 	}
 
 	return response, nil
@@ -70,21 +72,34 @@ func (s *Server) GetBlockByNum(ctx context.Context, req *prototype.NumRequest) (
 		return res, err
 	}
 
-	log.Infof("ChainAPI.GetBlockByNum(%d)", req.GetNum())
+	var block *prototype.Block
+	if req.GetNum() == "latest" {
+		block, err = s.Backend.GetLatestBlock()
+	} else {
+		var num uint64
 
-	block, err := s.Backend.GetBlockByNum(req.GetNum())
+		num, err = strconv.ParseUint(req.GetNum(), 10, 64)
+		if err != nil {
+			return nil, status.Error(3, "Wrong number given.")
+		}
+
+		log.Infof("ChainAPI.GetBlockByNum(%d)", num)
+
+		block, err = s.Backend.GetBlockByNum(num)
+	}
+
+	// error getting block
 	if err != nil {
-		res.Error = err.Error()
-		return res, err
+		return nil, err
 	}
 
 	if block == nil {
-		err = errors.Errorf("Not found block with num %d", req.GetNum())
+		err = errors.Errorf("Not found block with num %s", req.GetNum())
 		res.Error = err.Error()
 		return res, err
 	}
 
-	res.Block = cast.ConvBlock(block)
+	res.Block = cast.BlockValue(block)
 
 	return res, nil
 }
@@ -113,7 +128,7 @@ func (s *Server) GetBlockByHash(ctx context.Context, req *prototype.HashRequest)
 		return res, err
 	}
 
-	res.Block = cast.ConvBlock(block)
+	res.Block = cast.BlockValue(block)
 
 	return res, nil
 }
@@ -165,7 +180,7 @@ func (s *Server) GetTransaction(ctx context.Context, req *prototype.HashRequest)
 		return res, err
 	}
 
-	res.Tx = cast.ConvTx(tx)
+	res.Tx = cast.TxValue(tx)
 
 	return res, nil
 }
@@ -190,7 +205,7 @@ func (s *Server) GetStakeDeposits(ctx context.Context, request *prototype.Addres
 	response.Data = make([]*prototype.UTxO, len(arr))
 
 	for i, uo := range arr {
-		response.Data[i] = cast.ConvertProtoToInner(uo)
+		response.Data[i] = cast.ProtoUTxO(uo)
 	}
 
 	return response, nil
@@ -218,4 +233,3 @@ func (s *Server) GetTransactionsCount(ctx context.Context, request *prototype.Ad
 
 	return response, nil
 }
-
