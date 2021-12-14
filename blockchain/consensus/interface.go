@@ -101,8 +101,8 @@ type OutputUpdater interface {
 
 // TransactionQueue provides and updates transaction queue.
 type TransactionQueue interface {
-	// GetPricedQueue returns transaction sort queue.
-	GetPricedQueue() []*types.TransactionData
+	// GetTxQueue returns transaction sort queue.
+	GetTxQueue() []*types.TransactionData
 
 	// DeleteTransaction removes given transaction from pool.
 	DeleteTransaction(transaction *prototype.Transaction) error

@@ -48,7 +48,7 @@ type Miner struct {
 func (m *Miner) GenerateBlock() (*prototype.Block, error) {
 	totalSize := 0 // current size of block in bytes
 
-	txList := m.txPool.GetPricedQueue()
+	txList := m.txPool.GetTxQueue()
 	txListLen := len(txList)
 	txBatch := make([]*prototype.Transaction, 0, txListLen)
 

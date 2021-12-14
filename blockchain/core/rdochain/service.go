@@ -59,7 +59,10 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (
 	attestationValidator := attestation.NewCryspValidator(bc, outm, avalidator, &validatorCfg)
 
 	// new tx pool
-	txPool := txpool.NewTxPool(attestationValidator)
+	txPool := txpool.NewTxPool(attestationValidator, &txpool.PoolConfig{
+		MinimalFee: cfg.MinimalFee,
+		BlockSize:  cfg.BlockSize,
+	})
 
 	// new block miner
 	forger := miner.NewMiner(bc, attestationValidator, avalidator, txPool, outm, &miner.MinerConfig{
@@ -337,7 +340,7 @@ func (s *Service) GetTransactionsCount(addr string) (uint64, error) {
 
 // GetPendingTransactions returns list of pending transactions.
 func (s *Service) GetPendingTransactions() ([]*prototype.Transaction, error) {
-	queue := s.txPool.GetPricedQueue()
+	queue := s.txPool.GetTxQueue()
 
 	batch := make([]*prototype.Transaction, len(queue))
 	for i, td := range queue {
