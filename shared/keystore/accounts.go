@@ -1,12 +1,14 @@
-package types
+package keystore
 
 import (
 	"crypto/ecdsa"
+	"encoding/hex"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/shared/cmd"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
 	"github.com/raidoNetwork/RDO_v2/shared/fileutil"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"io/ioutil"
 	"path/filepath"
@@ -21,6 +23,8 @@ var (
 	ErrEmptyStore  = errors.New("Can't save empty store.")
 	ErrEmptyKeyDir = errors.New("Key dir is empty.")
 )
+
+var log = logrus.WithField("prefix", "keystore")
 
 func NewAccountManager(ctx *cli.Context) (*AccountManager, error) {
 	am := &AccountManager{
@@ -164,13 +168,15 @@ func (am *AccountManager) LoadFromDisk() error {
 		return err
 	}
 
-	if len(files) == 0 {
+	flen := len(files)
+	if flen == 0 {
 		return ErrEmptyKeyDir
 	}
 
 	for _, f := range files {
 		// skip directories and UNIX hidden files
 		if f.IsDir() || f.Name()[0] == '.' {
+			flen--
 			continue
 		}
 
@@ -185,9 +191,22 @@ func (am *AccountManager) LoadFromDisk() error {
 		am.store[addr.Hex()] = key
 	}
 
+	if flen == 0 {
+		return ErrEmptyKeyDir
+	}
+
 	return nil
 }
 
 func (am *AccountManager) createAddress(key *ecdsa.PrivateKey) common.Address {
 	return crypto.PubkeyToAddress(key.PublicKey)
+}
+
+func (am *AccountManager) GetHexPrivateKey(pubKey string) string {
+	key := am.GetKey(pubKey)
+	if key == nil {
+		return ""
+	}
+
+	return "0x" + hex.EncodeToString(crypto.FromECDSA(key))
 }

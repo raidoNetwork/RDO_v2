@@ -11,18 +11,19 @@ const (
 	HashLength = 32
 	// AddressLength is the expected length of the address
 	AddressLength = 20
-
-	nullHash = "0x0000000000000000000000000000000000000000000000000000000000000000"
-	nullAddr = "0x0000000000000000000000000000000000000000"
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
-type Hash [HashLength]byte
+type Hash []byte
 
 // BytesToHash sets b to hash.
 // If b is larger than len(h), b will be cropped from the left.
 func BytesToHash(b []byte) Hash {
-	var h Hash
+	if len(b) == 0 || b == nil {
+		return nil
+	}
+
+	var h Hash = make([]byte, HashLength)
 	h.SetBytes(b)
 	return h
 }
@@ -30,16 +31,15 @@ func BytesToHash(b []byte) Hash {
 func HexToHash(s string) Hash { return BytesToHash(FromHex(s)) }
 
 // Bytes gets the byte representation of the underlying hash.
-func (h Hash) Bytes() []byte { return h[:] }
+func (h Hash) Bytes() []byte { return h }
 
 // Hex converts a hash to a hex string.
 func (h Hash) Hex() string {
-	str := Encode(h[:])
-
-	// need to avoid writing such hash to the db
-	if str == nullHash {
+	if h == nil {
 		return ""
 	}
+
+	str := Encode(h)
 
 	return str
 }
@@ -52,8 +52,8 @@ func (h Hash) String() string {
 
 // SetBytes sets the hash to the value of b.
 // If b is larger than len(h), b will be cropped from the left.
-func (h *Hash) SetBytes(b []byte) {
-	if len(b) > len(h) {
+func (h Hash) SetBytes(b []byte) {
+	if len(b) > HashLength {
 		b = b[len(b)-HashLength:]
 	}
 
@@ -61,7 +61,7 @@ func (h *Hash) SetBytes(b []byte) {
 }
 
 // Scan implements Scanner for database/sql.
-func (h *Hash) Scan(src interface{}) error {
+func (h Hash) Scan(src interface{}) error {
 	srcB, ok := src.([]byte)
 	if !ok {
 		return fmt.Errorf("can't scan %T into Hash", src)
@@ -69,22 +69,26 @@ func (h *Hash) Scan(src interface{}) error {
 	if len(srcB) != HashLength {
 		return fmt.Errorf("can't scan []byte of len %d into Hash, want %d", len(srcB), HashLength)
 	}
-	copy(h[:], srcB)
+	copy(h, srcB)
 	return nil
 }
 
 // Value implements valuer for database/sql.
 func (h Hash) Value() (driver.Value, error) {
-	return h[:], nil
+	return h, nil
 }
 
 // Address represents the 20 byte address of an Raido account.
-type Address [AddressLength]byte
+type Address []byte
 
 // BytesToAddress returns Address with value b.
 // If b is larger than len(h), b will be cropped from the left.
 func BytesToAddress(b []byte) Address {
-	var a Address
+	if len(b) == 0 || b == nil {
+		return nil
+	}
+
+	var a Address = make([]byte, AddressLength)
 	a.SetBytes(b)
 	return a
 }
@@ -102,19 +106,26 @@ func IsHexAddress(s string) bool {
 	return len(s) == 2*AddressLength && isHex(s)
 }
 
+func IsHexHash(s string) bool {
+	if has0xPrefix(s) {
+		s = s[2:]
+	}
+	return len(s) == 2*HashLength && isHex(s)
+}
+
 // Bytes gets the string representation of the underlying address.
-func (a Address) Bytes() []byte { return a[:] }
+func (a Address) Bytes() []byte { return a }
 
 // Hash converts an address to a hash by left-padding it with zeros.
-func (a Address) Hash() Hash { return BytesToHash(a[:]) }
+func (a Address) Hash() Hash { return BytesToHash(a) }
 
 // Hex returns
 func (a Address) Hex() string {
-	res := Encode(a[:])
-
-	if res == nullAddr {
+	if a == nil {
 		return ""
 	}
+
+	res := Encode(a)
 
 	return res
 }
@@ -126,27 +137,10 @@ func (a Address) String() string {
 
 // SetBytes sets the address to the value of b.
 // If b is larger than len(a), b will be cropped from the left.
-func (a *Address) SetBytes(b []byte) {
-	if len(b) > len(a) {
+func (a Address) SetBytes(b []byte) {
+	if len(b) > AddressLength {
 		b = b[len(b)-AddressLength:]
 	}
+
 	copy(a[AddressLength-len(b):], b)
-}
-
-// Scan implements Scanner for database/sql.
-func (a *Address) Scan(src interface{}) error {
-	srcB, ok := src.([]byte)
-	if !ok {
-		return fmt.Errorf("can't scan %T into Address", src)
-	}
-	if len(srcB) != AddressLength {
-		return fmt.Errorf("can't scan []byte of len %d into Address, want %d", len(srcB), AddressLength)
-	}
-	copy(a[:], srcB)
-	return nil
-}
-
-// Value implements valuer for database/sql.
-func (a Address) Value() (driver.Value, error) {
-	return a[:], nil
 }

@@ -3,14 +3,16 @@ package utxo
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/joho/godotenv"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/iface"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/utxo/dbshared"
-	"github.com/raidoNetwork/RDO_v2/blockchain/db/utxo/mysql"
-	"github.com/raidoNetwork/RDO_v2/blockchain/db/utxo/sqlite"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/sirupsen/logrus"
+	"os"
 	"sync"
 	"time"
 )
@@ -18,17 +20,29 @@ import (
 var log = logrus.WithField("prefix", "OutputDB")
 
 func NewStore(ctx context.Context, dbType string, config *iface.SQLConfig) (*Store, error) {
-	var db *sql.DB
-	var err error
-	var schema string
+	path := config.ConfigPath
+	if path == "" {
+		return nil, errors.New("Empty database cfg path.")
+	}
 
-	switch dbType {
-	case "mysql":
-		db, schema, err = mysql.NewStore(config)
-	case "sqlite":
-		db, schema, err = sqlite.NewStore(config)
-	default:
-		return nil, errors.Errorf("Unknown database type %s", dbType)
+	err := godotenv.Load(path)
+	if err != nil {
+		return nil,  errors.Errorf("Error loading .env file %s.", path)
+	}
+
+	var uname, pass, host, port string
+	uname = os.Getenv("DB_USER")
+	pass = os.Getenv("DB_PASS")
+	host = os.Getenv("DB_HOST")
+	port = os.Getenv("DB_PORT")
+
+	dataSource := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", uname, pass, host, port, dbshared.DBname)
+
+	log.Info("Database config was parsed successfully.")
+
+	db, err := sql.Open("mysql", dataSource)
+	if err != nil {
+		return nil, err
 	}
 
 	if err != nil {
@@ -41,10 +55,10 @@ func NewStore(ctx context.Context, dbType string, config *iface.SQLConfig) (*Sto
 		ctx:          ctx,
 		txID:         1,
 		tx:           make(map[int]*sql.Tx),
-		txStatus:     make(map[int]int),
 		cfg:          config,
 		canCreateTx:  true,
-		schema:       schema,
+		schema:       utxoSchema,
+		dbType:       dbType,
 	}
 
 	if err := str.createSchema(); err != nil {
@@ -59,13 +73,13 @@ type Store struct {
 	databasePath string
 	ctx          context.Context
 	tx           map[int]*sql.Tx
-	txStatus     map[int]int
 	txID         int
 	canCreateTx  bool
 	lock         sync.RWMutex
 	cfg          *iface.SQLConfig
 
 	schema string
+	dbType string
 }
 
 // Close - close database connections
@@ -117,9 +131,10 @@ func (s *Store) FindLastBlockNum() (num uint64, err error) {
 	return
 }
 
+// GetTotalAmount return sum amount of network
 func (s *Store) GetTotalAmount() (uint64, error) {
-	query := `SELECT IFNULL(SUM(amount), 0) FROM ` + dbshared.UtxoTable + ` WHERE tx_type != ?`
-	rows, err := s.db.Query(query, common.RewardTxType)
+	query := `SELECT IFNULL(SUM(amount), 0) FROM ` + dbshared.UtxoTable
+	rows, err := s.db.Query(query)
 	if err != nil {
 		return 0, nil
 	}
@@ -140,14 +155,14 @@ func (s *Store) GetTotalAmount() (uint64, error) {
 // FindStakeDeposits shows all actual stake deposits and return list of deposit outputs.
 func (s *Store) FindStakeDeposits() (uoArr []*types.UTxO, err error) {
 	query := `WHERE tx_type = ? AND address_node = ?`
-	return s.getOutputsList(query, common.StakeTxType, common.StakeAddress)
+	return s.getOutputsList(query, common.StakeTxType, common.BlackHoleAddress)
 }
 
 // FindStakeDepositsOfAddress shows actual stake deposits of given address
 // and return list of deposit outputs.
 func (s *Store) FindStakeDepositsOfAddress(address string) ([]*types.UTxO, error) {
 	query := `WHERE tx_type = ? AND address_node = ? AND address_to = ?`
-	return s.getOutputsList(query, common.StakeTxType, common.StakeAddress, address)
+	return s.getOutputsList(query, common.StakeTxType, common.BlackHoleAddress, address)
 }
 
 // getOutputsList return outputs list with given query and params.
@@ -159,29 +174,21 @@ func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*ty
 		return nil, err
 	}
 
-	defer rows.Close()
-
 	if s.cfg.ShowFullStat {
 		end := time.Since(start)
-		log.Debugf("Get query result object in %s.", common.StatFmt(end))
+		log.Debugf("Get query object in %s.", common.StatFmt(end))
 	}
+
+	defer rows.Close()
 
 	uoArr = make([]*types.UTxO, 0)
 
 	start = time.Now()
-	showStat := true
+
+	var hash, from, to, node string
+	var id, spent, blockNum, amount, timestamp uint64
+	var index, typev uint32
 	for rows.Next() {
-		if showStat && s.cfg.ShowFullStat {
-			log.Debugf("First row next in %s", common.StatFmt(time.Since(start)))
-			showStat = false
-		}
-
-		startInner := time.Now()
-
-		var hash, from, to, node string
-		var id, spent, blockNum, amount, timestamp uint64
-		var index, typev uint32
-
 		err = rows.Scan(&id, &hash, &index, &from, &to, &node, &amount, &spent, &timestamp, &blockNum, &typev)
 		if err != nil {
 			return
@@ -193,11 +200,6 @@ func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*ty
 		}
 
 		uoArr = append(uoArr, uo)
-
-		if s.cfg.ShowFullStat {
-			endInner := time.Since(startInner)
-			log.Debugf("Parse one row in %s.", common.StatFmt(endInner))
-		}
 	}
 
 	if s.cfg.ShowFullStat {

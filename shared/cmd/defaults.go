@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"path/filepath"
 	"github.com/raidoNetwork/RDO_v2/shared/fileutil"
+	"path/filepath"
 	"runtime"
 )
 

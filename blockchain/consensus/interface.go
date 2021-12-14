@@ -55,9 +55,10 @@ type BlockSpecifying interface {
 	GetTransactionsCount([]byte) (uint64, error)
 }
 
+// StakeValidator regulates stake slots condition.
 type StakeValidator interface {
 	// RegisterStake add stake balance with data in transaction
-	RegisterStake([]byte) error
+	RegisterStake([]byte, uint64) error
 
 	// UnregisterStake unregister stake slots.
 	UnregisterStake([]byte) error
@@ -68,8 +69,8 @@ type StakeValidator interface {
 	// CanStake shows stake slots is filled or not.
 	CanStake() bool
 
-	// ReserveSlot mark validator slot as filled until block will be forged.
-	ReserveSlot() error
+	// ReserveSlots mark validator slots as filled until block will be forged.
+	ReserveSlots(uint64) error
 
 	// FlushReserved flush all reserved slots
 	FlushReserved()

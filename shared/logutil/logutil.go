@@ -1,10 +1,10 @@
 package logutil
 
 import (
+	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/sirupsen/logrus"
 	"io"
 	"os"
-	"github.com/raidoNetwork/RDO_v2/shared/params"
 )
 
 func addLogWriter(w io.Writer) {

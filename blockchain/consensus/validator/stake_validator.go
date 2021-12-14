@@ -12,12 +12,14 @@ import (
 
 var log = logrus.WithField("prefix", "Attestation")
 
-func NewValidator(outm consensus.OutputsReader, slotsLimit int, reward uint64) (consensus.StakeValidator, error) {
+func NewValidator(outm consensus.OutputsReader, slotsLimit int, reward uint64, stakeAmount uint64) (consensus.StakeValidator, error) {
 	vg := &ValidatorGerm{
 		slots:         make([]string, 0, slotsLimit),
 		reservedSlots: make([]int, 0),
 		mu:            sync.RWMutex{},
 		blockReward:   reward,
+		stakeAmount: stakeAmount,
+
 		slotsLimit:    slotsLimit,
 		outm:          outm,
 	}
@@ -37,6 +39,7 @@ type ValidatorGerm struct {
 	slots         []string // address list
 	reservedSlots []int
 	mu            sync.RWMutex
+	stakeAmount   uint64
 
 	outm consensus.OutputsReader
 }
@@ -48,7 +51,7 @@ func (vg *ValidatorGerm) LoadSlots() error {
 	}
 
 	for _, uo := range deposits {
-		err = vg.RegisterStake(uo.To.Bytes())
+		err = vg.RegisterStake(uo.To, uo.Amount)
 		if err != nil {
 			log.Error("Inconsistent stake deposits.")
 			return err
@@ -65,17 +68,40 @@ func (vg *ValidatorGerm) CanStake() bool {
 	vg.mu.RLock()
 	defer vg.mu.RUnlock()
 
-	return len(vg.slots)+len(vg.reservedSlots) < vg.slotsLimit
+	return vg.emptySlots() < vg.slotsLimit
 }
 
-// ReserveSlot add address to reserved slots
-func (vg *ValidatorGerm) ReserveSlot() error {
+func (vg *ValidatorGerm) emptySlots() int {
+	return len(vg.slots)+len(vg.reservedSlots)
+}
+
+// ReserveSlots add address to reserved slots
+func (vg *ValidatorGerm) ReserveSlots(amount uint64) error {
 	if !vg.CanStake() {
 		return errors.New("All stake slots are filled.")
 	}
 
 	vg.mu.Lock()
-	vg.reservedSlots = append(vg.reservedSlots, 1)
+	stakeAmount := vg.stakeAmount
+	vg.mu.Unlock()
+
+	count := amount / stakeAmount
+
+	if count == 0 {
+		return errors.New("Too low amount for staking.")
+	}
+
+	if uint64(vg.emptySlots()) < count {
+		return errors.New("Can't reserve all slots with given amount.")
+	}
+
+	vg.mu.Lock()
+
+	var i uint64
+	for ;i < count;i++ {
+		vg.reservedSlots = append(vg.reservedSlots, 1)
+	}
+
 	vg.mu.Unlock()
 
 	return nil
@@ -89,7 +115,7 @@ func (vg *ValidatorGerm) FlushReserved() {
 }
 
 // RegisterStake close validator slots
-func (vg *ValidatorGerm) RegisterStake(addr []byte) error {
+func (vg *ValidatorGerm) RegisterStake(addr []byte, amount uint64) error {
 	empty := vg.getEmptySlots()
 	if empty == 0 {
 		return errors.New("Validator slots limit is reached.")
@@ -99,10 +125,22 @@ func (vg *ValidatorGerm) RegisterStake(addr []byte) error {
 		return errors.New("Validator slots inconsistent.")
 	}
 
+	vg.mu.Lock()
+	stakeAmount := vg.stakeAmount
+	vg.mu.Unlock()
+
 	address := common.BytesToAddress(addr)
+	count := amount / stakeAmount
+
+	if uint64(empty) < count {
+		return errors.Errorf("Can't feel all slots. Empty: %d. Given: %d.", empty, count)
+	}
 
 	vg.mu.Lock()
-	vg.slots = append(vg.slots, address.Hex())
+	var i uint64
+	for ;i < count;i++ {
+		vg.slots = append(vg.slots, address.Hex())
+	}
 	vg.mu.Unlock()
 
 	return nil
@@ -112,21 +150,26 @@ func (vg *ValidatorGerm) RegisterStake(addr []byte) error {
 func (vg *ValidatorGerm) UnregisterStake(addr []byte) error {
 	address := common.BytesToAddress(addr).Hex()
 
+	/*vg.mu.Lock()
+	stakeAmount := vg.stakeAmount
+	vg.mu.Unlock()
+
+	count := amount / stakeAmount*/
+
 	vg.mu.Lock()
 	defer vg.mu.Unlock()
 
-	notFound := true
+	foundSlots := 0
 	for i, a := range vg.slots {
 		if a == address {
 			vg.slots = append(vg.slots[:i], vg.slots[i+1:]...)
-			notFound = false
-			break
+			foundSlots++
 		}
 	}
 
-	if notFound {
-		return errors.Errorf("Undefined staker %s.", address)
-	}
+	/*if uint64(foundSlots) != count {
+		return errors.Errorf("Inconsistent slots for %s. Given: %d. Found: %d.", address, count, foundSlots)
+	}*/
 
 	return nil
 }

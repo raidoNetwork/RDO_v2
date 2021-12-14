@@ -6,9 +6,7 @@ import (
 
 type Database = iface.Database
 
-type DataRow = iface.DataRow
-
-type BlockStorage = iface.BlockStorage
+type BlockStorage = iface.ChainStorage
 
 type OutputStorage = iface.OutputStorage
 

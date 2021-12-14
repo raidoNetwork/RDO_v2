@@ -14,5 +14,6 @@ var (
 	blockPrefix       = []byte("block")
 	transactionPrefix = []byte("tx-hash")
 	addressPrefix     = []byte("address")
-)
 
+	statsKey = []byte("statistic")
+)

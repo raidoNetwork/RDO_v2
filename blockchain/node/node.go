@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/rdochain"
+	"github.com/raidoNetwork/RDO_v2/blockchain/core/settings"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/kv"
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
 	"github.com/raidoNetwork/RDO_v2/gateway"
+	"github.com/raidoNetwork/RDO_v2/generator"
 	"github.com/raidoNetwork/RDO_v2/rpc"
 	"github.com/raidoNetwork/RDO_v2/shared"
 	"github.com/raidoNetwork/RDO_v2/shared/cmd"
+	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/version"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -21,11 +24,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-)
-
-const (
-	statusNotReady = iota
-	statusReady
 )
 
 var log = logrus.WithField("prefix", "node")
@@ -40,21 +38,18 @@ type RDONode struct {
 	services *shared.ServiceRegistry
 	lock     sync.RWMutex
 	stop     chan struct{} // Channel to wait for termination notifications.
-	kvStore       db.Database
+	kvStore  db.Database
 	outDB    db.OutputDatabase
-
-	status int // Node ready status
 }
 
 // New creates a new node instance, sets up configuration options, and registers
 // every required service to the node.
 func New(cliCtx *cli.Context) (*RDONode, error) {
-	/*if err := configureTracing(cliCtx); err != nil {
-		return nil, err
-	} */
+	// Setup default config
+	params.UseMainnetConfig()
 
 	// load chain config from file if special file has been given
-	configureChainConfig(cliCtx)
+	settings.ConfigureChainConfig(cliCtx)
 
 	// services map
 	registry := shared.NewServiceRegistry()
@@ -66,7 +61,6 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 		cancel:   cancel,
 		services: registry,
 		stop:     make(chan struct{}),
-		status:   statusNotReady,
 	}
 
 	// create database
@@ -113,13 +107,17 @@ func (r *RDONode) registerRPCservice() error {
 
 	host := r.cliCtx.String(flags.RPCHost.Name)
 	port := r.cliCtx.String(flags.RPCPort.Name)
+	maxMsgSize := r.cliCtx.Int(cmd.GrpcMaxCallRecvMsgSizeFlag.Name)
+
+	genService := generator.NewService(chainService)
 
 	srv := rpc.NewService(r.ctx, &rpc.Config{
 		Host:               host,
 		Port:               port,
 		ChainService:       chainService,
-		AttestationService: chainService, // TODO change it to another service in future
-		MaxMsgSize:         1 << 22,
+		AttestationService: chainService,
+		GeneratorService:   genService,
+		MaxMsgSize:         maxMsgSize,
 	})
 
 	return r.services.RegisterService(srv)
@@ -132,22 +130,25 @@ func (r *RDONode) registerGatewayService() error {
 	remoteAddr := fmt.Sprintf("%s:%d", host, rpcPort)
 	endpoint := fmt.Sprintf("%s:%d", host, port)
 	allowedOrigins := strings.Split(r.cliCtx.String(flags.GPRCGatewayCorsDomain.Name), ",")
+	maxMsgSize := r.cliCtx.Int(cmd.GrpcMaxCallRecvMsgSizeFlag.Name)
 
 	gatewayConfig := gateway.DefaultConfig()
 
 	srv := gateway.NewService(r.ctx,
 		remoteAddr,
 		endpoint,
+		maxMsgSize,
 		[]gateway.PbMux{gatewayConfig.PbMux},
 		gatewayConfig.Handler).WithAllowedOrigins(allowedOrigins)
 
 	return r.services.RegisterService(srv)
 }
 
-
 // Start the RDONode and kicks off every registered service.
 func (r *RDONode) Start() {
-	log.WithField("Version", version.Version()).Info("Starting raido node")
+	log.WithFields(logrus.Fields{
+		"version": version.Version(),
+	}).Info("Starting raido node")
 
 	r.lock.Lock()
 	r.services.StartAll()
@@ -184,7 +185,7 @@ func (r *RDONode) Close() {
 	r.services.StopAll()
 
 	if err := r.kvStore.Close(); err != nil {
-		log.Errorf("Failed to close database: %v", err)
+		log.Errorf("Failed to close KV database: %v", err)
 	}
 
 	if err := r.outDB.Close(); err != nil {
@@ -195,6 +196,8 @@ func (r *RDONode) Close() {
 	close(r.stop)
 }
 
+// startDB create database files and prepare databases schema.
+// Also clear database if certain flags given.
 func (r *RDONode) startDB(cliCtx *cli.Context) error {
 	baseDir := cliCtx.String(cmd.DataDirFlag.Name)
 	dbPath := filepath.Join(baseDir, kv.RdoNodeDbDirName)

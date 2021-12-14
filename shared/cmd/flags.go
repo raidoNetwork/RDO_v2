@@ -22,28 +22,29 @@ var (
 	}
 
 	// SQLType defines SQL database type.
-	SQLType = &cli.StringFlag{
+	SQLType = altsrc.NewStringFlag(&cli.StringFlag{
 		Name:  "sql-db-type",
-		Usage: "Set SQL database type to use. When use MySQL, flag with db config path should be given.",
+		Usage: "Set SQL database type to use. When use MySQL database config path should be given.",
 		Value: "mysql",
-	}
+	})
 
 	// SQLConfigPath setups path to the MySQL config file.
-	SQLConfigPath = &cli.StringFlag{
+	SQLConfigPath = altsrc.NewStringFlag(&cli.StringFlag{
 		Name:  "sql-db-cfg",
 		Usage: "Config file directory with MySQL user and password",
-	}
+	})
+
 	// DataDirFlag defines a path on disk.
-	DataDirFlag = &cli.StringFlag{
+	DataDirFlag = altsrc.NewStringFlag(&cli.StringFlag{
 		Name:  "datadir",
 		Usage: "Data directory for the databases and keystore",
 		Value: DefaultDataDir(),
-	}
+	})
 	// LogFileName specifies the log output file name.
-	LogFileName = &cli.StringFlag{
+	LogFileName = altsrc.NewStringFlag(&cli.StringFlag{
 		Name:  "log-file",
 		Usage: "Specify log file name, relative or absolute",
-	}
+	})
 	// ConfigFileFlag specifies the filepath to load flag values.
 	ConfigFileFlag = &cli.StringFlag{
 		Name:  "config-file",
@@ -55,42 +56,17 @@ var (
 		Usage: "The path to a YAML file with chain config values",
 	}
 	// GrpcMaxCallRecvMsgSizeFlag defines the max call message size for GRPC
-	GrpcMaxCallRecvMsgSizeFlag = &cli.IntFlag{
+	GrpcMaxCallRecvMsgSizeFlag = altsrc.NewIntFlag(&cli.IntFlag{
 		Name:  "grpc-max-msg-size",
 		Usage: "Integer to define max recieve message call size (default: 4194304 (for 4MB))",
 		Value: 1 << 22,
-	}
+	})
 	// BoltMMapInitialSizeFlag specifies the initial size in bytes of boltdb's mmap syscall.
-	BoltMMapInitialSizeFlag = &cli.IntFlag{
+	BoltMMapInitialSizeFlag = altsrc.NewIntFlag(&cli.IntFlag{
 		Name:  "bolt-mmap-initial-size",
 		Usage: "Specifies the size in bytes of bolt db's mmap syscall allocation",
 		Value: 536870912, // 512 Mb as a default value.
-	}
-
-	// EnableTracingFlag defines a flag to enable p2p message tracing.
-	EnableTracingFlag = &cli.BoolFlag{
-		Name:  "enable-tracing",
-		Usage: "Enable request tracing.",
-	}
-	// TracingProcessNameFlag defines a flag to specify a process name.
-	TracingProcessNameFlag = &cli.StringFlag{
-		Name:  "tracing-process-name",
-		Usage: "The name to apply to tracing tag \"process_name\"",
-		Value: "raido-trace",
-	}
-	// TracingEndpointFlag flag defines the http endpoint for serving traces to Jaeger.
-	TracingEndpointFlag = &cli.StringFlag{
-		Name:  "tracing-endpoint",
-		Usage: "Tracing endpoint defines where raido chain traces are exposed to Jaeger.",
-		Value: "http://127.0.0.1:14268/api/traces",
-	}
-	// TraceSampleFractionFlag defines a flag to indicate what fraction of p2p
-	// messages are sampled for tracing.
-	TraceSampleFractionFlag = &cli.Float64Flag{
-		Name:  "trace-sample-fraction",
-		Usage: "Indicate what fraction of p2p messages are sampled for tracing.",
-		Value: 0.20,
-	}
+	})
 )
 
 // LoadFlagsFromConfig sets flags values from config file if ConfigFileFlag is set.
@@ -100,6 +76,7 @@ func LoadFlagsFromConfig(cliCtx *cli.Context, flags []cli.Flag) error {
 			return err
 		}
 	}
+
 	return nil
 }
 

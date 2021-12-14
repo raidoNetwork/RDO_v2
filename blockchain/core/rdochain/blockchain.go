@@ -23,25 +23,30 @@ const (
 	GenesisBlockNum = 0
 )
 
-var (
-	GenesisHash = crypto.Keccak256([]byte("genesis-hash"))
+var log = logrus.WithField("prefix", "rdochain")
 
-	log = logrus.WithField("prefix", "rdochain")
+var (
+	randSignArr = make([]byte, crypto.SignatureLength)
+	nodeAddress = crypto.Keccak256Hash([]byte("super-node"))[12:]
 )
 
-// nodeAddress hex - a91b3079bdbf477fb8bf39eb329052e286ae47d5e878f5f5d9e70737296cb25b
-var nodeAddress = crypto.Keccak256Hash([]byte("super-node"))
+func init() {
+	// create random sign hash for block validators
+	rand.Read(randSignArr)
+}
 
 func NewBlockChain(db db.BlockStorage, ctx *cli.Context, cfg *params.RDOBlockChainConfig) (*BlockChain, error) {
-	bc := BlockChain{
-		db:              db,
-		prevHash:        GenesisHash,
-		currentBlockNum: GenesisBlockNum,
-		blockNum:        GenesisBlockNum + 1,          // block num for the future block
-		fullStatFlag:    ctx.Bool(flags.SrvStat.Name), // stat flag
+	genesisHash := crypto.Keccak256Hash([]byte("genesis"))
 
-		lock: sync.RWMutex{},
-		cfg: cfg,
+	bc := BlockChain{
+		db:             db,
+		prevHash:       genesisHash,
+		headBlockNum:   GenesisBlockNum,
+		futureBlockNum: GenesisBlockNum + 1,          // block num for the future block
+		showTimeStat:   ctx.Bool(flags.SrvStat.Name), // stat flag
+		genesisHash:    genesisHash,
+		lock:           sync.RWMutex{},
+		cfg:            cfg,
 	}
 
 	err := bc.Init()
@@ -56,12 +61,13 @@ type BlockChain struct {
 	db db.BlockStorage
 
 	prevHash     []byte
-	blockNum     uint64
-	fullStatFlag bool
+	showTimeStat bool
 
-	currentBlockNum uint64
-	currentBlock    *prototype.Block
-	genesisBlock    *prototype.Block
+	futureBlockNum uint64
+	headBlockNum   uint64
+	headBlock      *prototype.Block
+	genesisBlock   *prototype.Block
+	genesisHash    []byte
 
 	lock sync.RWMutex
 
@@ -71,12 +77,6 @@ type BlockChain struct {
 // Init check database and update block num and previous hash
 func (bc *BlockChain) Init() error {
 	log.Info("Init blockchain data.")
-
-	// insert Genesis if not exists
-	err := bc.insertGenesis()
-	if err != nil {
-		return err
-	}
 
 	// get head block
 	head, err := bc.db.GetHeadBlockNum()
@@ -89,14 +89,14 @@ func (bc *BlockChain) Init() error {
 				return err
 			}
 
-			if bc.fullStatFlag {
+			if bc.showTimeStat {
 				end := time.Since(start)
 				log.Infof("Init: Count KV rows num in %s.", common.StatFmt(end))
 			}
 
 			// save head block link
-			head = uint64(count) - 1 // skip genesis key
-			err = bc.SaveHeadBlockNum(head)
+			head = uint64(count) // skip genesis key
+			err = bc.saveHeadBlockNum(head)
 			if err != nil {
 				return err
 			}
@@ -105,120 +105,161 @@ func (bc *BlockChain) Init() error {
 		}
 	}
 
-	var block *prototype.Block
-
-	// update counter according to the database
-	bc.currentBlockNum = head            // head block number
-	bc.blockNum = bc.currentBlockNum + 1 // future block num
-
-	if head != 0 {
-		// get last block
-		block, err = bc.GetBlockByNum(bc.currentBlockNum)
-	} else {
-		// if head equal to zero return Genesis
-		block, err = bc.db.GetGenesis()
-	}
-
+	// insert Genesis if not exists
+	err = bc.insertGenesis()
 	if err != nil {
 		return err
 	}
 
+	var block *prototype.Block
+
+	// update counter according to the database
+	bc.headBlockNum = head                  // head block number
+	bc.futureBlockNum = bc.headBlockNum + 1 // future block num
+
+	if head != 0 {
+		// get last block
+		block, err = bc.GetBlockByNum(bc.headBlockNum)
+	} else {
+		// if head is equal to zero return Genesis
+		block, err = bc.db.GetGenesis()
+		bc.genesisHash = block.Hash[:]
+	}
+
+	if err != nil {
+		log.Errorf("Error reading head block #%d", head)
+		return err
+	}
+
 	if block == nil {
-		log.Errorf("Init: Not found block with num %d.", bc.currentBlockNum)
+		log.Errorf("Init: Not found block with num %d.", bc.headBlockNum)
 		return errors.New("block not found")
 	}
 
-	log.Infof("Database has %d blocks. Future block num %d.", bc.currentBlockNum, bc.blockNum)
+	log.Infof("Database has %d blocks. Future block num %d.", bc.headBlockNum, bc.futureBlockNum)
 
 	bc.prevHash = block.Hash[:]
-	bc.currentBlock = block
+	bc.headBlock = block
 
 	return nil
 }
 
 // GenerateBlock creates block from given batch of transactions and store it to the database.
-func (bc *BlockChain) GenerateBlock(tx []*prototype.Transaction) (*prototype.Block, error) {
-	timestamp := time.Now().UnixNano()
-
+func (bc *BlockChain) GenerateBlock(txBatch []*prototype.Transaction) (*prototype.Block, error) {
 	// generate fee tx for block
-	if len(tx) > 0 {
-		txFee, err := bc.createFeeTx(tx)
+	if len(txBatch) > 0 {
+		txFee, err := bc.createFeeTx(txBatch)
 		if err != nil {
 			if !errors.Is(err, ErrZeroFeeAmount) {
 				return nil, err
+			} else {
+				log.Debug(err)
 			}
 		} else {
-			tx = append(tx, txFee)
+			txBatch = append(txBatch, txFee)
 		}
 	}
 
 	start := time.Now()
 
 	// create tx merklee tree root
-	txRoot, err := bc.GenTxRoot(tx)
+	txRoot, err := bc.GenTxRoot(txBatch)
 	if err != nil {
 		return nil, err
 	}
 
-	if bc.fullStatFlag {
+	if bc.showTimeStat {
 		end := time.Since(start)
-		log.Infof("GenerateBlock: Create tx root in %s.", common.StatFmt(end))
+		log.Debugf("GenerateBlock: Create tx root in %s.", common.StatFmt(end))
 	}
 
 	// get num for future block
 	blockNum := bc.GetBlockCount()
 
+	version := []byte{1, 0, 0}
+	tstamp := uint64(time.Now().UnixNano())
+
 	// generate block hash
-	hash := hasher.BlockHash(blockNum, bc.prevHash, txRoot, nodeAddress.Bytes())
+	hash := hasher.BlockHash(blockNum, version, bc.prevHash, txRoot, tstamp, nodeAddress.Bytes())
 
 	block := &prototype.Block{
-		Num:       blockNum,
-		Version:   []byte{1, 0, 0},
-		Hash:      hash,
-		Parent:    bc.prevHash,
-		Txroot:    txRoot,
-		Timestamp: uint64(timestamp),
-		Proposer:  bc.sign(nodeAddress.Bytes()),
-		Approvers: []*prototype.Sign{
-			bc.sign(hash),
-			bc.sign(hash),
-			bc.sign(hash),
-		},
-		Slashers: []*prototype.Sign{
-			bc.sign(hash),
-			bc.sign(hash),
-		},
-		Transactions: tx,
+		Num:          blockNum,
+		Version:      version,
+		Hash:         hash,
+		Parent:       bc.prevHash,
+		Txroot:       txRoot,
+		Timestamp:    tstamp,
+		Proposer:     bc.sign(nodeAddress.Bytes()),
+		Transactions: txBatch,
 	}
 
 	return block, nil
 }
 
-func (bc *BlockChain) SaveHeadBlockNum(n uint64) error {
+// saveHeadBlockNum save given number to the database as head number.
+func (bc *BlockChain) saveHeadBlockNum(n uint64) error {
 	return bc.db.SaveHeadBlockNum(n)
 }
 
 // SaveBlock stores given block in the database.
 func (bc *BlockChain) SaveBlock(block *prototype.Block) error {
+	var end time.Duration
+	start := time.Now()
+
 	err := bc.db.WriteBlock(block)
 	if err != nil {
 		return err
 	}
 
-	err = bc.SaveHeadBlockNum(block.Num)
+	if bc.showTimeStat {
+		end = time.Since(start)
+		log.Infof("Save block data in %s", common.StatFmt(end))
+	}
+
+	start = time.Now()
+
+	err = bc.saveHeadBlockNum(block.Num)
 	if err != nil {
 		return err
 	}
 
+	if bc.showTimeStat {
+		end = time.Since(start)
+		log.Infof("Save head block number in %s", common.StatFmt(end))
+	}
+
+	start = time.Now()
+
+	var fee, reward uint64 // fee amount for block
+	for _, tx := range block.Transactions {
+		if tx.Type == common.RewardTxType {
+			reward = tx.Outputs[0].Amount * uint64(len(tx.Outputs))
+		}
+
+		if tx.Type == common.FeeTxType {
+			for _, out := range tx.Outputs {
+				fee += out.Amount
+			}
+		}
+	}
+
+	err = bc.db.UpdateAmountStats(reward, fee)
+	if err != nil {
+		return err
+	}
+
+	if bc.showTimeStat {
+		end = time.Since(start)
+		log.Infof("Save supply data in %s", common.StatFmt(end))
+	}
+
 	// update blocks stats
 	bc.lock.Lock()
-	bc.currentBlockNum++
-	bc.blockNum++
+	bc.headBlockNum++
+	bc.futureBlockNum++
 	bc.prevHash = block.Hash
-	bc.currentBlock = block
+	bc.headBlock = block
 	bc.lock.Unlock()
-
-	log.Warn("Block data was successfully saved.")
 
 	return nil
 }
@@ -226,7 +267,11 @@ func (bc *BlockChain) SaveBlock(block *prototype.Block) error {
 // GetBlockByNum returns block from database by block number
 func (bc *BlockChain) GetBlockByNum(num uint64) (*prototype.Block, error) {
 	if num == 0 {
-		return bc.genesisBlock, nil
+		return bc.GetGenesis(), nil
+	}
+
+	if num > bc.GetHeadBlockNum() {
+		return nil, errors.New("Given block number is not forged yet.")
 	}
 
 	return bc.db.GetBlockByNum(num)
@@ -234,8 +279,8 @@ func (bc *BlockChain) GetBlockByNum(num uint64) (*prototype.Block, error) {
 
 // GetBlockByHash returns block
 func (bc *BlockChain) GetBlockByHash(hash []byte) (*prototype.Block, error) {
-	if bytes.Equal(hash, GenesisHash) {
-		return bc.genesisBlock, nil
+	if bytes.Equal(hash, bc.genesisHash) {
+		return bc.GetGenesis(), nil
 	}
 
 	return bc.db.GetBlockByHash(hash)
@@ -243,12 +288,13 @@ func (bc *BlockChain) GetBlockByHash(hash []byte) (*prototype.Block, error) {
 
 // sign test function for signing some data
 func (bc *BlockChain) sign(addr []byte) *prototype.Sign {
-	randSign := make([]byte, crypto.SignatureLength)
-	rand.Read(randSign)
+	if len(addr) > common.AddressLength {
+		addr = addr[:common.AddressLength]
+	}
 
 	sign := &prototype.Sign{
 		Address:   addr,
-		Signature: randSign,
+		Signature: randSignArr,
 	}
 
 	return sign
@@ -259,7 +305,7 @@ func (bc *BlockChain) GetBlockCount() uint64 {
 	bc.lock.RLock()
 	defer bc.lock.RUnlock()
 
-	return bc.blockNum
+	return bc.futureBlockNum
 }
 
 // GenTxRoot create transactions root hash of block
@@ -278,31 +324,34 @@ func (bc *BlockChain) GenTxRoot(txarr []*prototype.Transaction) ([]byte, error) 
 	return root, nil
 }
 
-// GetCurrentBlock get last block
-func (bc *BlockChain) GetCurrentBlock() (*prototype.Block, error) {
-	if bc.currentBlock == nil {
-		blk, err := bc.GetBlockByNum(bc.currentBlockNum)
+// GetHeadBlock get last block
+func (bc *BlockChain) GetHeadBlock() (*prototype.Block, error) {
+	bc.lock.Lock()
+	defer bc.lock.Unlock()
+
+	if bc.headBlock == nil {
+		blk, err := bc.GetBlockByNum(bc.headBlockNum)
 		if err != nil {
 			return nil, err
 		}
 
 		if blk == nil {
-			return nil, errors.Errorf("GetCurrentBlock: Not found block with number %d.", bc.currentBlockNum)
+			return nil, errors.Errorf("GetCurrentBlock: Not found block with number %d.", bc.headBlockNum)
 		}
 
-		bc.currentBlock = blk
+		bc.headBlock = blk
 		return blk, nil
 	} else {
-		return bc.currentBlock, nil
+		return bc.headBlock, nil
 	}
 }
 
-// GetCurrentBlockNum get number of last block in the chain
-func (bc *BlockChain) GetCurrentBlockNum() uint64 {
+// GetHeadBlockNum get number of last block in the chain
+func (bc *BlockChain) GetHeadBlockNum() uint64 {
 	bc.lock.RLock()
 	defer bc.lock.RUnlock()
 
-	return bc.currentBlockNum
+	return bc.headBlockNum
 }
 
 // GetTransaction get transaction with given hash from KV.
@@ -318,4 +367,9 @@ func (bc *BlockChain) GetTransaction(hash string) (*prototype.Transaction, error
 // GetTransactionsCount get address nonce.
 func (bc *BlockChain) GetTransactionsCount(addr []byte) (uint64, error) {
 	return bc.db.GetTransactionsCount(addr)
+}
+
+// GetAmountStats returns total reward and fee amount
+func (bc *BlockChain) GetAmountStats() (uint64, uint64) {
+	return bc.db.GetAmountStats()
 }

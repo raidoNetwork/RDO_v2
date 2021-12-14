@@ -7,15 +7,20 @@ import (
 
 var (
 	ErrMerkleeTreeCreation = errors.New("Error creating MerkleeTree")
+	EmptyTxRoot            = crypto.Keccak256([]byte("empty-tx-body"))
 )
 
-// merkleeRoot return root hash with given []byte
+// MerkleeRoot return root hash with given []byte
 func MerkleeRoot(data [][]byte) (res []byte, err error) {
 	size := len(data)
 
 	lvlKoef := size % 2
 	lvlCount := size/2 + lvlKoef
 	lvlSize := size
+
+	if lvlCount == 0 {
+		return EmptyTxRoot, nil
+	}
 
 	prevLvl := data
 	tree := make([][][]byte, lvlCount)

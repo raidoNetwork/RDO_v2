@@ -6,8 +6,23 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
 	"github.com/raidoNetwork/RDO_v2/shared/hasher"
 	"github.com/sirupsen/logrus"
+	"sync"
 	"time"
 )
+
+var log = logrus.WithField("prefix", "types")
+
+var txSigner TxSigner
+var changeOutput = NewOutput(make([]byte, 20), 200, nil)
+
+func getTxSigner() TxSigner {
+	// create transaction signer if not exist
+	if txSigner == nil {
+		txSigner = MakeTxSigner("keccak256")
+	}
+
+	return txSigner
+}
 
 type TxOptions struct {
 	Inputs  []*prototype.TxInput
@@ -17,8 +32,6 @@ type TxOptions struct {
 	Num     uint64
 	Type    uint32
 }
-
-var log = logrus.WithField("prefix", "types")
 
 // NewTx creates new transaction with given options
 func NewTx(opts TxOptions, key *ecdsa.PrivateKey) (*prototype.Transaction, error) {
@@ -41,16 +54,10 @@ func NewTx(opts TxOptions, key *ecdsa.PrivateKey) (*prototype.Transaction, error
 	tx.Hash = hash[:]
 
 	if key != nil {
-		signer := MakeTxSigner("keccak256")
-
-		// signature digest = Keccak256(hash)
-		dgst := GetTxDomain(tx.Hash)
-		sign, err := signer.Sign(dgst, key)
+		err = SignTx(tx, key)
 		if err != nil {
 			return nil, err
 		}
-
-		tx.Signature = sign
 	} else {
 		tx.Signature = make([]byte, crypto.SignatureLength)
 	}
@@ -58,13 +65,33 @@ func NewTx(opts TxOptions, key *ecdsa.PrivateKey) (*prototype.Transaction, error
 	return tx, nil
 }
 
+func CountTxFee(opts TxOptions) (uint64, uint64) {
+	tx := new(prototype.Transaction)
+
+	tx.Num = opts.Num
+	tx.Type = opts.Type
+	tx.Timestamp = uint64(time.Now().UnixNano())
+	tx.Fee = opts.Fee
+	tx.Data = opts.Data
+	tx.Inputs = opts.Inputs
+	tx.Outputs = opts.Outputs
+	tx.Hash = make([]byte, 32)
+	tx.Signature = make([]byte, crypto.SignatureLength)
+
+	fee := tx.GetRealFee()
+
+	tx.Outputs = append(tx.Outputs, changeOutput)
+
+	extraFee := tx.GetRealFee()
+
+	return fee, extraFee
+}
+
 // SignTx create transaction signature with given private key
 func SignTx(tx *prototype.Transaction, key *ecdsa.PrivateKey) error {
-	signer := MakeTxSigner("keccak256")
-
 	// signature digest = Keccak256(hash)
 	dgst := GetTxDomain(tx.Hash)
-	sign, err := signer.Sign(dgst, key)
+	sign, err := getTxSigner().Sign(dgst, key)
 	if err != nil {
 		return err
 	}
@@ -74,58 +101,75 @@ func SignTx(tx *prototype.Transaction, key *ecdsa.PrivateKey) error {
 	return nil
 }
 
-
 func NewTxData(tx *prototype.Transaction) *TransactionData {
 	td := TransactionData{
-		tx:    tx,
-		size:  tx.SizeSSZ(),
-		fee:   tx.Fee,
-		num:   tx.Num,
+		tx:        tx,
+		size:      tx.SizeSSZ(),
+		fee:       tx.Fee,
+		num:       tx.Num,
 		timestamp: tx.Timestamp,
-		alias: make([]string, 0),
+		alias:     make([]string, 0),
+		lock:      sync.RWMutex{},
 	}
 
 	return &td
 }
 
 type TransactionData struct {
-	tx    *prototype.Transaction
-	size  int
-	fee   uint64
-	num   uint64
-	alias []string
+	tx        *prototype.Transaction
+	size      int
+	fee       uint64
+	num       uint64
+	alias     []string
 	timestamp uint64
-	status int
+	lock      sync.RWMutex
 }
 
 func (td *TransactionData) GetTx() *prototype.Transaction {
+	td.lock.Lock()
+	defer td.lock.Unlock()
+
 	return td.tx
 }
 
 func (td *TransactionData) Size() int {
+	td.lock.RLock()
+	defer td.lock.RUnlock()
+
 	return td.size
 }
 
 func (td *TransactionData) Fee() uint64 {
+	td.lock.RLock()
+	defer td.lock.RUnlock()
+
 	return td.fee
 }
 
 func (td *TransactionData) Num() uint64 {
+	td.lock.RLock()
+	defer td.lock.RUnlock()
+
 	return td.num
 }
 
 func (td *TransactionData) Timestamp() uint64 {
+	td.lock.RLock()
+	defer td.lock.RUnlock()
+
 	return td.timestamp
 }
 
 func (td *TransactionData) AddAlias(hash string) {
+	td.lock.Lock()
+	defer td.lock.Unlock()
+
 	td.alias = append(td.alias, hash)
 }
 
 func (td *TransactionData) GetAlias() []string {
-	return td.alias
-}
+	td.lock.RLock()
+	defer td.lock.RUnlock()
 
-func (td *TransactionData) SetStatus(s int){
-	td.status = s
+	return td.alias
 }

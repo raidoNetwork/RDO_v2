@@ -63,12 +63,14 @@ func Keccak256(data ...[]byte) []byte {
 
 // Keccak256Hash calculates and returns the Keccak256 hash of the input data,
 // converting it to an internal Hash data structure.
-func Keccak256Hash(data ...[]byte) (h common.Hash) {
+func Keccak256Hash(data ...[]byte) common.Hash {
+	buf := make([]byte, common.HashLength)
 	d := NewKeccakState()
 	for _, b := range data {
 		d.Write(b)
 	}
-	d.Read(h[:])
+	d.Read(buf)
+	h := common.BytesToHash(buf)
 	return h
 }
 
@@ -153,27 +155,6 @@ func SaveECDSA(file string, key *ecdsa.PrivateKey) error {
 	return ioutil.WriteFile(file, []byte(k), 0600)
 }
 
-func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
-	if pub == nil || pub.X == nil || pub.Y == nil {
-		return nil
-	}
-	return elliptic.Marshal(S256(), pub.X, pub.Y)
-}
-
-// UnmarshalPubkey converts bytes to a secp256k1 public key.
-func UnmarshalPubkey(pub []byte) (*ecdsa.PublicKey, error) {
-	x, y := elliptic.Unmarshal(S256(), pub)
-	if x == nil {
-		return nil, errInvalidPubkey
-	}
-	return &ecdsa.PublicKey{Curve: S256(), X: x, Y: y}, nil
-}
-
-func PubkeyToAddress(p ecdsa.PublicKey) common.Address {
-	pubBytes := FromECDSAPub(&p)
-	return common.BytesToAddress(Keccak256(pubBytes[1:])[12:])
-}
-
 // readASCII reads into 'buf', stopping when the buffer is full or
 // when a non-printable control character is encountered.
 func readASCII(buf []byte, r *bufio.Reader) (n int, err error) {
@@ -206,9 +187,30 @@ func checkKeyFileEnd(r *bufio.Reader) error {
 	}
 }
 
+// UnmarshalPubkey converts bytes to a secp256k1 public key.
+func UnmarshalPubkey(pub []byte) (*ecdsa.PublicKey, error) {
+	x, y := elliptic.Unmarshal(S256(), pub)
+	if x == nil {
+		return nil, errInvalidPubkey
+	}
+	return &ecdsa.PublicKey{Curve: S256(), X: x, Y: y}, nil
+}
+
 // GenerateKey generates a new private keyAcc.
 func GenerateKey() (*ecdsa.PrivateKey, error) {
 	return ecdsa.GenerateKey(S256(), rand.Reader)
+}
+
+func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
+	if pub == nil || pub.X == nil || pub.Y == nil {
+		return nil
+	}
+	return elliptic.Marshal(S256(), pub.X, pub.Y)
+}
+
+func PubkeyToAddress(p ecdsa.PublicKey) common.Address {
+	pubBytes := FromECDSAPub(&p)
+	return common.BytesToAddress(Keccak256(pubBytes[1:])[12:])
 }
 
 // ValidateSignatureValues verifies whether the signature values are valid with

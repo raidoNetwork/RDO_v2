@@ -101,7 +101,7 @@ func (s *Store) GetBlock(num uint64, hash []byte) (*prototype.Block, error) {
 		}
 
 		// save stat for reading db
-		log.Debugf("Read row from db in %s.", common.StatFmt(time.Since(start)))
+		log.Debugf("Read block from db in %s.", common.StatFmt(time.Since(start)))
 
 		var err error
 		blk, err = unmarshalBlock(enc)
@@ -110,7 +110,7 @@ func (s *Store) GetBlock(num uint64, hash []byte) (*prototype.Block, error) {
 		}
 
 		// save stat for reading db
-		log.Debugf("Read row end in %s.", common.StatFmt(time.Since(start)))
+		log.Debugf("Read block end in %s.", common.StatFmt(time.Since(start)))
 
 		return nil
 	})
@@ -126,7 +126,7 @@ func (s *Store) GetBlockByNum(num uint64) (*prototype.Block, error) {
 	}
 
 	if hash == nil {
-		return nil, nil
+		return nil, errors.Errorf("Not found hash mapped to given number %d.", num)
 	}
 
 	log.Debugf("Got hash %s", hex.EncodeToString(hash))
@@ -300,6 +300,52 @@ func (s *Store) SaveGenesis(block *prototype.Block) error {
 	})
 }
 
+// UpdateAmountStats updates statistics for net amount check.
+func (s *Store) UpdateAmountStats(reward, fee uint64) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(addressBucket)
+		raw := bkt.Get(statsKey)
+
+		if raw == nil {
+			return bkt.Put(statsKey, marshalStats(reward, fee))
+		} else {
+			var feeTotal uint64
+			rewardTotal, feeTotal := unmarshalStats(raw)
+
+			rewardTotal += reward
+			feeTotal += fee
+
+			return bkt.Put(statsKey, marshalStats(rewardTotal, feeTotal))
+		}
+	})
+}
+
+func (s *Store) GetAmountStats() (uint64, uint64) {
+	var reward, fee uint64
+
+	err := s.db.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(addressBucket)
+		raw := bkt.Get(statsKey)
+
+		if raw == nil {
+			reward = 0
+			fee = 0
+
+			return nil
+		}
+
+		reward, fee = unmarshalStats(raw)
+
+		return nil
+	})
+
+	if err != nil {
+		log.Error("Error selecting amount stats:", err)
+	}
+
+	return reward, fee
+}
+
 func unmarshalBlock(enc []byte) (*prototype.Block, error) {
 	rawBlock := &prototype.Block{}
 
@@ -311,6 +357,7 @@ func unmarshalBlock(enc []byte) (*prototype.Block, error) {
 
 	err = rawBlock.UnmarshalSSZ(enc)
 	if err != nil {
+		log.Errorf("Unmarshal block error: %s", err)
 		return rawBlock, err
 	}
 
@@ -324,6 +371,27 @@ func marshalBlock(blk *prototype.Block) ([]byte, error) {
 	}
 
 	return snappy.Encode(nil, obj), nil
+}
+
+var statsBuf = make([]byte, 0, 16)
+
+func marshalStats(counter uint64, fee uint64) []byte {
+	raw := statsBuf
+	raw = ssz.MarshalUint64(raw[:8], counter)
+	raw = ssz.MarshalUint64(raw[8:], fee)
+
+	defer func() {
+		statsBuf = statsBuf[:0]
+	}()
+
+	return raw
+}
+
+func unmarshalStats(raw []byte) (uint64, uint64) {
+	counter := ssz.UnmarshallUint64(raw[:8])
+	fee := ssz.UnmarshallUint64(raw[8:])
+
+	return counter, fee
 }
 
 func genHashKey(num uint64) []byte {

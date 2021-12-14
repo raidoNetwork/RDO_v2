@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
+	log "github.com/sirupsen/logrus"
 )
 
 // ExpandPath given a string which may be a relative path.

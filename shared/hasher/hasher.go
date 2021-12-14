@@ -14,12 +14,18 @@ const (
 
 var log = logrus.WithField("prefix", "Hasher")
 
-func BlockHash(num uint64, parent, txroot, proposer []byte) []byte {
+// BlockHash count block hash
+// hash = Keccak256(num + version + parentHash + txRoot + timestamp + proposerAddress)
+func BlockHash(num uint64, version, parent, txroot []byte, tstamp uint64, proposer []byte) []byte {
 	res := make([]byte, 0, 8)
 	res = ssz.MarshalUint64(res, num)
 
+	res = append(res, version...)
 	res = append(res, parent...)
 	res = append(res, txroot...)
+
+	res = ssz.MarshalUint64(res, tstamp)
+
 	res = append(res, proposer...)
 
 	h := crypto.Keccak256(res)
@@ -29,7 +35,7 @@ func BlockHash(num uint64, parent, txroot, proposer []byte) []byte {
 }
 
 // TxHash count tx hash
-// hash = Keccak256(num + fee + outputs + inputs + data + type)
+// hash = Keccak256(num + fee + outputs + inputs + data + type + timestamp)
 func TxHash(tx *prototype.Transaction) (common.Hash, error) {
 	var buf []byte
 

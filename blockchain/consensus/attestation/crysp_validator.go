@@ -8,7 +8,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/hasher"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
-
 	"github.com/sirupsen/logrus"
 	"strconv"
 	"time"
@@ -184,13 +183,13 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 // ValidateTransaction validate transaction and return an error if something is wrong
 func (cv *CryspValidator) ValidateTransaction(tx *prototype.Transaction) error {
 	switch tx.Type {
+	case common.UnstakeTxType:
+		return cv.validateUnstakeTx(tx)
 	case common.StakeTxType:
 		if !cv.stakeValidator.CanStake() {
 			return consensus.ErrStakeLimit
 		}
 
-		fallthrough
-	case common.UnstakeTxType:
 		fallthrough
 	case common.NormalTxType:
 		return cv.validateTxInputs(tx)
@@ -209,6 +208,14 @@ func (cv *CryspValidator) ValidateTransactionStruct(tx *prototype.Transaction) e
 	// check minimal fee value
 	if tx.Fee < cv.cfg.MinFee {
 		return consensus.ErrSmallFee
+	}
+
+	if len(tx.Inputs) == 0 {
+		return consensus.ErrEmptyInputs
+	}
+
+	if len(tx.Outputs) == 0 {
+		return consensus.ErrEmptyOutputs
 	}
 
 	// check tx hash
@@ -290,6 +297,10 @@ func (cv *CryspValidator) validateTxInputs(tx *prototype.Transaction) error {
 
 	// validate each input
 	alreadySpent, err := cv.checkInputsData(tx, spentOutputsMap)
+	if err != nil {
+		log.Error("ValidateTransaction: Error checking inputs: %s.", err)
+		return err
+	}
 
 	if cv.cfg.LogStat {
 		end := time.Since(start)
@@ -367,11 +378,7 @@ func (cv *CryspValidator) validateRewardTx(tx *prototype.Transaction, block *pro
 		return err
 	}
 
-	targetOutputsLen := len(stakeDeposits)
-	if len(tx.Outputs) != targetOutputsLen {
-		return errors.New("Wrong tx reward outputs size.")
-	}
-
+	var slots uint64
 	receivers := map[string]int{}
 	var to string
 	for _, uo := range stakeDeposits {
@@ -382,10 +389,18 @@ func (cv *CryspValidator) validateRewardTx(tx *prototype.Transaction, block *pro
 		} else {
 			receivers[to] = 1
 		}
+
+		slots += uo.Amount
+	}
+
+	slots /= cv.cfg.StakeUnit
+
+	if len(tx.Outputs) != int(slots) {
+		return errors.Errorf("Wrong tx reward outputs size. Given: %d. Expected: %d.", len(tx.Outputs), slots)
 	}
 
 	// count reward amount for each staker
-	rewardAmount := cv.stakeValidator.GetRewardAmount(targetOutputsLen)
+	rewardAmount := cv.stakeValidator.GetRewardAmount(int(slots))
 
 	// check outputs amount and receiver addresses
 	for i, out := range tx.Outputs {
@@ -447,7 +462,7 @@ func (cv *CryspValidator) validateTxBalance(tx *prototype.Transaction) error {
 
 		// check stake outputs in the stake transaction
 		if tx.Type == common.StakeTxType && common.BytesToAddress(out.Node).Hex() == common.BlackHoleAddress {
-			if out.Amount < cv.cfg.StakeUnit {
+			if out.Amount % cv.cfg.StakeUnit == 0 {
 				return consensus.ErrLowStakeAmount
 			}
 
@@ -502,6 +517,7 @@ func (cv *CryspValidator) getTxInputsFromDB(tx *prototype.Transaction) ([]*types
 func (cv *CryspValidator) checkInputsData(tx *prototype.Transaction, spentOutputsMap map[string]*prototype.TxInput) (map[string]int, error) {
 	// get sender address
 	from := common.Encode(tx.Inputs[0].Address)
+	txHash := common.Encode(tx.Hash)
 	alreadySpent := map[string]int{}
 
 	var hash, indexStr, key string
@@ -535,6 +551,8 @@ func (cv *CryspValidator) checkInputsData(tx *prototype.Transaction, spentOutput
 
 		// mark output as already spent
 		alreadySpent[key] = 1
+
+		log.Debugf("Validate input %s on tx %s", key, txHash)
 	}
 
 	return alreadySpent, nil
@@ -552,4 +570,12 @@ func (cv *CryspValidator) checkHash(tx *prototype.Transaction) error {
 	}
 
 	return nil
+}
+
+func (cv *CryspValidator) validateUnstakeTx(tx *prototype.Transaction) error {
+	if len(tx.Outputs) != 1 {
+		return errors.New("Wrong outputs count.")
+	}
+
+	return cv.validateTxInputs(tx)
 }

@@ -2,6 +2,8 @@ package rdochain
 
 import (
 	"context"
+	"fmt"
+	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/attestation"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/miner"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/validator"
@@ -13,17 +15,14 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/urfave/cli/v2"
-	"google.golang.org/grpc/status"
 	"sync"
 	"time"
 )
 
-const generatorInterval = 500 * time.Millisecond
-
 // NewService creates new ChainService
 func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (*Service, error) {
 	statFlag := cliCtx.Bool(flags.SrvStat.Name)
-	debugStatFlag := cliCtx.Bool(flags.SrvExpStat.Name)
+	debugStatFlag := cliCtx.Bool(flags.SrvDebugStat.Name)
 
 	cfg := params.RaidoConfig()
 	slotTime := time.Duration(cfg.SlotTime) * time.Second
@@ -37,11 +36,14 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (
 
 	// output manager
 	outm := NewOutputManager(bc, sql, &OutputManagerConfig{
-		ShowStat: statFlag,
+		ShowStat:     statFlag,
+		ShowWideStat: debugStatFlag,
 	})
 
+	stakeAmount := cfg.StakeSlotUnit * cfg.RoiPerRdo
+
 	// create new attestation validator
-	avalidator, err := validator.NewValidator(outm, cfg.ValidatorRegistryLimit, bc.GetBlockReward())
+	avalidator, err := validator.NewValidator(outm, cfg.ValidatorRegistryLimit, bc.GetBlockReward(), stakeAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +53,7 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (
 		MinFee:                 cfg.MinimalFee,
 		LogStat:                statFlag,
 		LogDebugStat:           debugStatFlag,
-		StakeUnit:              cfg.StakeSlotUnit,
+		StakeUnit:              stakeAmount,
 		ValidatorRegistryLimit: cfg.ValidatorRegistryLimit,
 	}
 
@@ -71,7 +73,6 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (
 		BlockSize:    cfg.BlockSize,
 	})
 
-
 	ctx, finish := context.WithCancel(context.Background())
 
 	srv := &Service{
@@ -82,6 +83,7 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (
 		bc:         bc,
 		miner:      forger,
 		txPool:     txPool,
+		slotTime:   slotTime,
 
 		stop: make(chan struct{}),
 
@@ -119,6 +121,8 @@ type Service struct {
 	blockStat map[string]int64
 
 	ready bool
+
+	slotTime time.Duration
 }
 
 // Start service work
@@ -137,18 +141,24 @@ func (s *Service) Start() {
 	}
 
 	// start block generator main loop
-	go s.generatorLoop()
+	go s.minerLoop()
 }
 
-// generatorLoop is main loop of service
-func (s *Service) generatorLoop() {
+// minerLoop is main loop of service
+func (s *Service) minerLoop() {
 	log.Warn("[ChainService] Start block miner loop.")
 
 	s.mu.Lock()
 	s.ready = true
 	s.mu.Unlock()
 
-	blockTicker := time.NewTicker(generatorInterval)
+	// start tx pool reading loop
+	s.txPool.Start()
+
+	var start time.Time
+	var end time.Duration
+
+	blockTicker := time.NewTicker(s.slotTime)
 	defer blockTicker.Stop()
 
 	for {
@@ -156,41 +166,43 @@ func (s *Service) generatorLoop() {
 		case <-s.stop:
 			return
 		case <-blockTicker.C:
-			start := time.Now()
+			start = time.Now()
 
-			num, err := s.genBlockWorker()
+			num, txCount, err := s.generateBlock()
 			if err != nil {
-				log.Errorf("[ChainService] generatorLoop: Error: %s", err.Error())
+				log.Errorf("[ChainService] minerLoop: Error: %s", err.Error())
 
 				s.mu.Lock()
 				s.statusErr = err
+				s.ready = false
 				s.mu.Unlock()
 				return
 			}
 
 			if s.fullStatFlag {
-				end := time.Since(start)
+				end = time.Since(start)
 				log.Infof("[ChainService] Create block in: %s", common.StatFmt(end))
 			}
 
-			log.Warnf("[ChainService] Block #%d generated.", num)
+			log.Warnf("[ChainService] Block #%d generated. Transactions in block: %d.", num, txCount)
 		}
 	}
 }
 
-// genBlockWorker worker for creating one block and store it to the database
-func (s *Service) genBlockWorker() (uint64, error) {
+// generateBlock worker for creating one block and store it to the database
+func (s *Service) generateBlock() (uint64, int, error) {
 	start := time.Now()
+	var end time.Duration
 
 	// generate block with block miner
 	block, err := s.miner.GenerateBlock()
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
 	if s.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("[ChainService] genBlockWorker: Generate block in %s.", common.StatFmt(end))
+		end = time.Since(start)
+		log.Infof("[ChainService] generateBlock: Generate block in %s.", common.StatFmt(end))
 	}
 
 	start = time.Now()
@@ -198,33 +210,34 @@ func (s *Service) genBlockWorker() (uint64, error) {
 	// validate, save block and update SQL
 	err = s.miner.FinalizeBlock(block)
 	if err != nil {
-		log.Error("[ChainService] genBlockWorker: Error finalizing block.")
+		log.Error("[ChainService] generateBlock: Error finalizing block.")
 
-		return 0, err
+		return 0, 0, err
 	}
 
 	if s.fullStatFlag {
-		end := time.Since(start)
-		log.Infof("[ChainService] genBlockWorker: Finalize block in %s.", common.StatFmt(end))
+		end = time.Since(start)
+		log.Infof("[ChainService] generateBlock: Finalize block in %s.", common.StatFmt(end))
 	}
 
-	return block.Num, nil
+	return block.Num, len(block.Transactions), nil
 }
 
 // Stop stops tx generator service
 func (s *Service) Stop() error {
-	close(s.stop)  // close stop chan
-	s.cancelFunc() // finish context
+	close(s.stop)   // close stop chan
+	s.cancelFunc()  // finish context
+	s.txPool.Stop() // close tx pool
 
 	s.showEndStats()
 
-	log.Warn("Stop service.")
+	log.Warn("Stop ChainService.")
 	return nil
 }
 
 // showEndStats write stats when stop service
 func (s *Service) showEndStats() {
-	log.Printf("[ChainService] Blockhain has %d blocks.", s.bc.GetCurrentBlockNum())
+	log.Printf("[ChainService] Blockhain has %d blocks.", s.bc.GetHeadBlockNum())
 }
 
 func (s *Service) Status() error {
@@ -238,8 +251,7 @@ func (s *Service) Status() error {
 	return s.statusErr
 }
 
-// SyncDatabase sync SQL with KV and check that total amount is equal to initial amount.
-// If amounts are equal system is working correctly.
+// SyncDatabase sync SQL with KV.
 func (s *Service) SyncDatabase() error {
 	log.Warn("Start database syncing.")
 
@@ -249,8 +261,7 @@ func (s *Service) SyncDatabase() error {
 		return err
 	}
 
-	// check DB consistency
-	err = s.outm.CheckBalance()
+	err = s.checkBalance()
 	if err != nil {
 		return err
 	}
@@ -258,6 +269,29 @@ func (s *Service) SyncDatabase() error {
 	return nil
 }
 
+// checkBalance check that total supply of chain is correct
+func (s *Service) checkBalance() error {
+	// get amount stats from KV
+	rewardAmount, feeAmount := s.bc.GetAmountStats()
+
+	// get current balances sum from SQL
+	balanceSum, err := s.outm.GetTotalAmount()
+	if err != nil {
+		return err
+	}
+
+	targetSum := common.StartAmount*common.AccountNum + rewardAmount
+	currentSum := balanceSum + feeAmount
+
+	if targetSum != currentSum {
+		log.Errorf("Wrong total supply. Expected: %d. Given: %d.", targetSum, currentSum)
+		return errors.New("Wrong total supply.")
+	}
+
+	log.Warnf("SQL sum is correct. Total supply: %d", currentSum)
+
+	return nil
+}
 
 // FindAllUTxO returns all address unspent outputs.
 func (s *Service) FindAllUTxO(addr string) ([]*types.UTxO, error) {
@@ -271,33 +305,34 @@ func (s *Service) FindAllUTxO(addr string) ([]*types.UTxO, error) {
 func (s *Service) GetSyncStatus() (string, error) {
 	s.mu.RLock()
 	isNodeReady := s.ready
+	statusError := s.statusErr
 	s.mu.RUnlock()
 
-	statusMsg := "Not ready."
-	if isNodeReady {
+	statMsg := ""
+
+	if statusError == nil {
+		min, max, percent := s.outm.GetSyncStatus()
+		statMsg = fmt.Sprintf("Syncing with SQL: blocks %d / %d (%.2f%%)", min, max, percent)
+	} else {
+		statMsg = "Error creating block."
+	}
+
+	statusMsg := "Not ready. " + statMsg
+	if isNodeReady && !s.outm.IsSyncing() {
 		statusMsg = "Ready. Synced."
 	}
 
 	return statusMsg, nil
 }
 
+// SendRawTx implements PoolAPI for gRPC gateway
+func (s *Service) SendRawTx(tx *prototype.Transaction) error {
+	return s.txPool.SendRawTx(tx)
+}
+
 func (s *Service) GetServiceStatus() (string, error) {
 	return s.GetSyncStatus()
 }
-
-// SendRawTx implements PoolAPI for gRPC gateway // TODO remove it to another service
-func (s *Service) SendRawTx(tx *prototype.Transaction) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	err := s.txPool.SendTx(tx)
-	if err != nil {
-		return status.Error(17, err.Error())
-	}
-
-	return nil
-}
-
 
 func (s *Service) GetBlockByNum(n uint64) (*prototype.Block, error) {
 	return s.bc.GetBlockByNum(n)
@@ -338,14 +373,17 @@ func (s *Service) GetTransactionsCount(addr string) (uint64, error) {
 	return s.bc.GetTransactionsCount(common.HexToAddress(addr).Bytes())
 }
 
+// GetFee returns minimal fee needed to insert transaction in the block.
+func (s *Service) GetFee() uint64 {
+	return s.txPool.GetFee()
+}
+
 // GetPendingTransactions returns list of pending transactions.
 func (s *Service) GetPendingTransactions() ([]*prototype.Transaction, error) {
-	queue := s.txPool.GetTxQueue()
+	return s.txPool.GetPendingTransactions()
+}
 
-	batch := make([]*prototype.Transaction, len(queue))
-	for i, td := range queue {
-		batch[i] = td.GetTx()
-	}
-
-	return batch, nil
+// GetLatestBlock returns the head block of blockchain
+func (s *Service) GetLatestBlock() (*prototype.Block, error) {
+	return s.bc.GetHeadBlock()
 }

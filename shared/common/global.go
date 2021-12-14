@@ -16,20 +16,20 @@ const (
 const (
 	NormalTxType  = 1
 	GenesisTxType = 2
-	FeeTxType = 3
-	RewardTxType = 4
+	FeeTxType     = 3
+	RewardTxType  = 4
 	StakeTxType   = 5
 	UnstakeTxType = 6
 )
 
 const (
-	StakeAddress     = "0x0000000000000000000000000000000000000000000000000000000000000000"
 	BlackHoleAddress = "0x0000000000000000000000000000000000000000"
 )
 
+// Test settings
 const (
-	AccountNum = 10
-	TxLimitPerBlock = 4
+	AccountNum  = 700
+	StartAmount = 1e12 //10000000000000 // 1 * 10e12
 )
 
 // StatFmt parse time.Duration to the needed string format

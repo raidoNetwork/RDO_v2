@@ -1,6 +1,8 @@
 package common
 
-import "encoding/hex"
+import (
+	"encoding/hex"
+)
 
 func FromHex(s string) []byte {
 	if len(s) > 1 {
@@ -19,10 +21,6 @@ func Hex2Bytes(str string) []byte {
 	h, _ := hex.DecodeString(str)
 
 	return h
-}
-
-func Bytes2Hex(d []byte) string {
-	return hex.EncodeToString(d)
 }
 
 // has0xPrefix validates str begins with '0x' or '0X'.

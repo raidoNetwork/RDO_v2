@@ -6,10 +6,13 @@ import (
 	"io"
 )
 
-// BlockStorage interface for work with blocks
-type BlockStorage interface {
+// ChainStorage interface for work with blocks
+type ChainStorage interface {
 	WriteBlock(*prototype.Block) error
 	CountBlocks() (int, error)
+
+	UpdateAmountStats(uint64, uint64) error
+	GetAmountStats() (uint64, uint64)
 
 	HeadAccessStorage
 	BlockReader
@@ -52,23 +55,18 @@ type Database interface {
 	DatabasePath() string
 	ClearDB() error
 
-	BlockStorage
-}
-
-type DataRow struct {
-	Timestamp int64
-	Hash      []byte
+	ChainStorage
 }
 
 type OutputStorage interface {
-	// AddOutput - add unspent output to the database in database transaction.
-	AddOutput(int, *types.UTxO) (int64, error)
+	// AddOutputIfNotExists - add unspent output to the database in database transaction.
+	AddOutputIfNotExists(int, *types.UTxO) error
+
+	// AddOutputBatch add outputs batch data to the database
+	AddOutputBatch(int, string) (int64, error)
 
 	// FindAllUTxO finds all unspent outputs according to user address.
 	FindAllUTxO(string) ([]*types.UTxO, error)
-
-	// VerifyOutput check that database is in the database
-	VerifyOutput(int, *types.UTxO) (int, error)
 
 	// CreateTx creates database transaction and returns it's ID.
 	CreateTx() (int, error)

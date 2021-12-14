@@ -14,10 +14,6 @@ func (s *Store) saveTransactions(tx *bolt.Tx, block *prototype.Block) error {
 	blockKey := genBlockKey(block.Num, block.Hash)
 
 	for i, transaction := range block.Transactions {
-		if transaction.Type != common.NormalTxType {
-			continue
-		}
-
 		key := genTxHashKey(transaction.Hash)
 		buf := make([]byte, 0)
 		buf = ssz.MarshalUint32(buf, uint32(i))
@@ -44,32 +40,11 @@ func (s *Store) GetTransactionByHash(hash []byte) (*prototype.Transaction, error
 			return errors.New("Undefined transaction)")
 		}
 
-		size := len(blockIndex)
-		blockKey := blockIndex[:size-4]
-		index32 := ssz.UnmarshallUint32(blockIndex[size-4:])
-
-		blockBkt := tx.Bucket(blocksBucket)
-		blockBuf := blockBkt.Get(blockKey)
-
-		if blockBuf == nil {
-			return errors.Errorf("Undefined block with key %s", blockKey)
-		}
-
-		block, err := unmarshalBlock(blockBuf)
+		var err error
+		txRes, err = s.getTransactionByLink(tx, blockIndex)
 		if err != nil {
-			return errors.Errorf("Block unmarshal error: %s", err)
+			return err
 		}
-
-		index := int(index32)
-		if index < 0 {
-			return errors.Errorf("Wrong transaciton index %d", index)
-		}
-
-		if index > len(block.Transactions) {
-			return errors.Errorf("Wrong transaction index %d with block transaction count: %d", index, len(block.Transactions))
-		}
-
-		txRes = block.Transactions[index]
 
 		return nil
 	})
@@ -118,6 +93,35 @@ func (s *Store) updateBlockAccountState(tx *bolt.Tx, block *prototype.Block) err
 	return nil
 }
 
+// getTransactionByLink find transaction with given link of block hash and tx index.
+func (s *Store) getTransactionByLink(tx *bolt.Tx, lnk []byte) (*prototype.Transaction, error) {
+	size := len(lnk)
+	blockKey := lnk[:size-4]
+	index32 := ssz.UnmarshallUint32(lnk[size-4:])
+
+	blockBkt := tx.Bucket(blocksBucket)
+	blockBuf := blockBkt.Get(blockKey)
+
+	if blockBuf == nil {
+		return nil, errors.Errorf("Undefined block with key %s", blockKey)
+	}
+
+	block, err := unmarshalBlock(blockBuf)
+	if err != nil {
+		return nil, errors.Errorf("Block unmarshal error: %s", err)
+	}
+
+	index := int(index32)
+	if index < 0 {
+		return nil, errors.Errorf("Wrong transaciton index %d", index)
+	}
+
+	if index > len(block.Transactions) {
+		return nil, errors.Errorf("Wrong transaction index %d with block transaction count: %d", index, len(block.Transactions))
+	}
+
+	return block.Transactions[index], nil
+}
 
 // GetTransactionsCount return nonce of given address
 func (s *Store) GetTransactionsCount(addr []byte) (uint64, error) {

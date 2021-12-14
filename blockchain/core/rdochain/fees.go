@@ -11,13 +11,12 @@ var ErrZeroFeeAmount = errors.New("Block has no transactions with fee.")
 
 // GetBlockReward returns reward for the current block
 func (bc *BlockChain) GetBlockReward() uint64 {
-	award := bc.cfg.RewardBase * bc.cfg.KroiPerRdo
-	return award
+	return bc.cfg.RewardBase
 }
 
 // createFeeTx creates fee transaction
 func (bc *BlockChain) createFeeTx(txarr []*prototype.Transaction) (*prototype.Transaction, error) {
-	var feeAmount uint64 = 0
+	var feeAmount uint64
 
 	for _, tx := range txarr {
 		feeAmount += tx.GetRealFee()

@@ -81,7 +81,14 @@ func (m *Miner) GenerateBlock() (*prototype.Block, error) {
 
 			// check if empty validator slots exists and skip stake tx if not exist
 			if tx.Type == common.StakeTxType {
-				err = m.attestationValidator.ReserveSlot()
+				var amount uint64
+				for _, out := range tx.Outputs {
+					if common.BytesToAddress(out.Node).Hex() == common.BlackHoleAddress {
+						amount += out.Amount
+					}
+				}
+
+				err = m.attestationValidator.ReserveSlots(amount)
 				if err != nil {
 					totalSize -= size // return size of current tx
 
@@ -158,10 +165,8 @@ func (m *Miner) FinalizeBlock(block *prototype.Block) error {
 		log.Infof("FinalizeBlock: Store block in %s", common.StatFmt(end))
 	}
 
-	start = time.Now()
-
 	// update SQL
-	err = m.outm.ProcessBlock(block)
+	err = m.outm.ProcessBlock(block) // has statistic inside
 	if err != nil {
 		log.Errorf("FinalizeBlock: Error process block: %s", err)
 
@@ -172,21 +177,33 @@ func (m *Miner) FinalizeBlock(block *prototype.Block) error {
 		}
 	}
 
+	startInner := time.Now()
+	var sender []byte
+
 	// update stake slots
 	for _, tx := range block.Transactions {
-		if tx.Type == common.StakeTxType {
-			err = m.attestationValidator.RegisterStake(tx.Inputs[0].Address)
-			if err != nil {
-				log.Errorf("Error proccessing stake transaction: %s", err)
-				return err
-			}
-		}
+		if tx.Type == common.StakeTxType || tx.Type == common.UnstakeTxType {
+			sender = tx.Inputs[0].Address
 
-		if tx.Type == common.UnstakeTxType {
-			err = m.attestationValidator.UnregisterStake(tx.Inputs[0].Address)
-			if err != nil {
-				log.Errorf("Undefined staker! Error: %s.", err)
-				return err
+			if tx.Type == common.StakeTxType {
+				var amount uint64
+				for _, out := range tx.Outputs {
+					if common.BytesToAddress(out.Node).Hex() == common.BlackHoleAddress {
+						amount += out.Amount
+					}
+				}
+
+				err = m.attestationValidator.RegisterStake(sender, amount)
+				if err != nil {
+					log.Errorf("Error proccessing stake transaction: %s", err)
+					return err
+				}
+			} else{
+				err = m.attestationValidator.UnregisterStake(sender)
+				if err != nil {
+					log.Errorf("Undefined staker! Error: %s.", err)
+					return err
+				}
 			}
 		}
 	}
@@ -194,12 +211,19 @@ func (m *Miner) FinalizeBlock(block *prototype.Block) error {
 	// Reset reserved validator slots
 	m.attestationValidator.FlushReserved()
 
+	if m.cfg.ShowStat {
+		end := time.Since(startInner)
+		log.Infof("FinalizeBlock: Update stake slots in %s", common.StatFmt(end))
+	}
+
+	startInner = time.Now()
+
 	// Reset reserved pool and clean all extra staking
 	m.txPool.FlushReserved(true)
 
 	if m.cfg.ShowStat {
-		end := time.Since(start)
-		log.Infof("FinalizeBlock: Proccess block in %s", common.StatFmt(end))
+		endInner := time.Since(startInner)
+		log.Infof("FinalizeBlock: Clean transaction pool in %s", common.StatFmt(endInner))
 	}
 
 	return nil

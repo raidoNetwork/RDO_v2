@@ -1,4 +1,4 @@
-package mysql
+package utxo
 
 import (
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/utxo/dbshared"
@@ -12,17 +12,17 @@ CREATE TABLE IF NOT EXISTS ` + "`" + dbshared.UtxoTable + "`" + `(
   ` + "`" + `blockId` + "`" + ` BIGINT UNSIGNED DEFAULT NULL,
   ` + "`" + `hash` + "`" + ` VARCHAR(66) DEFAULT NULL,
   ` + "`" + `tx_index` + "`" + ` INT DEFAULT NULL,
-  ` + "`" + `id_index` + "`" + ` INT DEFAULT NULL,
   ` + "`" + `address_from` + "`" + ` VARCHAR(44) DEFAULT NULL,
   ` + "`" + `address_to` + "`" + ` VARCHAR(44) DEFAULT NULL,
-  ` + "`" + `address_node` + "`" + ` VARCHAR(66) DEFAULT NULL,
+  ` + "`" + `address_node` + "`" + ` VARCHAR(44) DEFAULT NULL,
   ` + "`" + `amount` + "`" + ` BIGINT UNSIGNED DEFAULT NULL,
   ` + "`" + `spent` + "`" + ` TINYINT DEFAULT NULL,
   ` + "`" + `timestamp` + "`" + ` BIGINT DEFAULT NULL,
    PRIMARY KEY (` + "`" + `id` + "`" + `),
-   KEY ` + dbshared.AddrToSpentIndex + ` (address_to, spent),
-   KEY ` + dbshared.HashToTxIndex + ` (hash, tx_index),
-   KEY ` + dbshared.BlockIdIndex + `(blockId)
+   KEY ` + dbshared.AddrToSpentIndex + ` (address_to, spent, address_node),
+   UNIQUE KEY ` + dbshared.HashToTxIndex + ` (hash, tx_index),
+   KEY ` + dbshared.BlockIdIndex + `(blockId),
+   KEY ` + dbshared.TxTypeToNodeIndex + ` (tx_type, address_node)
 );
 `
 )

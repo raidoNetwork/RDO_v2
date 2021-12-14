@@ -19,8 +19,6 @@ const (
 	DatabaseFileName = "raido.db"
 
 	boltAllocSize = 8 * 1024 * 1024
-	// The size of hash length in bytes
-	hashLength = 32
 )
 
 var log = logrus.WithField("prefix", "database")
@@ -83,6 +81,8 @@ func NewKVStore(ctx context.Context, dirPath string, config *Config) (*Store, er
 			blocksBucket,
 			blocksHashBucket,
 			blocksNumBucket,
+			transactionBucket,
+			addressBucket,
 		)
 	}); err != nil {
 		return nil, err
