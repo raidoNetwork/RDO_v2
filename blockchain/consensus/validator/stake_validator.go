@@ -18,10 +18,10 @@ func NewValidator(outm consensus.OutputsReader, slotsLimit int, reward uint64, s
 		reservedSlots: make([]int, 0),
 		mu:            sync.RWMutex{},
 		blockReward:   reward,
-		stakeAmount: stakeAmount,
+		stakeAmount:   stakeAmount,
 
-		slotsLimit:    slotsLimit,
-		outm:          outm,
+		slotsLimit: slotsLimit,
+		outm:       outm,
 	}
 
 	// Load stake deposits data
@@ -68,11 +68,11 @@ func (vg *ValidatorGerm) CanStake() bool {
 	vg.mu.RLock()
 	defer vg.mu.RUnlock()
 
-	return vg.emptySlots() < vg.slotsLimit
+	return vg.filledSlots() < vg.slotsLimit
 }
 
-func (vg *ValidatorGerm) emptySlots() int {
-	return len(vg.slots)+len(vg.reservedSlots)
+func (vg *ValidatorGerm) filledSlots() int {
+	return len(vg.slots) + len(vg.reservedSlots)
 }
 
 // ReserveSlots add address to reserved slots
@@ -85,20 +85,24 @@ func (vg *ValidatorGerm) ReserveSlots(amount uint64) error {
 	stakeAmount := vg.stakeAmount
 	vg.mu.Unlock()
 
+	if amount%stakeAmount != 0 {
+		return errors.New("Wrong amount for staking given.")
+	}
+
 	count := amount / stakeAmount
 
 	if count == 0 {
 		return errors.New("Too low amount for staking.")
 	}
 
-	if uint64(vg.emptySlots()) < count {
+	if uint64(vg.slotsLimit-vg.filledSlots()) < count {
 		return errors.New("Can't reserve all slots with given amount.")
 	}
 
 	vg.mu.Lock()
 
 	var i uint64
-	for ;i < count;i++ {
+	for ; i < count; i++ {
 		vg.reservedSlots = append(vg.reservedSlots, 1)
 	}
 
@@ -138,7 +142,7 @@ func (vg *ValidatorGerm) RegisterStake(addr []byte, amount uint64) error {
 
 	vg.mu.Lock()
 	var i uint64
-	for ;i < count;i++ {
+	for ; i < count; i++ {
 		vg.slots = append(vg.slots, address.Hex())
 	}
 	vg.mu.Unlock()

@@ -81,6 +81,7 @@ func (m *Miner) GenerateBlock() (*prototype.Block, error) {
 
 			// check if empty validator slots exists and skip stake tx if not exist
 			if tx.Type == common.StakeTxType {
+				hash := common.Encode(tx.Hash)
 				var amount uint64
 				for _, out := range tx.Outputs {
 					if common.BytesToAddress(out.Node).Hex() == common.BlackHoleAddress {
@@ -92,7 +93,7 @@ func (m *Miner) GenerateBlock() (*prototype.Block, error) {
 				if err != nil {
 					totalSize -= size // return size of current tx
 
-					log.Infof("Skip tx %s", common.Encode(tx.Hash))
+					log.Warnf("Skip stake tx %s: %s", hash, err)
 
 					// Delete stake tx from pool
 					err = m.txPool.DeleteTransaction(tx)
@@ -102,6 +103,8 @@ func (m *Miner) GenerateBlock() (*prototype.Block, error) {
 
 					continue
 				}
+
+				log.Infof("Add stake tx %s to the block.", hash)
 			}
 
 			txBatch = append(txBatch, tx)
@@ -198,7 +201,7 @@ func (m *Miner) FinalizeBlock(block *prototype.Block) error {
 					log.Errorf("Error proccessing stake transaction: %s", err)
 					return err
 				}
-			} else{
+			} else {
 				err = m.attestationValidator.UnregisterStake(sender)
 				if err != nil {
 					log.Errorf("Undefined staker! Error: %s.", err)

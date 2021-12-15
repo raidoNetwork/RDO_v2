@@ -109,7 +109,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 	start := time.Now()
 
 	// check that block has total balance equal to zero
-	// check that inputs and outputs of bock doesn't repeat
+	// check that inputs of block don't repeat
 	err := cv.checkBlockBalance(block)
 	if err != nil {
 		return err
@@ -378,25 +378,26 @@ func (cv *CryspValidator) validateRewardTx(tx *prototype.Transaction, block *pro
 		return err
 	}
 
-	var slots uint64
-	receivers := map[string]int{}
+	var userSlots, slots uint64
 	var to string
+
+	receivers := map[string]uint64{}
 	for _, uo := range stakeDeposits {
 		to = uo.To.Hex()
 
+		userSlots = uo.Amount / cv.cfg.StakeUnit
+
 		if _, exists := receivers[to]; exists {
-			receivers[to]++
+			receivers[to] += userSlots
 		} else {
-			receivers[to] = 1
+			receivers[to] = userSlots
 		}
 
-		slots += uo.Amount
+		slots += userSlots
 	}
 
-	slots /= cv.cfg.StakeUnit
-
-	if len(tx.Outputs) != int(slots) {
-		return errors.Errorf("Wrong tx reward outputs size. Given: %d. Expected: %d.", len(tx.Outputs), slots)
+	if rewardSize != int(slots) {
+		return errors.Errorf("Wrong tx reward outputs size. Given: %d. Expected: %d.", rewardSize, slots)
 	}
 
 	// count reward amount for each staker
@@ -414,14 +415,14 @@ func (cv *CryspValidator) validateRewardTx(tx *prototype.Transaction, block *pro
 		}
 
 		if out.Amount != rewardAmount {
-			return errors.Errorf("Wrong reward amount on output %d. Expect: %d. Real: %d.", i, rewardAmount, out.Amount)
+			return errors.Errorf("Wrong reward amount on output %d address %s. Expect: %d. Real: %d.", i, addrHex, rewardAmount, out.Amount)
 		}
 	}
 
 	// check that all receivers got their reward correctly
 	for addr, count := range receivers {
 		if count != 0 {
-			return errors.Errorf("Address %s didn't receive reward.", addr)
+			return errors.Errorf("Address %s didn't receive reward for slots count %d.", addr, count)
 		}
 	}
 
@@ -462,7 +463,7 @@ func (cv *CryspValidator) validateTxBalance(tx *prototype.Transaction) error {
 
 		// check stake outputs in the stake transaction
 		if tx.Type == common.StakeTxType && common.BytesToAddress(out.Node).Hex() == common.BlackHoleAddress {
-			if out.Amount % cv.cfg.StakeUnit == 0 {
+			if out.Amount%cv.cfg.StakeUnit != 0 {
 				return consensus.ErrLowStakeAmount
 			}
 
