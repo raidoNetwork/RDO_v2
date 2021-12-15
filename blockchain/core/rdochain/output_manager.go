@@ -439,6 +439,8 @@ func (om *OutputManager) processBlockInputs(blockTx int, tx *prototype.Transacti
 	for _, in := range tx.Inputs {
 		hash = common.BytesToHash(in.Hash).Hex()
 
+		startIn = time.Now()
+
 		arows, err = om.db.SpendOutput(blockTx, hash, in.Index)
 		if err != nil || arows != 1 {
 			log.Errorf("Error deleting input: %s_%d.", hash, in.Index)

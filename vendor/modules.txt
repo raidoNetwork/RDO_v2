@@ -1,6 +1,3 @@
-# contrib.go.opencensus.io/exporter/jaeger v0.2.1
-## explicit
-contrib.go.opencensus.io/exporter/jaeger
 # github.com/BurntSushi/toml v0.3.1
 github.com/BurntSushi/toml
 # github.com/antonfisher/nested-logrus-formatter v1.3.1
@@ -40,9 +37,6 @@ github.com/grpc-ecosystem/grpc-gateway/v2/utilities
 github.com/joho/godotenv
 # github.com/klauspost/cpuid/v2 v2.0.4
 github.com/klauspost/cpuid/v2
-# github.com/mattn/go-sqlite3 v1.14.8
-## explicit
-github.com/mattn/go-sqlite3
 # github.com/minio/sha256-simd v1.0.0
 ## explicit
 github.com/minio/sha256-simd
@@ -64,11 +58,6 @@ github.com/shurcooL/sanitized_anchor_name
 # github.com/sirupsen/logrus v1.8.1
 ## explicit
 github.com/sirupsen/logrus
-# github.com/uber/jaeger-client-go v2.25.0+incompatible
-github.com/uber/jaeger-client-go/thrift
-github.com/uber/jaeger-client-go/thrift-gen/agent
-github.com/uber/jaeger-client-go/thrift-gen/jaeger
-github.com/uber/jaeger-client-go/thrift-gen/zipkincore
 # github.com/urfave/cli/v2 v2.3.0
 ## explicit
 github.com/urfave/cli/v2
@@ -104,9 +93,6 @@ golang.org/x/net/http2/hpack
 golang.org/x/net/idna
 golang.org/x/net/internal/timeseries
 golang.org/x/net/trace
-# golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-## explicit
-golang.org/x/sync/semaphore
 # golang.org/x/sys v0.0.0-20211113001501-0c823b97ae02
 ## explicit
 golang.org/x/sys/cpu
@@ -119,8 +105,6 @@ golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
-# google.golang.org/api v0.30.0
-google.golang.org/api/support/bundler
 # google.golang.org/genproto v0.0.0-20211118181313-81c1377c94b1
 ## explicit
 google.golang.org/genproto/googleapis/api/annotations
