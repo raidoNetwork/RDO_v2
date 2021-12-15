@@ -379,6 +379,8 @@ type AttestationClient interface {
 	SendStakeTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error)
 	// SendUnstakeTx send stake transaction to the node.
 	SendUnstakeTx(ctx context.Context, in *SendTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error)
+	// SendRawTx send raw transaction to the node.
+	SendRawTx(ctx context.Context, in *RawTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error)
 	// GetFee returns minimal fee price needed to add transaction to the future block.
 	GetFee(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*NumberResponse, error)
 	// GetPendingTransactions returns pending transactions list.
@@ -420,6 +422,15 @@ func (c *attestationClient) SendUnstakeTx(ctx context.Context, in *SendTxRequest
 	return out, nil
 }
 
+func (c *attestationClient) SendRawTx(ctx context.Context, in *RawTxRequest, opts ...grpc.CallOption) (*ErrorResponse, error) {
+	out := new(ErrorResponse)
+	err := c.cc.Invoke(ctx, "/rdo.service.Attestation/SendRawTx", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *attestationClient) GetFee(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*NumberResponse, error) {
 	out := new(NumberResponse)
 	err := c.cc.Invoke(ctx, "/rdo.service.Attestation/GetFee", in, out, opts...)
@@ -448,6 +459,8 @@ type AttestationServer interface {
 	SendStakeTx(context.Context, *SendTxRequest) (*ErrorResponse, error)
 	// SendUnstakeTx send stake transaction to the node.
 	SendUnstakeTx(context.Context, *SendTxRequest) (*ErrorResponse, error)
+	// SendRawTx send raw transaction to the node.
+	SendRawTx(context.Context, *RawTxRequest) (*ErrorResponse, error)
 	// GetFee returns minimal fee price needed to add transaction to the future block.
 	GetFee(context.Context, *emptypb.Empty) (*NumberResponse, error)
 	// GetPendingTransactions returns pending transactions list.
@@ -467,6 +480,9 @@ func (UnimplementedAttestationServer) SendStakeTx(context.Context, *SendTxReques
 }
 func (UnimplementedAttestationServer) SendUnstakeTx(context.Context, *SendTxRequest) (*ErrorResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendUnstakeTx not implemented")
+}
+func (UnimplementedAttestationServer) SendRawTx(context.Context, *RawTxRequest) (*ErrorResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendRawTx not implemented")
 }
 func (UnimplementedAttestationServer) GetFee(context.Context, *emptypb.Empty) (*NumberResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetFee not implemented")
@@ -541,6 +557,24 @@ func _Attestation_SendUnstakeTx_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Attestation_SendRawTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RawTxRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AttestationServer).SendRawTx(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rdo.service.Attestation/SendRawTx",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AttestationServer).SendRawTx(ctx, req.(*RawTxRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Attestation_GetFee_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
@@ -595,6 +629,10 @@ var Attestation_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendUnstakeTx",
 			Handler:    _Attestation_SendUnstakeTx_Handler,
+		},
+		{
+			MethodName: "SendRawTx",
+			Handler:    _Attestation_SendRawTx_Handler,
 		},
 		{
 			MethodName: "GetFee",

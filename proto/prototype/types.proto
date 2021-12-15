@@ -18,7 +18,7 @@ message Block{
   Sign proposer = 7;
   repeated Sign approvers = 8 [(rdo.ext.opts.ssz_max) = "128"];
   repeated Sign slashers = 9 [(rdo.ext.opts.ssz_max) = "128"];
-  repeated Transaction transactions = 10;
+  repeated Transaction transactions = 10 [(rdo.ext.opts.ssz_max) = "1000"];
 }
 
 message Sign{
@@ -33,8 +33,8 @@ message Transaction{
   bytes hash = 4 [(rdo.ext.opts.ssz_size) = "32", (validate.rules).bytes.len = 32];
   uint64 fee = 5 [(validate.rules).uint64.gt = 0];
   bytes data = 6 [(rdo.ext.opts.ssz_max) = "10000", (validate.rules).bytes.max_len = 10000]; // external byte data
-  repeated TxInput inputs = 7 [(rdo.ext.opts.ssz_max) = "200"];
-  repeated TxOutput outputs = 8 [(rdo.ext.opts.ssz_max) = "50"];
+  repeated TxInput inputs = 7 [(rdo.ext.opts.ssz_max) = "2000"];
+  repeated TxOutput outputs = 8 [(rdo.ext.opts.ssz_max) = "2000"];
   bytes signature = 9 [(rdo.ext.opts.ssz_size) = "65", (validate.rules).bytes.len = 65];
 }
 

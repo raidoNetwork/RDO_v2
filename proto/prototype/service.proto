@@ -99,6 +99,14 @@ service Attestation {
     };
   }
 
+  // SendRawTx send raw transaction to the node.
+  rpc SendRawTx(RawTxRequest) returns (ErrorResponse) {
+    option (google.api.http) = {
+      post: "/rdo/v1/attestation/send/raw"
+      body: "*"
+    };
+  }
+
   // GetFee returns minimal fee price needed to add transaction to the future block.
   rpc GetFee(google.protobuf.Empty) returns (NumberResponse) {
     option (google.api.http) = {
@@ -204,6 +212,10 @@ message TxOptionsStakeRequest {
 
 message TxBodyResponse {
   rdo.service.types.SignedTxValue tx = 1;
+}
+
+message RawTxRequest {
+  string data = 1;
 }
 
 option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {

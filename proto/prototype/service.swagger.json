@@ -110,6 +110,39 @@
         ]
       }
     },
+    "/rdo/v1/attestation/send/raw": {
+      "post": {
+        "summary": "SendRawTx send raw transaction to the node.",
+        "operationId": "Attestation_SendRawTx",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/serviceErrorResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/serviceRawTxRequest"
+            }
+          }
+        ],
+        "tags": [
+          "Attestation"
+        ]
+      }
+    },
     "/rdo/v1/attestation/send/stake": {
       "post": {
         "summary": "SendStakeTx send stake transaction to the node.",
@@ -571,6 +604,14 @@
           "format": "uint64"
         },
         "error": {
+          "type": "string"
+        }
+      }
+    },
+    "serviceRawTxRequest": {
+      "type": "object",
+      "properties": {
+        "data": {
           "type": "string"
         }
       }

@@ -37,7 +37,7 @@ type Block struct {
 	Proposer     *Sign          `protobuf:"bytes,7,opt,name=proposer,proto3" json:"proposer,omitempty"`
 	Approvers    []*Sign        `protobuf:"bytes,8,rep,name=approvers,proto3" json:"approvers,omitempty" ssz-max:"128"`
 	Slashers     []*Sign        `protobuf:"bytes,9,rep,name=slashers,proto3" json:"slashers,omitempty" ssz-max:"128"`
-	Transactions []*Transaction `protobuf:"bytes,10,rep,name=transactions,proto3" json:"transactions,omitempty" ssz-max:"600"`
+	Transactions []*Transaction `protobuf:"bytes,10,rep,name=transactions,proto3" json:"transactions,omitempty" ssz-max:"1000"`
 }
 
 func (x *Block) Reset() {
@@ -208,8 +208,8 @@ type Transaction struct {
 	Hash      []byte      `protobuf:"bytes,4,opt,name=hash,proto3" json:"hash,omitempty" ssz-size:"32"`
 	Fee       uint64      `protobuf:"varint,5,opt,name=fee,proto3" json:"fee,omitempty"`
 	Data      []byte      `protobuf:"bytes,6,opt,name=data,proto3" json:"data,omitempty" ssz-max:"1000000"` // external byte data
-	Inputs    []*TxInput  `protobuf:"bytes,7,rep,name=inputs,proto3" json:"inputs,omitempty" ssz-max:"1000"`
-	Outputs   []*TxOutput `protobuf:"bytes,8,rep,name=outputs,proto3" json:"outputs,omitempty" ssz-max:"1000"`
+	Inputs    []*TxInput  `protobuf:"bytes,7,rep,name=inputs,proto3" json:"inputs,omitempty" ssz-max:"2000"`
+	Outputs   []*TxOutput `protobuf:"bytes,8,rep,name=outputs,proto3" json:"outputs,omitempty" ssz-max:"2000"`
 	Signature []byte      `protobuf:"bytes,9,opt,name=signature,proto3" json:"signature,omitempty" ssz-size:"65"`
 }
 

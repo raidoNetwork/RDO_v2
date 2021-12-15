@@ -202,7 +202,13 @@ func (m *Miner) FinalizeBlock(block *prototype.Block) error {
 					return err
 				}
 			} else {
-				err = m.attestationValidator.UnregisterStake(sender)
+				var amount uint64
+
+				for _, in := range tx.Inputs {
+					amount += in.Amount
+				}
+
+				err = m.attestationValidator.UnregisterStake(sender, amount)
 				if err != nil {
 					log.Errorf("Undefined staker! Error: %s.", err)
 					return err

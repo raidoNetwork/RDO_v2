@@ -61,7 +61,7 @@ type StakeValidator interface {
 	RegisterStake([]byte, uint64) error
 
 	// UnregisterStake unregister stake slots.
-	UnregisterStake([]byte) error
+	UnregisterStake([]byte, uint64) error
 
 	// CreateRewardTx creates transaction with reward for all stakers.
 	CreateRewardTx(uint64) (*prototype.Transaction, error)

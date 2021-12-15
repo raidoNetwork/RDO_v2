@@ -151,29 +151,34 @@ func (vg *ValidatorGerm) RegisterStake(addr []byte, amount uint64) error {
 }
 
 // UnregisterStake open validator slots
-func (vg *ValidatorGerm) UnregisterStake(addr []byte) error {
+func (vg *ValidatorGerm) UnregisterStake(addr []byte, amount uint64) error {
 	address := common.BytesToAddress(addr).Hex()
 
-	/*vg.mu.Lock()
-	stakeAmount := vg.stakeAmount
-	vg.mu.Unlock()
-
-	count := amount / stakeAmount*/
-
 	vg.mu.Lock()
-	defer vg.mu.Unlock()
-
+	stakeAmount := vg.stakeAmount
+	count := amount / stakeAmount
 	foundSlots := 0
+	size := len(vg.slots) - 1
+
 	for i, a := range vg.slots {
 		if a == address {
-			vg.slots = append(vg.slots[:i], vg.slots[i+1:]...)
+			// swap delete element with last
+			vg.slots[i] = vg.slots[size]
+
+			// remove last
+			vg.slots = vg.slots[:size]
+
+			// update last index
+			size = len(vg.slots) - 1
+
 			foundSlots++
 		}
 	}
+	vg.mu.Unlock()
 
-	/*if uint64(foundSlots) != count {
-		return errors.Errorf("Inconsistent slots for %s. Given: %d. Found: %d.", address, count, foundSlots)
-	}*/
+	if uint64(foundSlots) != count {
+		return errors.Errorf("Inconsistent slots for %s. Given: %d. Found: %d", address, count, foundSlots)
+	}
 
 	return nil
 }

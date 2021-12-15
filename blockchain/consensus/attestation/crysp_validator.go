@@ -452,6 +452,10 @@ func (cv *CryspValidator) validateTxBalance(tx *prototype.Transaction) error {
 	for _, in := range tx.Inputs {
 		txBalance += in.Amount
 
+		if in.Amount == 0 {
+			return errors.Errorf("Zero amount on input.")
+		}
+
 		if tx.Type == common.UnstakeTxType && in.Amount < cv.cfg.StakeUnit {
 			return consensus.ErrLowStakeAmount
 		}
@@ -461,10 +465,14 @@ func (cv *CryspValidator) validateTxBalance(tx *prototype.Transaction) error {
 	for _, out := range tx.Outputs {
 		txBalance -= out.Amount
 
+		if out.Amount == 0 {
+			return errors.Errorf("Zero amount on output.")
+		}
+
 		// check stake outputs in the stake transaction
 		if tx.Type == common.StakeTxType && common.BytesToAddress(out.Node).Hex() == common.BlackHoleAddress {
 			if out.Amount%cv.cfg.StakeUnit != 0 {
-				return consensus.ErrLowStakeAmount
+				return errors.Wrap(consensus.ErrLowStakeAmount, "Stake error")
 			}
 
 			stakeOutputs++
