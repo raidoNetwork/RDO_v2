@@ -89,9 +89,7 @@ func CountTxFee(opts TxOptions) (uint64, uint64) {
 
 // SignTx create transaction signature with given private key
 func SignTx(tx *prototype.Transaction, key *ecdsa.PrivateKey) error {
-	// signature digest = Keccak256(hash)
-	dgst := GetTxDomain(tx.Hash)
-	sign, err := getTxSigner().Sign(dgst, key)
+	sign, err := getTxSigner().Sign(tx, key)
 	if err != nil {
 		return err
 	}

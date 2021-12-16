@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"fmt"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
@@ -11,7 +12,7 @@ import (
 
 type TxSigner interface {
 	// Sign given digest with given key.
-	Sign([]byte, *ecdsa.PrivateKey) ([]byte, error)
+	Sign(*prototype.Transaction, *ecdsa.PrivateKey) ([]byte, error)
 
 	// Verify sign of given input.
 	Verify(transaction *prototype.Transaction) error
@@ -27,13 +28,16 @@ func MakeTxSigner(signType string) TxSigner {
 }
 
 type KeccakTxSigner struct {
-	TxSigner
+	signSalt []byte
+	buf      []byte
 }
 
-func (s *KeccakTxSigner) Sign(dgst []byte, key *ecdsa.PrivateKey) ([]byte, error) {
+func (s *KeccakTxSigner) Sign(tx *prototype.Transaction, key *ecdsa.PrivateKey) ([]byte, error) {
 	if key == nil {
 		return nil, errors.New("Empty private key.")
 	}
+
+	dgst := s.GetTxDomain(tx)
 
 	kdst := crypto.FromECDSA(key)
 	sign, err := secp256k1.Sign(dgst, kdst)
@@ -51,7 +55,7 @@ func (s *KeccakTxSigner) Verify(tx *prototype.Transaction) error {
 		return errors.New("Wrong signature size.")
 	}
 
-	dgst := GetTxDomain(tx.Hash)
+	dgst := s.GetTxDomain(tx)
 	sign := tx.Signature
 
 	sign[64] -= 27
@@ -69,6 +73,7 @@ func (s *KeccakTxSigner) Verify(tx *prototype.Transaction) error {
 	return nil
 }
 
-func GetTxDomain(hash []byte) []byte {
-	return crypto.Keccak256(hash)
+func (s *KeccakTxSigner) GetTxDomain(tx *prototype.Transaction) []byte {
+	msg := fmt.Sprintf("\x55RaidoSignedData\n32%s", string(crypto.Keccak256(tx.Hash)))
+	return crypto.Keccak256([]byte(msg))
 }

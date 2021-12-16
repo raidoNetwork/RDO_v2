@@ -7,6 +7,10 @@
 node_modules/
 dist/
 
+# Outputs
+Output/
+bin/
+
 # Compiled Java class files
 *.class
 

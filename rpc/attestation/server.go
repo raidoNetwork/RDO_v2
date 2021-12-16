@@ -76,6 +76,28 @@ func (s *Server) SendUnstakeTx(ctx context.Context, request *prototype.SendTxReq
 	return s.sendTx(request, common.UnstakeTxType, "SendUnstakeTx")
 }
 
+func (s *Server) SendRawTx(ctx context.Context, request *prototype.RawTxRequest) (*prototype.ErrorResponse, error) {
+	if len(request.Data) == 0 {
+		return nil, status.Error(17, "Empty request given.")
+	}
+
+	resp := new(prototype.ErrorResponse)
+
+	tx, err := UnmarshalTx(request.Data)
+	if err != nil {
+		resp.Error = err.Error()
+		return resp, status.Error(17, err.Error())
+	}
+
+	err = s.Backend.SendRawTx(tx)
+	if err != nil {
+		resp.Error = err.Error()
+		return resp, err
+	}
+
+	return resp, nil
+}
+
 func (s *Server) GetFee(ctx context.Context, empty *emptypb.Empty) (*prototype.NumberResponse, error) {
 	log.Info("AttestationAPI.GetFee")
 
