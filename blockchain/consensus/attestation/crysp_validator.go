@@ -49,7 +49,7 @@ func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
 	// check that block has no double in outputs and inputs
 	inputExists := map[string]string{}
 
-	var blockBalance uint64 = 0
+	var blockInputsBalance, blockOutputsBalance uint64
 	for txIndex, tx := range block.Transactions {
 		// validate reward tx and skip it
 		// because reward tx brings inconsistency in block balance
@@ -88,16 +88,16 @@ func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
 			}
 
 			inputExists[key] = txHashIndex
-			blockBalance += in.Amount
+			blockInputsBalance += in.Amount
 		}
 
 		// check outputs
 		for _, out := range tx.Outputs {
-			blockBalance -= out.Amount
+			blockOutputsBalance += out.Amount
 		}
 	}
 
-	if blockBalance != 0 {
+	if blockInputsBalance != blockOutputsBalance {
 		return errors.New("Wrong block balance.")
 	}
 
@@ -448,9 +448,9 @@ func (cv *CryspValidator) validateTxBalance(tx *prototype.Transaction) error {
 	}
 
 	// check that inputs and outputs balance with fee are equal
-	var txBalance uint64 = 0
+	var inputsBalance, outputsBalance uint64
 	for _, in := range tx.Inputs {
-		txBalance += in.Amount
+		inputsBalance += in.Amount
 
 		if in.Amount == 0 {
 			return errors.Errorf("Zero amount on input.")
@@ -463,7 +463,7 @@ func (cv *CryspValidator) validateTxBalance(tx *prototype.Transaction) error {
 
 	stakeOutputs := 0
 	for _, out := range tx.Outputs {
-		txBalance -= out.Amount
+		outputsBalance += out.Amount
 
 		if out.Amount == 0 {
 			return errors.Errorf("Zero amount on output.")
@@ -483,10 +483,16 @@ func (cv *CryspValidator) validateTxBalance(tx *prototype.Transaction) error {
 		return errors.New("transaction has no stake outputs.")
 	}
 
-	txBalance -= tx.GetRealFee()
+	outputsBalance += tx.GetRealFee()
 
-	if txBalance != 0 {
-		return errors.Errorf("tx balance is inconsistent. Mismatch is %d.", txBalance)
+	if inputsBalance != outputsBalance {
+		diff := outputsBalance - inputsBalance
+
+		if inputsBalance > outputsBalance {
+			diff = inputsBalance - outputsBalance
+		}
+
+		return errors.Errorf("tx balance is inconsistent. Mismatch is %d.", diff)
 	}
 
 	return nil
@@ -581,9 +587,13 @@ func (cv *CryspValidator) checkHash(tx *prototype.Transaction) error {
 	return nil
 }
 
+// validateUnstakeTx check unstake tx
 func (cv *CryspValidator) validateUnstakeTx(tx *prototype.Transaction) error {
-	if len(tx.Outputs) != 1 {
-		return errors.New("Wrong outputs count.")
+	// validate unstake outputs are valid
+	for _, out := range tx.Outputs {
+		if common.BytesToAddress(out.Node).Hex() == common.BlackHoleAddress && (out.Amount%cv.cfg.StakeUnit) != 0 {
+			return errors.New("Wrong stake output amount.")
+		}
 	}
 
 	return cv.validateTxInputs(tx)

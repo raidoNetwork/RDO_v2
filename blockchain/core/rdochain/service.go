@@ -225,13 +225,14 @@ func (s *Service) generateBlock() (uint64, int, error) {
 
 // Stop stops tx generator service
 func (s *Service) Stop() error {
+	log.Warn("Stop ChainService.")
+
 	close(s.stop)   // close stop chan
 	s.cancelFunc()  // finish context
 	s.txPool.Stop() // close tx pool
 
-	s.showEndStats()
+	s.showEndStats() // block statistic
 
-	log.Warn("Stop ChainService.")
 	return nil
 }
 
@@ -272,7 +273,7 @@ func (s *Service) SyncDatabase() error {
 // checkBalance check that total supply of chain is correct
 func (s *Service) checkBalance() error {
 	// get amount stats from KV
-	rewardAmount, feeAmount := s.bc.GetAmountStats()
+	rewardAmount, feeAmount, genesisSupply := s.bc.GetAmountStats()
 
 	// get current balances sum from SQL
 	balanceSum, err := s.outm.GetTotalAmount()
@@ -280,7 +281,7 @@ func (s *Service) checkBalance() error {
 		return err
 	}
 
-	targetSum := common.StartAmount*common.AccountNum + rewardAmount
+	targetSum := genesisSupply + rewardAmount
 	currentSum := balanceSum + feeAmount
 
 	if targetSum != currentSum {

@@ -370,6 +370,24 @@ func (bc *BlockChain) GetTransactionsCount(addr []byte) (uint64, error) {
 }
 
 // GetAmountStats returns total reward and fee amount
-func (bc *BlockChain) GetAmountStats() (uint64, uint64) {
-	return bc.db.GetAmountStats()
+func (bc *BlockChain) GetAmountStats() (uint64, uint64, uint64) {
+	bc.lock.Lock()
+	genesis := bc.genesisBlock
+	bc.lock.Unlock()
+
+	if genesis == nil {
+		return 0, 0, 0
+	}
+
+	reward, fee := bc.db.GetAmountStats()
+
+	var genesisAmount uint64
+	for _, tx := range genesis.Transactions {
+		for _, out := range tx.Outputs {
+			genesisAmount += out.Amount
+		}
+	}
+
+
+	return reward, fee, genesisAmount
 }

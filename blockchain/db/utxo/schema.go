@@ -15,11 +15,10 @@ CREATE TABLE IF NOT EXISTS ` + "`" + dbshared.UtxoTable + "`" + `(
   ` + "`" + `address_from` + "`" + ` VARCHAR(44) DEFAULT NULL,
   ` + "`" + `address_to` + "`" + ` VARCHAR(44) DEFAULT NULL,
   ` + "`" + `address_node` + "`" + ` VARCHAR(44) DEFAULT NULL,
-  ` + "`" + `amount` + "`" + ` BIGINT UNSIGNED DEFAULT NULL,
-  ` + "`" + `spent` + "`" + ` TINYINT DEFAULT NULL,
+  ` + "`" + `amount` + "`" + ` DECIMAL(28, 0) DEFAULT NULL,
   ` + "`" + `timestamp` + "`" + ` BIGINT DEFAULT NULL,
    PRIMARY KEY (` + "`" + `id` + "`" + `),
-   KEY ` + dbshared.AddrToSpentIndex + ` (address_to, spent, address_node),
+   KEY ` + dbshared.AddrToNode + ` (address_to, address_node),
    UNIQUE KEY ` + dbshared.HashToTxIndex + ` (hash, tx_index),
    KEY ` + dbshared.BlockIdIndex + `(blockId),
    KEY ` + dbshared.TxTypeToNodeIndex + ` (tx_type, address_node)

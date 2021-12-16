@@ -187,9 +187,9 @@ func (m *Miner) FinalizeBlock(block *prototype.Block) error {
 	for _, tx := range block.Transactions {
 		if tx.Type == common.StakeTxType || tx.Type == common.UnstakeTxType {
 			sender = tx.Inputs[0].Address
+			var amount uint64
 
 			if tx.Type == common.StakeTxType {
-				var amount uint64
 				for _, out := range tx.Outputs {
 					if common.BytesToAddress(out.Node).Hex() == common.BlackHoleAddress {
 						amount += out.Amount
@@ -202,15 +202,21 @@ func (m *Miner) FinalizeBlock(block *prototype.Block) error {
 					return err
 				}
 			} else {
-				var amount uint64
-
+				// count tx stake amount
 				for _, in := range tx.Inputs {
 					amount += in.Amount
 				}
 
+				// find amount to unstake
+				for _, out := range tx.Outputs {
+					if common.BytesToAddress(out.Node).Hex() == common.BlackHoleAddress {
+						amount -= out.Amount
+					}
+				}
+
 				err = m.attestationValidator.UnregisterStake(sender, amount)
 				if err != nil {
-					log.Errorf("Undefined staker! Error: %s.", err)
+					log.Errorf("Error unstaking slots: %s.", err)
 					return err
 				}
 			}

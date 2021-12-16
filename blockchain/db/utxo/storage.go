@@ -27,16 +27,17 @@ func NewStore(ctx context.Context, dbType string, config *iface.SQLConfig) (*Sto
 
 	err := godotenv.Load(path)
 	if err != nil {
-		return nil,  errors.Errorf("Error loading .env file %s.", path)
+		return nil, errors.Errorf("Error loading .env file %s.", path)
 	}
 
-	var uname, pass, host, port string
+	var uname, pass, host, port, dbname string
 	uname = os.Getenv("DB_USER")
 	pass = os.Getenv("DB_PASS")
 	host = os.Getenv("DB_HOST")
 	port = os.Getenv("DB_PORT")
+	dbname = os.Getenv("DB_NAME")
 
-	dataSource := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", uname, pass, host, port, dbshared.DBname)
+	dataSource := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", uname, pass, host, port, dbname)
 
 	log.Info("Database config was parsed successfully.")
 
@@ -106,8 +107,8 @@ func (s *Store) DatabasePath() string {
 
 // FindAllUTxO find all addresses' unspent outputs
 func (s *Store) FindAllUTxO(addr string) (uoArr []*types.UTxO, err error) {
-	query := `WHERE address_to = ? AND spent = ? AND address_node = ?`
-	return s.getOutputsList(query, addr, common.UnspentTxO, "")
+	query := `WHERE address_to = ? AND address_node = ?`
+	return s.getOutputsList(query, addr, "")
 }
 
 // FindLastBlockNum search max block num in the database.
@@ -154,8 +155,8 @@ func (s *Store) GetTotalAmount() (uint64, error) {
 
 // FindStakeDeposits shows all actual stake deposits and return list of deposit outputs.
 func (s *Store) FindStakeDeposits() (uoArr []*types.UTxO, err error) {
-	query := `WHERE tx_type = ? AND address_node = ?`
-	return s.getOutputsList(query, common.StakeTxType, common.BlackHoleAddress)
+	query := `WHERE (tx_type = ? OR tx_type = ?) AND address_node = ?`
+	return s.getOutputsList(query, common.StakeTxType, common.UnstakeTxType, common.BlackHoleAddress)
 }
 
 // FindStakeDepositsOfAddress shows actual stake deposits of given address
@@ -168,7 +169,7 @@ func (s *Store) FindStakeDepositsOfAddress(address string) ([]*types.UTxO, error
 // getOutputsList return outputs list with given query and params.
 func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*types.UTxO, err error) {
 	start := time.Now()
-	prefix := `SELECT id, hash, tx_index, address_from, address_to, address_node, amount, spent, timestamp, blockId, tx_type FROM ` + dbshared.UtxoTable + ` `
+	prefix := `SELECT id, hash, tx_index, address_from, address_to, address_node, amount, timestamp, blockId, tx_type FROM ` + dbshared.UtxoTable + ` `
 	rows, err := s.db.Query(prefix+query, params...)
 	if err != nil {
 		return nil, err
@@ -186,15 +187,15 @@ func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*ty
 	start = time.Now()
 
 	var hash, from, to, node string
-	var id, spent, blockNum, amount, timestamp uint64
+	var id, blockNum, amount, timestamp uint64
 	var index, typev uint32
 	for rows.Next() {
-		err = rows.Scan(&id, &hash, &index, &from, &to, &node, &amount, &spent, &timestamp, &blockNum, &typev)
+		err = rows.Scan(&id, &hash, &index, &from, &to, &node, &amount, &timestamp, &blockNum, &typev)
 		if err != nil {
 			return
 		}
 
-		uo, err := types.NewUTxOFull(id, hash, from, to, node, index, amount, blockNum, spent, timestamp, typev)
+		uo, err := types.NewUTxOFull(id, hash, from, to, node, index, amount, blockNum, timestamp, typev)
 		if err != nil {
 			return nil, err
 		}

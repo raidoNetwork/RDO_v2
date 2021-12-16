@@ -45,7 +45,7 @@ func NewTxPool(v consensus.TxValidator, cfg *PoolConfig) *TxPool {
 		// channel
 		dataC: make(chan *prototype.Transaction),
 		cfg:   cfg,
-		lock: sync.Mutex{},
+		lock:  sync.Mutex{},
 	}
 
 	return &tp
@@ -95,6 +95,7 @@ func (tp *TxPool) Stop() error {
 	tp.StopWriting()
 
 	log.Warn("Stop Attestation service.")
+
 	return nil
 }
 
