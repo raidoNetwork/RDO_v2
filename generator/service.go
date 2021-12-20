@@ -38,7 +38,11 @@ func (s *Service) GenerateTx(outputs []*prototype.TxOutput, fee uint64, hexKey s
 	return s.createTx(address, key, outputs, fee, common.NormalTxType)
 }
 
-func (s *Service) GenerateStakeTx(fee uint64, hexKey string) (*prototype.Transaction, error) {
+func (s *Service) GenerateStakeTx(fee uint64, hexKey string, amount uint64) (*prototype.Transaction, error) {
+	if amount%s.stakeAmount != 0 {
+		return nil, errors.New("Wrong stake amount given.")
+	}
+
 	// get address and private key from hex
 	address, key, err := s.getAddress(hexKey)
 	if err != nil {
@@ -48,7 +52,7 @@ func (s *Service) GenerateStakeTx(fee uint64, hexKey string) (*prototype.Transac
 	outputs := []*prototype.TxOutput{
 		types.NewOutput(
 			address.Bytes(),
-			s.stakeAmount,
+			amount,
 			s.blackHole,
 		),
 	}
@@ -56,7 +60,11 @@ func (s *Service) GenerateStakeTx(fee uint64, hexKey string) (*prototype.Transac
 	return s.createTx(address, key, outputs, fee, common.StakeTxType)
 }
 
-func (s *Service) GenerateUnstakeTx(fee uint64, hexKey string) (*prototype.Transaction, error) {
+func (s *Service) GenerateUnstakeTx(fee uint64, hexKey string, amount uint64) (*prototype.Transaction, error) {
+	if amount%s.stakeAmount != 0 {
+		return nil, errors.New("Wrong unstake amount given.")
+	}
+
 	// get address and private key from hex
 	address, key, err := s.getAddress(hexKey)
 	if err != nil {
@@ -69,18 +77,35 @@ func (s *Service) GenerateUnstakeTx(fee uint64, hexKey string) (*prototype.Trans
 		return nil, err
 	}
 
-	if len(utxo) == 0 {
+	utxoSize := len(utxo)
+	if utxoSize == 0 {
 		return nil, errors.New("No stake deposits on your address.")
 	}
 
-	inputsArr := []*prototype.TxInput{
-		utxo[0].ToInput(),
+	var balance uint64
+
+	inputsArr := make([]*prototype.TxInput, 0, len(utxo))
+	for _, uo := range utxo {
+		inputsArr = append(inputsArr, uo.ToInput())
+		balance += uo.Amount
 	}
 
-	balance := utxo[0].Amount
+	if balance < amount {
+		return nil, errors.New("Not enough stake deposits.")
+	}
+
+	stakeLeft := balance - amount
+
+	if stakeLeft%s.stakeAmount != 0 {
+		return nil, errors.New("Bad stake amount.")
+	}
 
 	outputs := []*prototype.TxOutput{
-		types.NewOutput(address.Bytes(), balance, nil),
+		types.NewOutput(address.Bytes(), amount, nil), // unstake
+	}
+
+	if stakeLeft > 0 {
+		outputs = append(outputs, types.NewOutput(address.Bytes(), stakeLeft, s.blackHole)) // stake deposits
 	}
 
 	nonce, err := s.chain.GetTransactionsCount(address.Hex())

@@ -63,7 +63,7 @@ type AttestationAPI interface {
 type GeneratorAPI interface {
 	GenerateTx([]*prototype.TxOutput, uint64, string) (*prototype.Transaction, error)
 
-	GenerateStakeTx(uint64, string) (*prototype.Transaction, error)
+	GenerateStakeTx(uint64, string, uint64) (*prototype.Transaction, error)
 
-	GenerateUnstakeTx(uint64, string) (*prototype.Transaction, error)
+	GenerateUnstakeTx(uint64, string, uint64) (*prototype.Transaction, error)
 }

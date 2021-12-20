@@ -1514,6 +1514,17 @@ func (m *TxOptionsStakeRequest) validate(all bool) error {
 
 	}
 
+	if m.GetAmount() <= 0 {
+		err := TxOptionsStakeRequestValidationError{
+			field:  "Amount",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
 	if len(errors) > 0 {
 		return TxOptionsStakeRequestMultiError(errors)
 	}
@@ -1720,3 +1731,103 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = TxBodyResponseValidationError{}
+
+// Validate checks the field values on RawTxRequest with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *RawTxRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on RawTxRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in RawTxRequestMultiError, or
+// nil if none found.
+func (m *RawTxRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *RawTxRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Data
+
+	if len(errors) > 0 {
+		return RawTxRequestMultiError(errors)
+	}
+	return nil
+}
+
+// RawTxRequestMultiError is an error wrapping multiple validation errors
+// returned by RawTxRequest.ValidateAll() if the designated constraints aren't met.
+type RawTxRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m RawTxRequestMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m RawTxRequestMultiError) AllErrors() []error { return m }
+
+// RawTxRequestValidationError is the validation error returned by
+// RawTxRequest.Validate if the designated constraints aren't met.
+type RawTxRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e RawTxRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e RawTxRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e RawTxRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e RawTxRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e RawTxRequestValidationError) ErrorName() string { return "RawTxRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e RawTxRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sRawTxRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = RawTxRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = RawTxRequestValidationError{}

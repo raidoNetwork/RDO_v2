@@ -28,8 +28,6 @@ func MakeTxSigner(signType string) TxSigner {
 }
 
 type KeccakTxSigner struct {
-	signSalt []byte
-	buf      []byte
 }
 
 func (s *KeccakTxSigner) Sign(tx *prototype.Transaction, key *ecdsa.PrivateKey) ([]byte, error) {
@@ -74,6 +72,6 @@ func (s *KeccakTxSigner) Verify(tx *prototype.Transaction) error {
 }
 
 func (s *KeccakTxSigner) GetTxDomain(tx *prototype.Transaction) []byte {
-	msg := fmt.Sprintf("\x55RaidoSignedData\n32%s", string(crypto.Keccak256(tx.Hash)))
+	msg := fmt.Sprintf("\x15RaidoSignedData\n%s", string(crypto.Keccak256(tx.Hash)))
 	return crypto.Keccak256([]byte(msg))
 }

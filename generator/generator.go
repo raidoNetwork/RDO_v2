@@ -72,19 +72,20 @@ func NewGenerator(cliCtx *cli.Context) (*TxGenerator, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	tg := TxGenerator{
-		nullBalance:   0,
-		accman:        accman,
-		mu:            sync.RWMutex{},
-		ctx:           ctx,
-		cancel:        cancel,
-		cli:           cliCtx,
-		stop:          make(chan struct{}),
-		api:           api,
-		senderIndex:   0,
-		receiverIndex: 0,
-		dataDir:       datadir,
-		cfg:           cfg,
-		txCounter:     0,
+		nullBalance:      0,
+		accman:           accman,
+		mu:               sync.RWMutex{},
+		ctx:              ctx,
+		cancel:           cancel,
+		cli:              cliCtx,
+		stop:             make(chan struct{}),
+		api:              api,
+		senderIndex:      0,
+		receiverIndex:    0,
+		dataDir:          datadir,
+		cfg:              cfg,
+		txCounter:        0,
+		blackHoleAddress: common.HexToAddress(common.BlackHoleAddress).Bytes(),
 	}
 
 	return &tg, nil
@@ -150,6 +151,8 @@ type TxGenerator struct {
 	stakeAmount uint64
 
 	txCounter int
+
+	blackHoleAddress []byte
 }
 
 // Start generator service
@@ -312,9 +315,11 @@ func (tg *TxGenerator) createTx() (*prototype.Transaction, error) {
 
 	// check address having enough balance for staking
 	// if not create regular transaction
-	if txType == common.StakeTxType && balance <= tg.stakeAmount {
-		log.Warnf("Cann't create stake transaction for %s. Balance too low.", from)
-		txType = common.NormalTxType
+	if txType == common.StakeTxType {
+		if (balance/tg.stakeAmount) == 0 || balance == tg.stakeAmount {
+			log.Warnf("Cann't create stake transaction for %s. Balance too low.", from)
+			txType = common.NormalTxType
+		}
 	}
 
 	// get account nonce
@@ -340,9 +345,20 @@ func (tg *TxGenerator) createTx() (*prototype.Transaction, error) {
 	}
 
 	// generate amount to spend for transaction
-	targetAmount := (balance / tg.stakeAmount) * tg.stakeAmount // try to set max slots value
-	if opts.Type == common.NormalTxType {
-		targetAmount = rmath.RandUint64(1, balance)
+	targetAmount := rmath.RandUint64(1, balance)
+
+	if txType == common.StakeTxType || txType == common.UnstakeTxType {
+		slots := balance / tg.stakeAmount
+
+		targetAmount = rmath.RandUint64(1, slots) * tg.stakeAmount
+
+		if targetAmount == balance {
+			if slots > 1 {
+				targetAmount -= tg.stakeAmount
+			} else if txType == common.UnstakeTxType {
+				targetAmount = balance
+			}
+		}
 	}
 
 	log.Infof("Address: %s Balance: %d. Trying to spend: %d.", from, balance, targetAmount)
@@ -403,17 +419,31 @@ func (tg *TxGenerator) findChange(from string, balance uint64, targetAmount uint
 }
 
 // getStakeOutput creates stake output for given address
-func (tg *TxGenerator) getStakeOutput(from string) *prototype.TxOutput {
+func (tg *TxGenerator) getStakeOutput(from string, targetAmount uint64) *prototype.TxOutput {
 	return types.NewOutput(common.HexToAddress(from).Bytes(),
-		tg.stakeAmount,
-		common.HexToAddress(common.BlackHoleAddress).Bytes())
+		targetAmount,
+		tg.blackHoleAddress)
 }
 
 // getStakeOutput creates stake output for given address
-func (tg *TxGenerator) getUnstakeOutput(from string) *prototype.TxOutput {
-	return types.NewOutput(common.HexToAddress(from).Bytes(),
-		tg.stakeAmount,
-		nil)
+func (tg *TxGenerator) getUnstakeOutput(from string, targetAmount, balance uint64) []*prototype.TxOutput {
+	stakeAmount := balance - targetAmount
+
+	data := []*prototype.TxOutput{
+		types.NewOutput(
+			common.HexToAddress(from).Bytes(),
+			targetAmount,
+			nil),
+	}
+
+	if stakeAmount > 0 {
+		data = append(data, types.NewOutput(
+			common.HexToAddress(from).Bytes(),
+			stakeAmount,
+			tg.blackHoleAddress))
+	}
+
+	return data
 }
 
 // createTxBody generate transaction outputs and create transaction struct. Also sign transaction with address private key.
@@ -427,9 +457,9 @@ func (tg *TxGenerator) createTxBody(opts types.TxOptions,
 	if opts.Type == common.NormalTxType {
 		opts.Outputs = append(opts.Outputs, tg.generateTxOutputs(targetAmount)...)
 	} else if opts.Type == common.StakeTxType {
-		opts.Outputs = append(opts.Outputs, tg.getStakeOutput(from))
+		opts.Outputs = append(opts.Outputs, tg.getStakeOutput(from, targetAmount))
 	} else {
-		opts.Outputs = append(opts.Outputs, tg.getUnstakeOutput(from))
+		opts.Outputs = append(opts.Outputs, tg.getUnstakeOutput(from, targetAmount, balance)...)
 	}
 
 	tx, err := types.NewTx(opts, usrKey)
@@ -519,7 +549,7 @@ func (tg *TxGenerator) generateTxOutputs(targetAmount uint64) []*prototype.TxOut
 		pair := lst[receiverIndex] // get account receiver
 		to := pair.Address
 
-		/*if receiverIndex == 500 {
+		/* if receiverIndex == 500 {
 			to = common.HexToAddress("0xeb6d2a58af1d19a3d3870a444e72e0f74f7e91d2")
 		} */
 

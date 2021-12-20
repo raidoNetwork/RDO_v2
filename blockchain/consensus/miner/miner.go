@@ -66,7 +66,7 @@ func (m *Miner) GenerateBlock() (*prototype.Block, error) {
 	}
 
 	// limit tx count in block according to marshaller settings
-	txBatchLimit := 500
+	txBatchLimit := 1000
 	if txListLen < txBatchLimit {
 		txBatchLimit = txListLen
 	}

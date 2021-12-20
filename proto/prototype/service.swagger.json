@@ -695,6 +695,10 @@
         },
         "key": {
           "type": "string"
+        },
+        "amount": {
+          "type": "string",
+          "format": "uint64"
         }
       }
     },

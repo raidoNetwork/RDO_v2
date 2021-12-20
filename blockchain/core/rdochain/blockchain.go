@@ -388,6 +388,5 @@ func (bc *BlockChain) GetAmountStats() (uint64, uint64, uint64) {
 		}
 	}
 
-
 	return reward, fee, genesisAmount
 }
