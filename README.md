@@ -22,14 +22,15 @@ $ raido
 ```
 This command will start raido node with default parameters.
 
-*Note: Log entries are not saved to the disk if flag `-log-file` is not defined in console or with config file param.*
+## Logging
+ Logs are output to the path set with flag `-log-file`. If flag is not specified logs are output to `os.Stdout`.
 
 ### Recommended usage
 ```bash
 $ raido --config-file=config.yaml --chain-config-file=net.yaml
 ```
 
-Specifying the `--config-file` flag will configure node to use config file params instead of flags.
+The `--config-file` flag will configure node to use config file params instead of flags.
 
 *Note: Сonfig file params have higher priority than given flags!*
 
@@ -37,7 +38,7 @@ Config file can take all flags from the list below as params.
 
 ### Node flags
 
-|     **Flag**     |  **Desciprtion** | 
+| <div style="width:150px;">**Flag** </div> |  **Desciprtion** | 
 |--------------------------|-------------------------------|
 | `rpc-host` | Host on which the RPC server should listen. |
 | `rpc-port` | RPC port exposed by a rdo node.             |  
@@ -82,8 +83,10 @@ To create special Genesis block use structure below:
 ```
 
 ## Web3 API
-Use `raido node` Swagger Docs to explore the available API methods.
+`Raido node` has built-in support for a JSON-RPC based APIs to interact with it. This can be exposed **only** via HTTP. 
+Full list of `raido node` API methods is presented in Swagger Docs.
 
+### Signing and verifying data 
 Signing any data and signature verification with Node.js requires npm packages `keccak` and `secp256k1` to be installed.
 Example:
 ```javascript
