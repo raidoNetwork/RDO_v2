@@ -22,7 +22,7 @@ $ raido
 ```
 This command will start raido node with default parameters.
 
-## Logging
+### Logging
  Logs are output to the path set with flag `-log-file`. If flag is not specified logs are output to `os.Stdout`.
 
 ### Recommended usage
