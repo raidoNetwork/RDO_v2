@@ -208,7 +208,7 @@ func (bc *BlockChain) SaveBlock(block *prototype.Block) error {
 
 	err := bc.db.WriteBlock(block)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Error saving block to the KV")
 	}
 
 	if bc.showTimeStat {

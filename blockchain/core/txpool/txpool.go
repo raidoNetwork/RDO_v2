@@ -105,7 +105,12 @@ func (tp *TxPool) Status() error {
 
 // SendRawTx implements PoolAPI for gRPC gateway
 func (tp *TxPool) SendRawTx(tx *prototype.Transaction) error {
-	err := tp.SendTx(tx)
+	_, err := tx.MarshalSSZ()
+	if err != nil {
+		return status.Error(17, "Transaction ")
+	}
+
+	err = tp.SendTx(tx)
 	if err != nil {
 		return status.Error(17, err.Error())
 	}
@@ -279,7 +284,7 @@ func (tp *TxPool) ReserveTransactions(arr []*prototype.Transaction) error {
 	defer tp.lock.Unlock()
 
 	for _, tx := range arr {
-		if tx.Type == common.RewardTxType {
+		if common.IsSystemTx(tx) {
 			continue
 		}
 

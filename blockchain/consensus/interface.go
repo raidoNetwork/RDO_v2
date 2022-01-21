@@ -98,6 +98,12 @@ type OutputUpdater interface {
 
 	// SyncData syncs data in the KV with data in the SQL.
 	SyncData() error
+
+	// CollapseOutputs collapse user inputs
+	CollapseOutputs(transaction *prototype.Transaction) (*prototype.Transaction, error)
+
+	// ClearCollapsedList clear data for already collapsed addresses in the block
+	ClearCollapsedList()
 }
 
 // TransactionQueue provides and updates transaction queue.

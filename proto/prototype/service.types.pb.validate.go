@@ -216,9 +216,29 @@ func (m *TxValue) validate(all bool) error {
 
 	}
 
-	// no validation rules for Fee
+	if m.GetFee() <= 0 {
+		err := TxValueValidationError{
+			field:  "Fee",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
 
 	// no validation rules for Data
+
+	if len(m.GetInputs()) < 1 {
+		err := TxValueValidationError{
+			field:  "Inputs",
+			reason: "value must contain at least 1 item(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
 
 	for idx, item := range m.GetInputs() {
 		_, _ = idx, item
@@ -252,6 +272,17 @@ func (m *TxValue) validate(all bool) error {
 			}
 		}
 
+	}
+
+	if len(m.GetOutputs()) < 1 {
+		err := TxValueValidationError{
+			field:  "Outputs",
+			reason: "value must contain at least 1 item(s)",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
 	}
 
 	for idx, item := range m.GetOutputs() {
@@ -526,7 +557,16 @@ func (m *TxOutputValue) validate(all bool) error {
 
 	// no validation rules for Amount
 
-	// no validation rules for Node
+	if utf8.RuneCountInString(m.GetNode()) > 42 {
+		err := TxOutputValueValidationError{
+			field:  "Node",
+			reason: "value length must be at most 42 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
 
 	if len(errors) > 0 {
 		return TxOutputValueMultiError(errors)

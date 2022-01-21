@@ -210,8 +210,6 @@ func (s *Service) generateBlock() (uint64, int, error) {
 	// validate, save block and update SQL
 	err = s.miner.FinalizeBlock(block)
 	if err != nil {
-		log.Error("[ChainService] generateBlock: Error finalizing block.")
-
 		return 0, 0, err
 	}
 

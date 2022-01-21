@@ -34,14 +34,14 @@ func (s *Store) GetTransactionByHash(hash []byte) (*prototype.Transaction, error
 
 	err := s.db.View(func(tx *bolt.Tx) error {
 		txBkt := tx.Bucket(transactionBucket)
-		blockIndex := txBkt.Get(key)
+		blockLink := txBkt.Get(key)
 
-		if blockIndex == nil {
-			return errors.New("Undefined transaction)")
+		if blockLink == nil {
+			return errors.New("Undefined transaction")
 		}
 
 		var err error
-		txRes, err = s.getTransactionByLink(tx, blockIndex)
+		txRes, err = s.getTransactionByLink(tx, blockLink)
 		if err != nil {
 			return err
 		}
@@ -63,7 +63,7 @@ func (s *Store) updateBlockAccountState(tx *bolt.Tx, block *prototype.Block) err
 	bkt := tx.Bucket(addressBucket)
 
 	for _, transaction := range block.Transactions {
-		if transaction.Type == common.FeeTxType || transaction.Type == common.RewardTxType {
+		if common.IsSystemTx(transaction) {
 			continue
 		}
 

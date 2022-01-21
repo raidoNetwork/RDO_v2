@@ -175,7 +175,7 @@ func (s *Server) GetTransaction(ctx context.Context, req *prototype.HashRequest)
 	}
 
 	if tx == nil {
-		err = errors.Errorf("Not found block with hash %s", req.GetHash())
+		err = errors.Errorf("Not found transaction %s", req.GetHash())
 		res.Error = err.Error()
 		return res, err
 	}

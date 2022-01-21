@@ -6,12 +6,6 @@ import (
 	"time"
 )
 
-// Outputs types
-const (
-	UnspentTxO = 0
-	SpentTxO   = 1
-)
-
 // Transaction types
 const (
 	NormalTxType  = 1
@@ -20,6 +14,7 @@ const (
 	RewardTxType  = 4
 	StakeTxType   = 5
 	UnstakeTxType = 6
+	CollapseTxType = 7
 )
 
 const (
@@ -47,12 +42,20 @@ func IsLegacyTx(tx *prototype.Transaction) bool {
 		fallthrough
 	case UnstakeTxType:
 		return true
+	default:
+		return false
+	}
+}
+
+// IsSystemTx check transaction is created by blockchain self
+func IsSystemTx(tx *prototype.Transaction) bool {
+	switch tx.Type {
 	case FeeTxType:
 		fallthrough
 	case RewardTxType:
 		fallthrough
-	case GenesisTxType:
-		return false
+	case CollapseTxType:
+		return true
 	default:
 		return false
 	}

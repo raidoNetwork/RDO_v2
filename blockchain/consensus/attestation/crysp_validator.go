@@ -51,6 +51,10 @@ func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
 
 	var blockInputsBalance, blockOutputsBalance uint64
 	for txIndex, tx := range block.Transactions {
+		if tx.Type == common.CollapseTxType {
+			continue
+		}
+
 		// validate reward tx and skip it
 		// because reward tx brings inconsistency in block balance
 		if tx.Type == common.RewardTxType {

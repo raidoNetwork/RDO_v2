@@ -46,11 +46,13 @@ type Miner struct {
 
 // GenerateBlock create block from tx pool data
 func (m *Miner) GenerateBlock() (*prototype.Block, error) {
+	start := time.Now()
 	totalSize := 0 // current size of block in bytes
 
 	txList := m.txPool.GetTxQueue()
 	txListLen := len(txList)
 	txBatch := make([]*prototype.Transaction, 0, txListLen)
+	collapseBatch := make([]*prototype.Transaction, 0, 4)
 
 	// create reward transaction for current block
 	rewardTx, err := m.attestationValidator.CreateRewardTx(m.bc.GetBlockCount())
@@ -63,6 +65,19 @@ func (m *Miner) GenerateBlock() (*prototype.Block, error) {
 	} else {
 		txBatch = append(txBatch, rewardTx)
 		totalSize += rewardTx.SizeSSZ()
+
+		collapseTx, err := m.outm.CollapseOutputs(rewardTx)
+		if err != nil {
+			log.Errorf("Can't collapse reward tx %s outputs", common.Encode(rewardTx.Hash))
+			return nil, errors.Wrap(err, "Error collapsing tx outputs")
+		}
+
+		if collapseTx != nil {
+			collapseBatch = append(collapseBatch, collapseTx)
+			totalSize += collapseTx.SizeSSZ()
+
+			log.Warnf("Add CollapseTx %s to the block", common.Encode(collapseTx.Hash))
+		}
 	}
 
 	// limit tx count in block according to marshaller settings
@@ -78,10 +93,10 @@ func (m *Miner) GenerateBlock() (*prototype.Block, error) {
 
 		if totalSize <= m.cfg.BlockSize {
 			tx := txList[i].GetTx()
+			hash := common.Encode(tx.Hash)
 
 			// check if empty validator slots exists and skip stake tx if not exist
 			if tx.Type == common.StakeTxType {
-				hash := common.Encode(tx.Hash)
 				var amount uint64
 				for _, out := range tx.Outputs {
 					if common.BytesToAddress(out.Node).Hex() == common.BlackHoleAddress {
@@ -109,6 +124,20 @@ func (m *Miner) GenerateBlock() (*prototype.Block, error) {
 
 			txBatch = append(txBatch, tx)
 
+			collapseTx, err := m.outm.CollapseOutputs(tx)
+			if err != nil {
+				log.Errorf("Can't collapse tx %s outputs", hash)
+				return nil, errors.Wrap(err, "Error collapsing tx outputs")
+			}
+
+			// no need to create collapse tx for given tx addresses
+			if collapseTx != nil {
+				collapseBatch = append(collapseBatch, collapseTx)
+				totalSize += collapseTx.SizeSSZ()
+
+				log.Warnf("Add CollapseTx %s to the block", common.Encode(collapseTx.Hash))
+			}
+
 			// we fill block successfully
 			if totalSize == m.cfg.BlockSize {
 				break
@@ -127,13 +156,17 @@ func (m *Miner) GenerateBlock() (*prototype.Block, error) {
 		}
 	}
 
+	// add collapsed transaction to the end of the batch
+	txBatch = append(txBatch, collapseBatch...)
+
 	// get block instance
 	block, err := m.bc.GenerateBlock(txBatch)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Warnf("Generate block with transactions count: %d. TxPool transactions count: %d. Size: %d kB.", len(txBatch), txListLen, totalSize/1024)
+	end := time.Since(start)
+	log.Warnf("Generate block with transactions count: %d. TxPool transactions count: %d. Size: %d kB. Time: %s", len(txBatch), txListLen, totalSize/1024, common.StatFmt(end))
 
 	return block, nil
 }
@@ -167,6 +200,9 @@ func (m *Miner) FinalizeBlock(block *prototype.Block) error {
 		end := time.Since(start)
 		log.Infof("FinalizeBlock: Store block in %s", common.StatFmt(end))
 	}
+
+	// clear collapse list
+	m.outm.ClearCollapsedList()
 
 	// update SQL
 	err = m.outm.ProcessBlock(block) // has statistic inside

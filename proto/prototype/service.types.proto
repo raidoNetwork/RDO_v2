@@ -22,10 +22,10 @@ message TxValue{
   uint32 type = 2;
   uint64 timestamp = 3;
   string hash = 4 [(validate.rules).string.len = 66];
-  uint64 fee = 5;
+  uint64 fee = 5 [(validate.rules).uint64.gt = 0];
   bytes data = 6;
-  repeated TxInputValue inputs = 7;
-  repeated TxOutputValue outputs = 8;
+  repeated TxInputValue inputs = 7 [(validate.rules).repeated.min_items = 1];
+  repeated TxOutputValue outputs = 8 [(validate.rules).repeated.min_items = 1];
 }
 
 message TxInputValue{

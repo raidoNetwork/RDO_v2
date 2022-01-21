@@ -20,8 +20,7 @@ func (s *Store) WriteBlock(block *prototype.Block) error {
 
 	data, err := marshalBlock(block)
 	if err != nil {
-		log.Error("Block marshal error")
-		return err
+		return errors.Wrap(err, "Marshaling block error")
 	}
 
 	end := time.Since(start)
