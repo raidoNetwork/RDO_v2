@@ -31,7 +31,7 @@ func (s *Server) GetUTxO(ctx context.Context, request *prototype.AddressRequest)
 
 	addr := request.GetAddress()
 
-	log.Infof("ChainAPI.GetUTxO %s", addr)
+	log.Infof("ChainAPI.GetUTxO(%s)", addr)
 
 	arr, err := s.Backend.FindAllUTxO(addr)
 	if err != nil {
@@ -194,7 +194,7 @@ func (s *Server) GetStakeDeposits(ctx context.Context, request *prototype.Addres
 
 	addr := request.GetAddress()
 
-	log.Infof("ChainAPI.GetStakeDeposits %s", addr)
+	log.Infof("ChainAPI.GetStakeDeposits(%s)", addr)
 
 	arr, err := s.Backend.GetStakeDeposits(addr)
 	if err != nil {

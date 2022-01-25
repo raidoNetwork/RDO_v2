@@ -51,6 +51,7 @@ func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
 
 	var blockInputsBalance, blockOutputsBalance uint64
 	for txIndex, tx := range block.Transactions {
+		// skip collapse tx
 		if tx.Type == common.CollapseTxType {
 			continue
 		}
@@ -60,7 +61,7 @@ func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
 		if tx.Type == common.RewardTxType {
 			err := cv.validateRewardTx(tx, block)
 			if err != nil {
-				return err
+				return errors.Wrap(err, "Error validation RewardTx")
 			}
 
 			continue
@@ -70,7 +71,7 @@ func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
 		if tx.Type == common.FeeTxType {
 			err := cv.validateFeeTx(tx, block)
 			if err != nil {
-				return err
+				return errors.Wrap(err, "Error validation FeeTx")
 			}
 		}
 
@@ -368,7 +369,7 @@ func (cv *CryspValidator) validateRewardTx(tx *prototype.Transaction, block *pro
 
 	rewardSize := len(tx.Outputs)
 	if rewardSize == 0 || rewardSize > cv.cfg.ValidatorRegistryLimit {
-		return errors.Errorf("Wrong outputs size. Given: %d. Expected: %d.", rewardSize, cv.cfg.ValidatorRegistryLimit)
+		return errors.Errorf("Wrong outputs size. Given: %d. Expected: <= %d.", rewardSize, cv.cfg.ValidatorRegistryLimit)
 	}
 
 	// reward tx num should be equal to the block num

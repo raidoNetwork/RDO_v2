@@ -66,6 +66,8 @@ func (m *Miner) GenerateBlock() (*prototype.Block, error) {
 		txBatch = append(txBatch, rewardTx)
 		totalSize += rewardTx.SizeSSZ()
 
+		log.Warnf("Add RewardTx %s to the block", common.Encode(rewardTx.Hash))
+
 		collapseTx, err := m.outm.CollapseOutputs(rewardTx)
 		if err != nil {
 			log.Errorf("Can't collapse reward tx %s outputs", common.Encode(rewardTx.Hash))

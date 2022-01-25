@@ -157,6 +157,8 @@ func (bc *BlockChain) GenerateBlock(txBatch []*prototype.Transaction) (*prototyp
 			}
 		} else {
 			txBatch = append(txBatch, txFee)
+
+			log.Warnf("Add FeeTx %s to the block", common.Encode(txFee.Hash))
 		}
 	}
 

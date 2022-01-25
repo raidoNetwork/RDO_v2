@@ -133,7 +133,7 @@ func (vg *ValidatorGerm) RegisterStake(addr []byte, amount uint64) error {
 	stakeAmount := vg.stakeAmount
 	vg.mu.Unlock()
 
-	address := common.BytesToAddress(addr)
+	address := common.BytesToAddress(addr).Hex()
 	count := amount / stakeAmount
 
 	if uint64(empty) < count {
@@ -143,7 +143,7 @@ func (vg *ValidatorGerm) RegisterStake(addr []byte, amount uint64) error {
 	vg.mu.Lock()
 	var i uint64
 	for ; i < count; i++ {
-		vg.slots = append(vg.slots, address.Hex())
+		vg.slots = append(vg.slots, address)
 	}
 	vg.mu.Unlock()
 
@@ -164,24 +164,11 @@ func (vg *ValidatorGerm) UnregisterStake(addr []byte, amount uint64) error {
 		return errors.Errorf("Bad unstake amount given: %d.", amount)
 	}
 
-	foundSlots := 0
-	size := len(vg.slots) - 1
-
-	for i, a := range vg.slots {
-		if a == address {
-			// swap delete element with last
-			vg.slots[i] = vg.slots[size]
-
-			// remove last
-			vg.slots = vg.slots[:size]
-
-			// update last index
-			size = len(vg.slots) - 1
-
-			foundSlots++
-
-			// break when desired unstake slots limit is reached
-			if foundSlots == int(count) {
+	var i uint64
+	for i = 0;i < count;i++ {
+		for k, slotAddress := range vg.slots {
+			if slotAddress == address {
+				vg.slots = append(vg.slots[:k], vg.slots[k+1:]...)
 				break
 			}
 		}
