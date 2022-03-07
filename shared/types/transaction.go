@@ -107,7 +107,6 @@ func NewTxData(tx *prototype.Transaction) *TransactionData {
 		num:       tx.Num,
 		timestamp: tx.Timestamp,
 		alias:     make([]string, 0),
-		lock:      sync.RWMutex{},
 	}
 
 	return &td
@@ -120,7 +119,7 @@ type TransactionData struct {
 	num       uint64
 	alias     []string
 	timestamp uint64
-	lock      sync.RWMutex
+	lock      sync.Mutex
 }
 
 func (td *TransactionData) GetTx() *prototype.Transaction {
@@ -131,29 +130,29 @@ func (td *TransactionData) GetTx() *prototype.Transaction {
 }
 
 func (td *TransactionData) Size() int {
-	td.lock.RLock()
-	defer td.lock.RUnlock()
+	td.lock.Lock()
+	defer td.lock.Unlock()
 
 	return td.size
 }
 
 func (td *TransactionData) Fee() uint64 {
-	td.lock.RLock()
-	defer td.lock.RUnlock()
+	td.lock.Lock()
+	defer td.lock.Unlock()
 
 	return td.fee
 }
 
 func (td *TransactionData) Num() uint64 {
-	td.lock.RLock()
-	defer td.lock.RUnlock()
+	td.lock.Lock()
+	defer td.lock.Unlock()
 
 	return td.num
 }
 
 func (td *TransactionData) Timestamp() uint64 {
-	td.lock.RLock()
-	defer td.lock.RUnlock()
+	td.lock.Lock()
+	defer td.lock.Unlock()
 
 	return td.timestamp
 }
@@ -166,8 +165,8 @@ func (td *TransactionData) AddAlias(hash string) {
 }
 
 func (td *TransactionData) GetAlias() []string {
-	td.lock.RLock()
-	defer td.lock.RUnlock()
+	td.lock.Lock()
+	defer td.lock.Unlock()
 
 	return td.alias
 }
