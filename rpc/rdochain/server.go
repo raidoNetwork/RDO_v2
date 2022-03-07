@@ -116,7 +116,7 @@ func (s *Server) GetBlockByHash(ctx context.Context, req *prototype.HashRequest)
 
 	log.Infof("ChainAPI.GetBlockByHash(%s)", req.GetHash())
 
-	block, err := s.Backend.GetBlockByHash(req.GetHash())
+	block, err := s.Backend.GetBlockByHashHex(req.GetHash())
 	if err != nil {
 		res.Error = err.Error()
 		return res, err
@@ -223,7 +223,7 @@ func (s *Server) GetTransactionsCount(ctx context.Context, request *prototype.Ad
 	log.Infof("ChainAPI.GetTransactionsCount %s", addr)
 
 	response := new(prototype.NumberResponse)
-	nonce, err := s.Backend.GetTransactionsCount(addr)
+	nonce, err := s.Backend.GetTransactionsCountHex(addr)
 	if err != nil {
 		response.Error = err.Error()
 		return response, err

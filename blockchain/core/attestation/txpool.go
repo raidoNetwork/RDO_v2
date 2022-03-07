@@ -1,4 +1,4 @@
-package txpool
+package attestation
 
 import (
 	"bytes"
@@ -45,7 +45,6 @@ func NewTxPool(v consensus.TxValidator, cfg *PoolConfig) *TxPool {
 		// channel
 		dataC: make(chan *prototype.Transaction),
 		cfg:   cfg,
-		lock:  sync.Mutex{},
 	}
 
 	return &tp
@@ -83,24 +82,6 @@ type TxPool struct {
 	finish context.CancelFunc
 
 	cfg *PoolConfig
-}
-
-func (tp *TxPool) Start() {
-	log.Warn("Start Attestation service.")
-
-	go tp.ReadingLoop()
-}
-
-func (tp *TxPool) Stop() error {
-	tp.StopWriting()
-
-	log.Warn("Stop Attestation service.")
-
-	return nil
-}
-
-func (tp *TxPool) Status() error {
-	return nil
 }
 
 // SendRawTx implements PoolAPI for gRPC gateway

@@ -26,10 +26,8 @@ func NewOutputManager(bc *BlockChain, outDB db.OutputStorage, cfg *OutputManager
 		db:          outDB,
 		bc:          bc,
 		cfg:         cfg,
-		mu:          sync.RWMutex{},
 		minBlockNum: 0,
 		maxBlockNum: 0,
-		collapsedAddr: map[string]int{},
 	}
 
 	return &om
@@ -47,9 +45,7 @@ type OutputManager struct {
 	minBlockNum uint64
 	maxBlockNum uint64
 
-	mu sync.RWMutex
-
-	collapsedAddr map[string]int
+	mu sync.Mutex
 }
 
 // FindAllUTxO find all address' unspent outputs
@@ -489,8 +485,8 @@ func (om *OutputManager) prepareOutputsQuery(tx *prototype.Transaction, from com
 
 // GetSyncStatus return current block num, max block num and percent of synchronisation.
 func (om *OutputManager) GetSyncStatus() (uint64, uint64, float64) {
-	om.mu.RLock()
-	defer om.mu.RUnlock()
+	om.mu.Lock()
+	defer om.mu.Unlock()
 
 	percent := float64(om.minBlockNum) / float64(om.maxBlockNum) * 100
 
@@ -513,98 +509,12 @@ func (om *OutputManager) FindStakeDepositsOfAddress(address string) ([]*types.UT
 
 // IsSyncing return true if OutputManager is syncing with KV.
 func (om *OutputManager) IsSyncing() bool {
-	om.mu.RLock()
-	defer om.mu.RUnlock()
+	om.mu.Lock()
+	defer om.mu.Unlock()
 
 	return om.syncing
 }
 
 func (om *OutputManager) GetTotalAmount() (uint64, error) {
 	return om.db.GetTotalAmount()
-}
-
-func (om *OutputManager) CollapseOutputs(tx *prototype.Transaction) (*prototype.Transaction, error) {
-	const CollapseOutputsNum = 100
-	const InputsPerTxLimit = 2000
-
-	opts := types.TxOptions{
-		Inputs: []*prototype.TxInput{},
-		Outputs: []*prototype.TxOutput{},
-		Fee: 0,
-		Num: 0,
-		Type: common.CollapseTxType,
-	}
-
-	from := ""
-	if tx.Type != common.RewardTxType {
-		from = common.BytesToAddress(tx.Inputs[0].Address).Hex()
-	}
-
-	for _, out := range tx.Outputs {
-		addr := common.BytesToAddress(out.Address).Hex()
-
-		// skip already collapsed addresses and sender address
-		if _, exists := om.collapsedAddr[addr]; exists || addr == from {
-			continue
-		}
-
-		utxo, err := om.FindAllUTxO(addr)
-		if err != nil {
-			return nil, err
-		}
-
-		inputsCount := len(utxo)
-		if inputsCount + 1 <= CollapseOutputsNum {
-			continue
-		}
-
-		skipAddr := true
-		inputsLimitReached := false
-
-		var balance uint64 = 0
-		storedInputs := 0
-		for _, uo := range utxo {
-			balance += uo.Amount
-			opts.Inputs = append(opts.Inputs, uo.ToInput())
-
-			storedInputs++
-
-			if len(opts.Inputs) == InputsPerTxLimit {
-				skipAddr = inputsCount - storedInputs > CollapseOutputsNum
-				inputsLimitReached = true
-				break
-			}
-		}
-
-		collapsedOutput := types.NewOutput(out.Address, balance, nil)
-		opts.Outputs = append(opts.Outputs, collapsedOutput)
-
-		// if address has a lot of inputs yet and
-		// block has another transaction with inputs for given address
-		// skip this address for generation new collapse tx
-		if skipAddr {
-			om.collapsedAddr[addr] = 1
-		}
-
-		// break generation when inputs limit is reached
-		if inputsLimitReached {
-			break
-		}
-	}
-
-	var collapseTx *prototype.Transaction
-	var err error
-
-	if len(opts.Inputs) > 0 {
-		collapseTx, err = types.NewTx(opts, nil)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return collapseTx, nil
-}
-
-func (om *OutputManager) ClearCollapsedList(){
-	om.collapsedAddr = map[string]int{}
 }

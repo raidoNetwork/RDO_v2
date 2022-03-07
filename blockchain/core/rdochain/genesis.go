@@ -6,6 +6,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
+	"github.com/raidoNetwork/RDO_v2/shared/hashutil"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"io/ioutil"
 	"time"
@@ -91,11 +92,7 @@ func (bc *BlockChain) createGenesis() *prototype.Block {
 	txArr := []*prototype.Transaction{tx}
 
 	// create tx merklee tree root
-	txRoot, err := bc.GenTxRoot(txArr)
-	if err != nil {
-		log.Errorf("getGenesis: Can't find tx root. %s", err)
-		return nil
-	}
+	txRoot := hashutil.GenTxRoot(txArr)
 
 	block := &prototype.Block{
 		Num:          GenesisBlockNum,
@@ -107,7 +104,7 @@ func (bc *BlockChain) createGenesis() *prototype.Block {
 		Transactions: txArr,
 		Proposer: &prototype.Sign{
 			Address:   common.HexToAddress(common.BlackHoleAddress).Bytes(),
-			Signature: randSignArr,
+			Signature: make([]byte, crypto.SignatureLength),
 		},
 	}
 

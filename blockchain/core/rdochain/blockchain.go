@@ -2,7 +2,6 @@ package rdochain
 
 import (
 	"bytes"
-	"crypto/rand"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/kv"
@@ -10,8 +9,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
-	"github.com/raidoNetwork/RDO_v2/shared/hasher"
-	"github.com/raidoNetwork/RDO_v2/shared/hashutil"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -23,19 +20,9 @@ const (
 	GenesisBlockNum = 0
 )
 
-var log = logrus.WithField("prefix", "rdochain")
+var log = logrus.WithField("prefix", "blockchain")
 
-var (
-	randSignArr = make([]byte, crypto.SignatureLength)
-	nodeAddress = crypto.Keccak256Hash([]byte("super-node"))[12:]
-)
-
-func init() {
-	// create random sign hash for block validators
-	rand.Read(randSignArr)
-}
-
-func NewBlockChain(db db.BlockStorage, ctx *cli.Context, cfg *params.RDOBlockChainConfig) (*BlockChain, error) {
+func NewBlockChain(db db.BlockStorage, ctx *cli.Context, cfg *params.RDOBlockChainConfig) *BlockChain {
 	genesisHash := crypto.Keccak256Hash([]byte("genesis"))
 
 	bc := BlockChain{
@@ -45,16 +32,10 @@ func NewBlockChain(db db.BlockStorage, ctx *cli.Context, cfg *params.RDOBlockCha
 		futureBlockNum: GenesisBlockNum + 1,          // block num for the future block
 		showTimeStat:   ctx.Bool(flags.SrvStat.Name), // stat flag
 		genesisHash:    genesisHash,
-		lock:           sync.RWMutex{},
 		cfg:            cfg,
 	}
 
-	err := bc.Init()
-	if err != nil {
-		return nil, err
-	}
-
-	return &bc, nil
+	return &bc
 }
 
 type BlockChain struct {
@@ -144,63 +125,17 @@ func (bc *BlockChain) Init() error {
 	return nil
 }
 
-// GenerateBlock creates block from given batch of transactions and store it to the database.
-func (bc *BlockChain) GenerateBlock(txBatch []*prototype.Transaction) (*prototype.Block, error) {
-	// generate fee tx for block
-	if len(txBatch) > 0 {
-		txFee, err := bc.createFeeTx(txBatch)
-		if err != nil {
-			if !errors.Is(err, ErrZeroFeeAmount) {
-				return nil, err
-			} else {
-				log.Debug(err)
-			}
-		} else {
-			txBatch = append(txBatch, txFee)
-
-			log.Warnf("Add FeeTx %s to the block", common.Encode(txFee.Hash))
-		}
-	}
-
-	start := time.Now()
-
-	// create tx merklee tree root
-	txRoot, err := bc.GenTxRoot(txBatch)
-	if err != nil {
-		return nil, err
-	}
-
-	if bc.showTimeStat {
-		end := time.Since(start)
-		log.Debugf("GenerateBlock: Create tx root in %s.", common.StatFmt(end))
-	}
-
-	// get num for future block
-	blockNum := bc.GetBlockCount()
-
-	version := []byte{1, 0, 0}
-	tstamp := uint64(time.Now().UnixNano())
-
-	// generate block hash
-	hash := hasher.BlockHash(blockNum, version, bc.prevHash, txRoot, tstamp, nodeAddress.Bytes())
-
-	block := &prototype.Block{
-		Num:          blockNum,
-		Version:      version,
-		Hash:         hash,
-		Parent:       bc.prevHash,
-		Txroot:       txRoot,
-		Timestamp:    tstamp,
-		Proposer:     bc.sign(nodeAddress.Bytes()),
-		Transactions: txBatch,
-	}
-
-	return block, nil
-}
-
 // saveHeadBlockNum save given number to the database as head number.
 func (bc *BlockChain) saveHeadBlockNum(n uint64) error {
 	return bc.db.SaveHeadBlockNum(n)
+}
+
+// ParentHash return parent hash for current block
+func (bc *BlockChain) ParentHash() []byte {
+	bc.lock.Lock()
+	defer bc.lock.Unlock()
+
+	return bc.prevHash
 }
 
 // SaveBlock stores given block in the database.
@@ -234,13 +169,13 @@ func (bc *BlockChain) SaveBlock(block *prototype.Block) error {
 
 	var fee, reward uint64 // fee amount for block
 	for _, tx := range block.Transactions {
-		if tx.Type == common.RewardTxType {
-			reward = tx.Outputs[0].Amount * uint64(len(tx.Outputs))
-		}
-
-		if tx.Type == common.FeeTxType {
+		if tx.Type == common.RewardTxType || tx.Type == common.FeeTxType {
 			for _, out := range tx.Outputs {
-				fee += out.Amount
+				if tx.Type == common.RewardTxType {
+					reward += out.Amount
+				} else{
+					fee += out.Amount
+				}
 			}
 		}
 	}
@@ -288,42 +223,12 @@ func (bc *BlockChain) GetBlockByHash(hash []byte) (*prototype.Block, error) {
 	return bc.db.GetBlockByHash(hash)
 }
 
-// sign test function for signing some data
-func (bc *BlockChain) sign(addr []byte) *prototype.Sign {
-	if len(addr) > common.AddressLength {
-		addr = addr[:common.AddressLength]
-	}
-
-	sign := &prototype.Sign{
-		Address:   addr,
-		Signature: randSignArr,
-	}
-
-	return sign
-}
-
 // GetBlockCount return block count
 func (bc *BlockChain) GetBlockCount() uint64 {
 	bc.lock.RLock()
 	defer bc.lock.RUnlock()
 
 	return bc.futureBlockNum
-}
-
-// GenTxRoot create transactions root hash of block
-func (bc *BlockChain) GenTxRoot(txarr []*prototype.Transaction) ([]byte, error) {
-	data := make([][]byte, 0, len(txarr))
-
-	for _, tx := range txarr {
-		data = append(data, tx.Hash)
-	}
-
-	root, err := hashutil.MerkleeRoot(data)
-	if err != nil {
-		return nil, err
-	}
-
-	return root, nil
 }
 
 // GetHeadBlock get last block

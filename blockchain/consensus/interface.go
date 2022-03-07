@@ -26,8 +26,7 @@ type Validator interface {
 	TxValidator
 }
 
-// OutputsReader checks all address unspent outputs
-type OutputsReader interface {
+type BlockchainReader interface{
 	// FindAllUTxO find all address unspent outputs
 	FindAllUTxO(string) ([]*types.UTxO, error)
 
@@ -36,13 +35,6 @@ type OutputsReader interface {
 
 	// FindStakeDepositsOfAddress returns all address stake outputs.
 	FindStakeDepositsOfAddress(string) ([]*types.UTxO, error)
-}
-
-// BlockSpecifying get need info from blockchain for verifying block
-type BlockSpecifying interface {
-	// GenTxRoot returns root hash of Merklee tree of transactions
-	// or return error if hash was not found
-	GenTxRoot([]*prototype.Transaction) ([]byte, error)
 
 	// GetBlockByHash return block with given hash from blockchain
 	// if block not found return nil
@@ -55,59 +47,29 @@ type BlockSpecifying interface {
 	GetTransactionsCount([]byte) (uint64, error)
 }
 
-// StakeValidator regulates stake slots condition.
-type StakeValidator interface {
-	// RegisterStake add stake balance with data in transaction
-	RegisterStake([]byte, uint64) error
-
-	// UnregisterStake unregister stake slots.
-	UnregisterStake([]byte, uint64) error
-
-	// CreateRewardTx creates transaction with reward for all stakers.
-	CreateRewardTx(uint64) (*prototype.Transaction, error)
-
-	// CanStake shows stake slots is filled or not.
-	CanStake() bool
-
-	// ReserveSlots mark validator slots as filled until block will be forged.
-	ReserveSlots(uint64) error
-
-	// FlushReserved flush all reserved slots
-	FlushReserved()
-
-	// GetRewardAmount return amount for reward with given size of filled slots.
-	GetRewardAmount(int) uint64
-}
-
-// BlockMiner interface for any struct that can create and save block to the database
-type BlockMiner interface {
-	// GenerateBlock creates block struct from given transaction batch.
-	GenerateBlock([]*prototype.Transaction) (*prototype.Block, error)
-
+// BlockForger interface for any struct that can create and save block to the database
+type BlockForger interface {
 	// SaveBlock store block to the blockchain.
 	SaveBlock(*prototype.Block) error
 
 	// GetBlockCount return block count in the blockchain
-	GetBlockCount() uint64
-}
+	GetBlockCount() uint64 // same
 
-// OutputUpdater updates block outputs in the SQL and sync KV with SQL if it is need.
-type OutputUpdater interface {
+	// FindAllUTxO find all address unspent outputs
+	FindAllUTxO(string) ([]*types.UTxO, error) // same
+
+	// ParentHash return parent block hash for current block
+	ParentHash() []byte
+
 	// ProcessBlock update all given block inputs and outputs state in the SQL database.
 	ProcessBlock(*prototype.Block) error
 
 	// SyncData syncs data in the KV with data in the SQL.
 	SyncData() error
-
-	// CollapseOutputs collapse user inputs
-	CollapseOutputs(transaction *prototype.Transaction) (*prototype.Transaction, error)
-
-	// ClearCollapsedList clear data for already collapsed addresses in the block
-	ClearCollapsedList()
 }
 
-// TransactionQueue provides and updates transaction queue.
-type TransactionQueue interface {
+// TxPool provides and updates transaction queue.
+type TxPool interface {
 	// GetTxQueue returns transaction sort queue.
 	GetTxQueue() []*types.TransactionData
 
@@ -123,4 +85,33 @@ type TransactionQueue interface {
 
 	// FlushReserved removes all reserved transactions from pool.
 	FlushReserved(bool)
+}
+
+// StakePool regulates stake slots condition.
+type StakePool interface {
+	// CanStake shows stake slots is filled or not.
+	CanStake() bool
+
+	// ReserveSlots mark validator slots as filled until block will be forged.
+	ReserveSlots(uint64) error
+
+	// FlushReservedSlots flush all reserved slots
+	FlushReservedSlots()
+
+	// GetStakeSlots returns array of stake slots
+	GetStakeSlots() []string
+
+	// GetRewardPerSlot return reward amount for each stake slot
+	GetRewardPerSlot(uint64) uint64
+
+	// UpdateStakeSlots update stake slots state according to the given block
+	UpdateStakeSlots(block *prototype.Block) error
+}
+
+type AttestationPool interface{
+	StakePool() StakePool
+
+	TxPool() TxPool
+
+	Validator() Validator
 }

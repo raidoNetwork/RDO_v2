@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/pkg/errors"
+	"github.com/raidoNetwork/RDO_v2/blockchain/core"
+	"github.com/raidoNetwork/RDO_v2/blockchain/core/attestation"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/rdochain"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/settings"
+	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/kv"
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
@@ -40,6 +43,8 @@ type RDONode struct {
 	stop     chan struct{} // Channel to wait for termination notifications.
 	kvStore  db.Database
 	outDB    db.OutputDatabase
+
+	slotTicker *slot.SlotTicker
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -53,6 +58,9 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 
 	// services map
 	registry := shared.NewServiceRegistry()
+
+	// create slot ticker
+	slot.NewSlotTicker()
 
 	ctx, cancel := context.WithCancel(cliCtx.Context)
 	rdo := &RDONode{
@@ -68,8 +76,20 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 		return nil, err
 	}
 
+	// register blockchain service
+	if err := rdo.registerBlockchainService(); err != nil {
+		log.Error("Error register BlockchainService.")
+		return nil, err
+	}
+
+	// register attestation service
+	if err := rdo.registerAttestationService(); err != nil {
+		log.Error("Error register BlockchainService.")
+		return nil, err
+	}
+
 	// register chain service
-	if err := rdo.registerChainService(); err != nil {
+	if err := rdo.registerCoreService(); err != nil {
 		log.Error("Error register ChainService.")
 		return nil, err
 	}
@@ -89,8 +109,20 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 	return rdo, nil
 }
 
-func (r *RDONode) registerChainService() error {
-	srv, err := rdochain.NewService(r.cliCtx, r.kvStore, r.outDB)
+func (r *RDONode) registerCoreService() error {
+	var blockchainService *rdochain.Service
+	err := r.services.FetchService(&blockchainService)
+	if err != nil {
+		return err
+	}
+
+	var attestationService *attestation.Service
+	err = r.services.FetchService(&attestationService)
+	if err != nil {
+		return err
+	}
+
+	srv, err := core.NewService(r.cliCtx, blockchainService, attestationService)
 	if err != nil {
 		return err
 	}
@@ -99,8 +131,14 @@ func (r *RDONode) registerChainService() error {
 }
 
 func (r *RDONode) registerRPCservice() error {
-	var chainService *rdochain.Service
-	err := r.services.FetchService(&chainService)
+	var blockchainService *rdochain.Service
+	err := r.services.FetchService(&blockchainService)
+	if err != nil {
+		return err
+	}
+
+	var attestationService *attestation.Service
+	err = r.services.FetchService(&attestationService)
 	if err != nil {
 		return err
 	}
@@ -109,13 +147,13 @@ func (r *RDONode) registerRPCservice() error {
 	port := r.cliCtx.String(flags.RPCPort.Name)
 	maxMsgSize := r.cliCtx.Int(cmd.GrpcMaxCallRecvMsgSizeFlag.Name)
 
-	genService := generator.NewService(chainService)
+	genService := generator.NewService(blockchainService)
 
 	srv := rpc.NewService(r.ctx, &rpc.Config{
 		Host:               host,
 		Port:               port,
-		ChainService:       chainService,
-		AttestationService: chainService,
+		ChainService:       blockchainService,
+		AttestationService: attestationService,
 		GeneratorService:   genService,
 		MaxMsgSize:         maxMsgSize,
 	})
@@ -140,6 +178,30 @@ func (r *RDONode) registerGatewayService() error {
 		maxMsgSize,
 		[]gateway.PbMux{gatewayConfig.PbMux},
 		gatewayConfig.Handler).WithAllowedOrigins(allowedOrigins)
+
+	return r.services.RegisterService(srv)
+}
+
+func (r *RDONode) registerBlockchainService() error {
+	srv, err := rdochain.NewService(r.cliCtx, r.kvStore, r.outDB)
+	if err != nil {
+		return err
+	}
+
+	return r.services.RegisterService(srv)
+}
+
+func (r *RDONode) registerAttestationService() error {
+	var blockchainService *rdochain.Service
+	err := r.services.FetchService(&blockchainService)
+	if err != nil {
+		return err
+	}
+
+	srv, err := attestation.NewService(blockchainService)
+	if err != nil {
+		return err
+	}
 
 	return r.services.RegisterService(srv)
 }
@@ -181,7 +243,11 @@ func (r *RDONode) Close() {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
-	log.Info("Stopping raido node")
+	log.Info("Raido node shutdown...")
+
+	slot.Ticker().Stop()
+	log.Info("Slot ticker stopped.")
+
 	r.services.StopAll()
 
 	if err := r.kvStore.Close(); err != nil {

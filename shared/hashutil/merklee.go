@@ -2,6 +2,7 @@ package hashutil
 
 import (
 	"github.com/pkg/errors"
+	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
 )
 
@@ -11,7 +12,7 @@ var (
 )
 
 // MerkleeRoot return root hash with given []byte
-func MerkleeRoot(data [][]byte) (res []byte, err error) {
+func MerkleeRoot(data [][]byte) (res []byte) {
 	size := len(data)
 
 	lvlKoef := size % 2
@@ -19,7 +20,7 @@ func MerkleeRoot(data [][]byte) (res []byte, err error) {
 	lvlSize := size
 
 	if lvlCount == 0 {
-		return EmptyTxRoot, nil
+		return EmptyTxRoot
 	}
 
 	prevLvl := data
@@ -51,10 +52,22 @@ func MerkleeRoot(data [][]byte) (res []byte, err error) {
 	d := tree[len(tree)-1]
 
 	if len(d) > 1 {
-		return nil, ErrMerkleeTreeCreation
+		panic(ErrMerkleeTreeCreation)
 	}
 
 	res = d[0]
 
-	return res, nil
+	return res
+}
+
+func GenTxRoot(txarr []*prototype.Transaction) []byte {
+	data := make([][]byte, 0, len(txarr))
+
+	for _, tx := range txarr {
+		data = append(data, tx.Hash)
+	}
+
+	root := MerkleeRoot(data)
+
+	return root
 }

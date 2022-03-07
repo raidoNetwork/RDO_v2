@@ -17,14 +17,14 @@ type ChainAPI interface {
 	// GetStakeDeposits returns address stake deposits.
 	GetStakeDeposits(string) ([]*types.UTxO, error)
 
-	// GetTransactionsCount returns number of transactions
+	// GetTransactionsCountHex returns number of transactions
 	// sent by given address.
-	GetTransactionsCount(string) (uint64, error)
+	GetTransactionsCountHex(string) (uint64, error)
 
 	/* Block data */
 
-	// GetBlockByHash return block with given hash.
-	GetBlockByHash(string) (*prototype.Block, error)
+	// GetBlockByHashHex return block with given hash.
+	GetBlockByHashHex(string) (*prototype.Block, error)
 
 	// GetBlockByNum return block with given num.
 	GetBlockByNum(uint64) (*prototype.Block, error)

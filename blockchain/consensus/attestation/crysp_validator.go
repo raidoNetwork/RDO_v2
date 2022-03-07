@@ -19,6 +19,7 @@ var (
 
 type CryspValidatorConfig struct {
 	SlotTime               time.Duration // SlotTime defines main generator ticker timeout.
+	RewardBase 			   uint64		 // RewardBase defines reward per validation slot.
 	MinFee                 uint64        // MinFee setups minimal transaction fee price.
 	StakeUnit              uint64        // StakeUnit roi amount needed for stake.
 	LogStat                bool          // LogStat enables time statistic log entries.
@@ -26,10 +27,9 @@ type CryspValidatorConfig struct {
 	ValidatorRegistryLimit int           // ValidatorRegistryLimit defines validator slots count
 }
 
-func NewCryspValidator(bc consensus.BlockSpecifying, outDB consensus.OutputsReader, stakeValidator consensus.StakeValidator, cfg *CryspValidatorConfig) *CryspValidator {
+func NewCryspValidator(bc consensus.BlockchainReader, stakeValidator consensus.StakePool, cfg *CryspValidatorConfig) *CryspValidator {
 	v := CryspValidator{
-		blockSpecifying: bc,
-		outputsReader:   outDB,
+		bc: bc,
 		stakeValidator:  stakeValidator,
 		cfg:             cfg,
 	}
@@ -38,151 +38,9 @@ func NewCryspValidator(bc consensus.BlockSpecifying, outDB consensus.OutputsRead
 }
 
 type CryspValidator struct {
-	outputsReader   consensus.OutputsReader
-	blockSpecifying consensus.BlockSpecifying
-	stakeValidator  consensus.StakeValidator
+	bc consensus.BlockchainReader
+	stakeValidator  consensus.StakePool
 	cfg             *CryspValidatorConfig
-}
-
-// checkBlockBalance count block inputs and outputs sum and check that all inputs in block are unique.
-func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
-	// check that block has no double in outputs and inputs
-	inputExists := map[string]string{}
-
-	var blockInputsBalance, blockOutputsBalance uint64
-	for txIndex, tx := range block.Transactions {
-		// skip collapse tx
-		if tx.Type == common.CollapseTxType {
-			continue
-		}
-
-		// validate reward tx and skip it
-		// because reward tx brings inconsistency in block balance
-		if tx.Type == common.RewardTxType {
-			err := cv.validateRewardTx(tx, block)
-			if err != nil {
-				return errors.Wrap(err, "Error validation RewardTx")
-			}
-
-			continue
-		}
-
-		//validate fee tx
-		if tx.Type == common.FeeTxType {
-			err := cv.validateFeeTx(tx, block)
-			if err != nil {
-				return errors.Wrap(err, "Error validation FeeTx")
-			}
-		}
-
-		txHash := common.BytesToHash(tx.Hash)
-
-		// check inputs
-		for _, in := range tx.Inputs {
-			inHash := common.BytesToHash(in.Hash)
-			key := inHash.Hex() + "_" + strconv.Itoa(int(in.Index))
-			txHashIndex := txHash.Hex() + "_" + strconv.Itoa(txIndex)
-
-			hash, exists := inputExists[key]
-			if exists {
-				curHash := txHashIndex
-
-				log.Errorf("Saved tx: %s", hash)
-				log.Errorf("Double spend tx: %s", curHash)
-				return errors.Errorf("Block #%d has double input with key %s", block.Num, key)
-			}
-
-			inputExists[key] = txHashIndex
-			blockInputsBalance += in.Amount
-		}
-
-		// check outputs
-		for _, out := range tx.Outputs {
-			blockOutputsBalance += out.Amount
-		}
-	}
-
-	if blockInputsBalance != blockOutputsBalance {
-		return errors.New("Wrong block balance.")
-	}
-
-	return nil
-}
-
-// ValidateBlock validate block and return an error if something is wrong
-func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
-	start := time.Now()
-
-	// check that block has total balance equal to zero
-	// check that inputs of block don't repeat
-	err := cv.checkBlockBalance(block)
-	if err != nil {
-		return err
-	}
-
-	if cv.cfg.LogStat {
-		end := time.Since(start)
-		log.Infof("ValidateBlock: Count block balance in %s", common.StatFmt(end))
-	}
-
-	// check block tx root
-	txRoot, err := cv.blockSpecifying.GenTxRoot(block.Transactions)
-	if err != nil {
-		log.Error("ValidateBlock: error creating tx root.")
-		return err
-	}
-
-	if !bytes.Equal(txRoot, block.Txroot) {
-		return errors.Errorf("Block tx root mismatch. Given: %s. Expected: %s.", common.Encode(block.Txroot), common.Encode(txRoot))
-	}
-
-	tstamp := time.Now().UnixNano() + int64(cv.cfg.SlotTime)
-	if tstamp < int64(block.Timestamp) {
-		return errors.Errorf("Wrong block timestamp: %d. Timestamp with slot time: %d.", block.Timestamp, tstamp)
-	}
-
-	start = time.Now()
-
-	// check if block is already exists in the database
-	b, err := cv.blockSpecifying.GetBlockByHash(block.Hash)
-	if err != nil {
-		return errors.New("Error reading block from database.")
-	}
-
-	if cv.cfg.LogStat {
-		end := time.Since(start)
-		log.Infof("ValidateBlock: Get block by hash in %s", common.StatFmt(end))
-	}
-
-	if b != nil {
-		return errors.Errorf("ValidateBlock: Block #%d is already exists in blockchain!", block.Num)
-	}
-
-	start = time.Now()
-
-	// find prevBlock
-	prevBlock, err := cv.blockSpecifying.GetBlockByHash(block.Parent)
-	if err != nil {
-		return errors.Errorf("ValidateBlock: Error reading previous block from database. Hash: %s.", common.BytesToHash(block.Parent))
-	}
-
-	if cv.cfg.LogStat {
-		end := time.Since(start)
-		log.Infof("ValidateBlock: Get prev block in %s", common.StatFmt(end))
-	}
-
-	if prevBlock == nil {
-		return errors.Errorf("ValidateBlock: Previous Block #%d for given block #%d is not exists.", block.Num-1, block.Num)
-	}
-
-	if prevBlock.Timestamp >= block.Timestamp {
-		return errors.Errorf("ValidateBlock: Timestamp is too small. Previous: %d. Current: %d.", prevBlock.Timestamp, block.Timestamp)
-	}
-
-	// TODO check block approvers and slashers
-
-	return nil
-
 }
 
 // ValidateTransaction validate transaction and return an error if something is wrong
@@ -251,7 +109,7 @@ func (cv *CryspValidator) validateTxInputs(tx *prototype.Transaction) error {
 	from := common.BytesToAddress(tx.Inputs[0].Address)
 
 	// get address nonce
-	nonce, err := cv.blockSpecifying.GetTransactionsCount(from.Bytes())
+	nonce, err := cv.bc.GetTransactionsCount(from.Bytes())
 	if err != nil {
 		return err
 	}
@@ -331,6 +189,11 @@ func (cv *CryspValidator) validateTxInputs(tx *prototype.Transaction) error {
 	return nil
 }
 
+// validateCollapseTx validate collapse transaction
+func (cv *CryspValidator) validateCollapseTx(tx *prototype.Transaction, block *prototype.Block) error {
+	return nil
+}
+
 // validateFeeTx validate fee transaction
 func (cv *CryspValidator) validateFeeTx(tx *prototype.Transaction, block *prototype.Block) error {
 	// if tx has type different from fee return error
@@ -378,7 +241,7 @@ func (cv *CryspValidator) validateRewardTx(tx *prototype.Transaction, block *pro
 	}
 
 	// get stakers from database
-	stakeDeposits, err := cv.outputsReader.FindStakeDeposits()
+	stakeDeposits, err := cv.bc.FindStakeDeposits()
 	if err != nil {
 		return err
 	}
@@ -401,33 +264,25 @@ func (cv *CryspValidator) validateRewardTx(tx *prototype.Transaction, block *pro
 		slots += userSlots
 	}
 
-	if rewardSize != int(slots) {
-		return errors.Errorf("Wrong tx reward outputs size. Given: %d. Expected: %d.", rewardSize, slots)
+	if rewardSize != len(receivers) {
+		return errors.Errorf("Wrong tx reward outputs size. Given: %d. Expected: %d.", rewardSize, len(receivers))
 	}
 
-	// count reward amount for each staker
-	rewardAmount := cv.stakeValidator.GetRewardAmount(int(slots))
+	// count reward amount for each stake slot
+	rewardAmount := cv.stakeValidator.GetRewardPerSlot(slots)
 
 	// check outputs amount and receiver addresses
 	for i, out := range tx.Outputs {
 		addr := common.BytesToAddress(out.Address)
 		addrHex := addr.Hex()
 
-		if _, exists := receivers[addrHex]; exists {
-			receivers[addrHex]--
+		if slots, exists := receivers[addrHex]; exists {
+			stakedAmount := rewardAmount * slots
+			if out.Amount != stakedAmount {
+				return errors.Errorf("Wrong reward amount on output %d address %s. Expect: %d. Real: %d.", i, addrHex, stakedAmount, out.Amount)
+			}
 		} else {
 			return errors.Errorf("Undefined staker %s", addrHex)
-		}
-
-		if out.Amount != rewardAmount {
-			return errors.Errorf("Wrong reward amount on output %d address %s. Expect: %d. Real: %d.", i, addrHex, rewardAmount, out.Amount)
-		}
-	}
-
-	// check that all receivers got their reward correctly
-	for addr, count := range receivers {
-		if count != 0 {
-			return errors.Errorf("Address %s didn't receive reward for slots count %d.", addr, count)
 		}
 	}
 
@@ -513,10 +368,10 @@ func (cv *CryspValidator) getTxInputsFromDB(tx *prototype.Transaction) ([]*types
 	var err error
 
 	if tx.Type == common.UnstakeTxType {
-		utxo, err = cv.outputsReader.FindStakeDepositsOfAddress(from)
+		utxo, err = cv.bc.FindStakeDepositsOfAddress(from)
 	} else {
 		// get user inputs from DB
-		utxo, err = cv.outputsReader.FindAllUTxO(from)
+		utxo, err = cv.bc.FindAllUTxO(from)
 	}
 
 	if err != nil {

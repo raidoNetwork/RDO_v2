@@ -108,7 +108,7 @@ func (s *Service) GenerateUnstakeTx(fee uint64, hexKey string, amount uint64) (*
 		outputs = append(outputs, types.NewOutput(address.Bytes(), stakeLeft, s.blackHole)) // stake deposits
 	}
 
-	nonce, err := s.chain.GetTransactionsCount(address.Hex())
+	nonce, err := s.chain.GetTransactionsCountHex(address.Hex())
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +176,7 @@ func (s *Service) genTxStruct(inputs []*prototype.TxInput, outputs []*prototype.
 		return nil, errors.New("Not enough balance on the wallet.")
 	}
 
-	nonce, err := s.chain.GetTransactionsCount(address.Hex())
+	nonce, err := s.chain.GetTransactionsCountHex(address.Hex())
 	if err != nil {
 		return nil, err
 	}
