@@ -26,7 +26,7 @@ var (
 
 var log = logrus.WithField("prefix", "keystore")
 
-func NewAccountManager(ctx *cli.Context) (*AccountManager, error) {
+func NewAccountManager(ctx *cli.Context) *AccountManager {
 	am := &AccountManager{
 		store:   map[string]*ecdsa.PrivateKey{},
 		list:    make([]KeyPair, 0),
@@ -34,7 +34,7 @@ func NewAccountManager(ctx *cli.Context) (*AccountManager, error) {
 		dataDir: ctx.String(cmd.DataDirFlag.Name),
 	}
 
-	return am, nil
+	return am
 }
 
 type KeyPair struct {
@@ -209,4 +209,18 @@ func (am *AccountManager) GetHexPrivateKey(pubKey string) string {
 	}
 
 	return "0x" + hex.EncodeToString(crypto.FromECDSA(key))
+}
+
+func (am *AccountManager) StoreKey(addr string, path string) error {
+	key := am.GetKey(addr)
+	if key == nil {
+		return errors.New("Undefined key")
+	}
+
+	err := crypto.SaveECDSA(path, key)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
