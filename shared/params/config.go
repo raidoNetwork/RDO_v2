@@ -1,5 +1,7 @@
 package params
 
+import "time"
+
 // RDOBlockChainConfig contains constant configs for node to participate in raido blockchain.
 type RDOBlockChainConfig struct {
 	SlotTime int64 `yaml:"SLOT_TIME"` // SlotTime setups block generator timeout.
@@ -17,4 +19,6 @@ type RDOBlockChainConfig struct {
 	StakeSlotUnit          uint64 `yaml:"STAKE_SLOT_UNIT"`          // StakeSlotUnit defines the amount of RDO needed to fill one stake slot.
 
 	GenesisPath string `yaml:"GENESIS_PATH"` // GenesisPath defines path to the Genesis JSON file.
+	ResponseTimeout time.Duration // ResponseTimeout defines timeout for p2p response
+	SlotsPerEpoch uint64 `yaml:"SLOTS_PER_EPOCH"` // SlotPerEpoch defines slots' number for one epoch
 }

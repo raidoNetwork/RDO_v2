@@ -16,6 +16,7 @@ import (
 	"math/big"
 	"os"
 
+	pcrypto "github.com/libp2p/go-libp2p-core/crypto"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -27,6 +28,9 @@ const RecoveryIDOffset = 64
 
 // DigestLength sets the signature digest exact length
 const DigestLength = 32
+
+const secp256k1EncodedSize = 64
+const ed25519EncodedSize = 128
 
 var (
 	secp256k1N, _  = new(big.Int).SetString("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16)
@@ -117,8 +121,7 @@ func HexToECDSA(hexkey string) (*ecdsa.PrivateKey, error) {
 	return ToECDSA(b)
 }
 
-// LoadECDSA loads a secp256k1 private keyAcc from the given file.
-func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
+func loadKey(file string, size int) ([]byte, error){
 	fd, err := os.Open(file)
 	if err != nil {
 		return nil, err
@@ -126,14 +129,24 @@ func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
 	defer fd.Close()
 
 	r := bufio.NewReader(fd)
-	buf := make([]byte, 64)
+	buf := make([]byte, size)
 	n, err := readASCII(buf, r)
 	if err != nil {
 		return nil, err
 	} else if n != len(buf) {
-		return nil, fmt.Errorf("keyAcc file too short, want 64 hex characters")
+		return nil, fmt.Errorf("keyAcc file too short, want %d hex characters", size)
 	}
 	if err := checkKeyFileEnd(r); err != nil {
+		return nil, err
+	}
+
+	return buf, nil
+}
+
+// LoadECDSA loads a secp256k1 private keyAcc from the given file.
+func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
+	buf, err := loadKey(file, secp256k1EncodedSize)
+	if err != nil {
 		return nil, err
 	}
 
@@ -153,6 +166,29 @@ func FromECDSA(priv *ecdsa.PrivateKey) []byte {
 func SaveECDSA(file string, key *ecdsa.PrivateKey) error {
 	k := hex.EncodeToString(FromECDSA(key))
 	return ioutil.WriteFile(file, []byte(k), 0600)
+}
+
+// SaveP2PKey save a raw key private key to the given file
+func SaveP2PKey(file string, key pcrypto.PrivKey) error {
+	raw, err := key.Raw()
+	if err != nil {
+		return err
+	}
+	k := hex.EncodeToString(raw)
+	return ioutil.WriteFile(file, []byte(k), 0600)
+}
+
+// LoadP2PKey load hex private ket from given file
+func LoadP2PKey(file string) (pcrypto.PrivKey, error) {
+	buf, err := loadKey(file, ed25519EncodedSize)
+	if err != nil {
+		return nil, err
+	}
+	ks, err := hex.DecodeString(string(buf))
+	if err != nil {
+		return nil, err
+	}
+	return pcrypto.UnmarshalEd25519PrivateKey(ks)
 }
 
 // readASCII reads into 'buf', stopping when the buffer is full or

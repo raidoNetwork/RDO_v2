@@ -5,7 +5,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
-	"github.com/raidoNetwork/RDO_v2/shared/hashutil"
+	"github.com/raidoNetwork/RDO_v2/utils/hash"
 	"strconv"
 	"time"
 )
@@ -96,7 +96,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 	}
 
 	// check block tx root
-	txRoot := hashutil.GenTxRoot(block.Transactions)
+	txRoot := hash.GenTxRoot(block.Transactions)
 	if !bytes.Equal(txRoot, block.Txroot) {
 		return errors.Errorf("Block tx root mismatch. Given: %s. Expected: %s.", common.Encode(block.Txroot), common.Encode(txRoot))
 	}

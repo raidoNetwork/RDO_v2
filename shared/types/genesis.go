@@ -2,9 +2,9 @@ package types
 
 import (
 	"encoding/json"
+	"github.com/raidoNetwork/RDO_v2/keystore"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
-	"github.com/raidoNetwork/RDO_v2/shared/keystore"
 	"io/ioutil"
 	"path/filepath"
 	"time"
@@ -13,7 +13,7 @@ import (
 type GenesisBlock struct {
 	Outputs   map[string]uint64 `json:"outputs"`   // map hex address -> amount
 	Hash      string            `json:"hash"`      // Genesis hash
-	Timestamp uint64            `json:"timestamp"` // Genesis time
+	Timestamp uint64			`json:"timestamp"` // Timestamp
 }
 
 func CreateGenesisJSON(accman *keystore.AccountManager, path string) error {

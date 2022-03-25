@@ -3,10 +3,9 @@ package miner
 import (
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
+	"github.com/raidoNetwork/RDO_v2/keystore"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
-	"github.com/raidoNetwork/RDO_v2/shared/hashutil"
-	"github.com/raidoNetwork/RDO_v2/shared/keystore"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/sirupsen/logrus"
@@ -32,7 +31,6 @@ func NewMiner(bc consensus.BlockForger, att consensus.AttestationPool, cfg *Mine
 		att: att,
 		cfg: cfg,
 		collapsedAddr: map[string]int{},
-		signer: types.MakeBlockSigner("keccak256"),
 	}
 
 	return &m
@@ -42,16 +40,14 @@ type Miner struct {
 	bc   consensus.BlockForger
 	att  consensus.AttestationPool
 
-	signer types.BlockSigner
-
 	cfg *MinerConfig
 	mu  sync.RWMutex
 
 	collapsedAddr map[string]int
 }
 
-// GenerateBlock create block from tx pool data
-func (m *Miner) GenerateBlock() (*prototype.Block, error) {
+// ForgeBlock create block from tx pool data
+func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 	start := time.Now()
 	totalSize := 0 // current size of block in bytes
 
@@ -194,8 +190,10 @@ func (m *Miner) GenerateBlock() (*prototype.Block, error) {
 }
 
 // FinalizeBlock validate given block and save it to the blockchain
-func (m *Miner) FinalizeBlock(block *prototype.Block) error {
+func (m *Miner) FinalizeBlock(block *prototype.Block, isLocal bool) error {
 	start := time.Now()
+
+	// TODO check transactions stored in pool?
 
 	// validate block
 	err := m.att.Validator().ValidateBlock(block)
@@ -223,19 +221,16 @@ func (m *Miner) FinalizeBlock(block *prototype.Block) error {
 		log.Infof("FinalizeBlock: Store block in %s", common.StatFmt(end))
 	}
 
+	// TODO refactor saving to SQL
+	// TODO try saving in parallel
+
 	// clear collapse list
 	m.collapsedAddr = map[string]int{}
 
 	// update SQL
-	err = m.bc.ProcessBlock(block) // has statistic inside
+	err = m.bc.ProcessBlock(block)
 	if err != nil {
-		log.Errorf("FinalizeBlock: Error process block: %s", err)
-
-		// try to resync SQL with KV
-		err = m.bc.SyncData()
-		if err != nil {
-			return err
-		}
+		return errors.Wrap(err, "Error process block")
 	}
 
 	startInner := time.Now()
@@ -266,53 +261,9 @@ func (m *Miner) FinalizeBlock(block *prototype.Block) error {
 	return nil
 }
 
-// ForgeBlock create and save new block
-func (m *Miner) ForgeBlock() (*prototype.Block, error) {
-	start := time.Now()
-	var end time.Duration
-
-	// generate block with block miner
-	block, err := m.GenerateBlock()
-	if err != nil {
-		return nil, err
-	}
-
-	if m.cfg.ShowStat {
-		end = time.Since(start)
-		log.Infof("ForgeBlock: Generate block in %s.", common.StatFmt(end))
-	}
-
-	start = time.Now()
-
-	// validate, save block and update SQL
-	err = m.FinalizeBlock(block)
-	if err != nil {
-		return nil, err
-	}
-
-	if m.cfg.ShowStat {
-		end = time.Since(start)
-		log.Infof("ForgeBlock: Finalize block in %s.", common.StatFmt(end))
-	}
-
-	return block, nil
-}
-
 // generateBlockBody creates block from given batch of transactions and store it to the database.
 func (m *Miner) generateBlockBody(txBatch []*prototype.Transaction) *prototype.Block {
-	header := &types.BlockHeader{
-		Num: m.bc.GetBlockCount(),
-		Parent: m.bc.ParentHash(),
-		Version: []byte{1, 0, 0},
-		TxRoot: hashutil.GenTxRoot(txBatch),
-	}
-
-	// sign block
-	sheet := &types.BlockSheet{
-		Proposer: m.signBlock(header),
-	}
-
-	return types.NewBlock(header, txBatch, sheet)
+	return types.NewBlock(m.bc.GetBlockCount(), m.bc.ParentHash(), txBatch, m.cfg.Proposer)
 }
 
 func (m *Miner) createFeeTx(txarr []*prototype.Transaction) (*prototype.Transaction, error) {
@@ -366,6 +317,7 @@ func (m *Miner) createRewardTx(blockNum uint64) (*prototype.Transaction, error) 
 	return ntx, nil
 }
 
+// TODO add optimization
 func (m *Miner) createCollapseTx(tx *prototype.Transaction, blockNum uint64) (*prototype.Transaction, error) {
 	const CollapseOutputsNum = 100
 	const InputsPerTxLimit = 2000
@@ -482,13 +434,4 @@ func (m *Miner) getRewardAmount(size int) uint64 {
 	}
 
 	return params.RaidoConfig().RewardBase / uint64(size)
-}
-
-func (m *Miner) signBlock(header *types.BlockHeader) *prototype.Sign {
-	sign, err := m.signer.Sign(header, m.cfg.Proposer.Key())
-	if err != nil {
-		panic(errors.Wrap(err, "error signing block"))
-	}
-
-	return sign
 }

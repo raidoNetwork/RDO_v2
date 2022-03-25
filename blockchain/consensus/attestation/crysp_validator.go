@@ -6,8 +6,8 @@ import (
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
-	"github.com/raidoNetwork/RDO_v2/shared/hasher"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
+	"github.com/raidoNetwork/RDO_v2/utils/hash"
 	"github.com/sirupsen/logrus"
 	"strconv"
 	"time"
@@ -108,14 +108,16 @@ func (cv *CryspValidator) validateTxInputs(tx *prototype.Transaction) error {
 	// get sender address
 	from := common.BytesToAddress(tx.Inputs[0].Address)
 
-	// get address nonce
-	nonce, err := cv.bc.GetTransactionsCount(from.Bytes())
-	if err != nil {
-		return err
-	}
+	if tx.Type != common.CollapseTxType {
+		// get address nonce
+		nonce, err := cv.bc.GetTransactionsCount(from.Bytes())
+		if err != nil {
+			return err
+		}
 
-	if tx.Num != nonce+1 {
-		return consensus.ErrBadNonce
+		if tx.Num != nonce+1 {
+			return consensus.ErrBadNonce
+		}
 	}
 
 	// get utxo for transaction
@@ -191,7 +193,12 @@ func (cv *CryspValidator) validateTxInputs(tx *prototype.Transaction) error {
 
 // validateCollapseTx validate collapse transaction
 func (cv *CryspValidator) validateCollapseTx(tx *prototype.Transaction, block *prototype.Block) error {
-	return nil
+	// collapse tx num should be equal to the block num
+	if tx.Num != block.Num {
+		return errors.New("Wrong collapse tx num.")
+	}
+
+	return cv.validateTxInputs(tx)
 }
 
 // validateFeeTx validate fee transaction
@@ -435,7 +442,7 @@ func (cv *CryspValidator) checkInputsData(tx *prototype.Transaction, spentOutput
 
 // checkHash check that tx hash is calculated correctly
 func (cv *CryspValidator) checkHash(tx *prototype.Transaction) error {
-	genHash, err := hasher.TxHash(tx)
+	genHash, err := hash.TxHash(tx)
 	if err != nil {
 		return err
 	}

@@ -3,8 +3,8 @@ package kv
 import (
 	"context"
 	"github.com/pkg/errors"
-	"github.com/raidoNetwork/RDO_v2/shared/fileutil"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
+	"github.com/raidoNetwork/RDO_v2/utils/file"
 	"github.com/sirupsen/logrus"
 	bolt "go.etcd.io/bbolt"
 	"os"
@@ -23,15 +23,6 @@ const (
 
 var log = logrus.WithField("prefix", "database")
 
-// BlockCacheSize specifies 1000 slots worth of blocks cached, which
-// would be approximately 2MB
-var BlockCacheSize = int64(1 << 21)
-
-// Config for the bolt db kv store.
-type Config struct {
-	InitialMMapSize int
-}
-
 // Store defines an implementation of the database.
 type Store struct {
 	db           *bolt.DB
@@ -42,13 +33,13 @@ type Store struct {
 // NewKVStore initializes a new boltDB key-value store at the directory
 // path specified, creates the kv-buckets based on the schema, and stores
 // an open connection db object as a property of the Store struct.
-func NewKVStore(ctx context.Context, dirPath string, config *Config) (*Store, error) {
-	hasDir, err := fileutil.HasDir(dirPath)
+func NewKVStore(ctx context.Context, dirPath string) (*Store, error) {
+	hasDir, err := file.HasDir(dirPath)
 	if err != nil {
 		return nil, err
 	}
 	if !hasDir {
-		if err := fileutil.MkdirAll(dirPath); err != nil {
+		if err := file.MkdirAll(dirPath); err != nil {
 			return nil, err
 		}
 	}
@@ -58,7 +49,7 @@ func NewKVStore(ctx context.Context, dirPath string, config *Config) (*Store, er
 		params.RaidoIoConfig().ReadWritePermissions,
 		&bolt.Options{
 			Timeout:         1 * time.Second,
-			InitialMmapSize: config.InitialMMapSize,
+			InitialMmapSize: 536870912, // 512 mb default
 		},
 	)
 	if err != nil {

@@ -12,8 +12,10 @@ import (
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/kv"
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
+	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/gateway"
 	"github.com/raidoNetwork/RDO_v2/generator"
+	"github.com/raidoNetwork/RDO_v2/p2p"
 	"github.com/raidoNetwork/RDO_v2/rpc"
 	"github.com/raidoNetwork/RDO_v2/shared"
 	"github.com/raidoNetwork/RDO_v2/shared/cmd"
@@ -43,6 +45,9 @@ type RDONode struct {
 	stop     chan struct{} // Channel to wait for termination notifications.
 	kvStore  db.Database
 	outDB    db.OutputDatabase
+	stateFeed events.Bus
+	blockFeed events.Bus
+	txFeed	  events.Bus
 
 	slotTicker *slot.SlotTicker
 }
@@ -74,6 +79,12 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 	// create database
 	if err := rdo.startDB(cliCtx); err != nil {
 		return nil, err
+	}
+
+	// register P2P service
+	if err := rdo.registerP2P(); err != nil {
+		log.Error("Error register P2P service.")
+		return nil, errors.Wrap(err, "P2P error")
 	}
 
 	// register blockchain service
@@ -122,7 +133,13 @@ func (r *RDONode) registerCoreService() error {
 		return err
 	}
 
-	srv, err := core.NewService(r.cliCtx, blockchainService, attestationService)
+	cfg := core.Config{
+		BlockForger: blockchainService,
+		AttestationPool: attestationService,
+		BlockFeed: r.BlockFeed(),
+		StateFeed: r.StateFeed(),
+	}
+	srv, err := core.NewService(r.cliCtx, &cfg)
 	if err != nil {
 		return err
 	}
@@ -183,7 +200,7 @@ func (r *RDONode) registerGatewayService() error {
 }
 
 func (r *RDONode) registerBlockchainService() error {
-	srv, err := rdochain.NewService(r.cliCtx, r.kvStore, r.outDB)
+	srv, err := rdochain.NewService(r.cliCtx, r.kvStore, r.outDB, r.StateFeed())
 	if err != nil {
 		return err
 	}
@@ -199,6 +216,23 @@ func (r *RDONode) registerAttestationService() error {
 	}
 
 	srv, err := attestation.NewService(blockchainService)
+	if err != nil {
+		return err
+	}
+
+	return r.services.RegisterService(srv)
+}
+
+func (r *RDONode) registerP2P() error {
+	cfg := p2p.Config{
+		Port: r.cliCtx.Int(flags.P2PPort.Name),
+		PeerLimit: 200, // TODO replace with flag
+		BootstrapNodes: []string{
+
+		},
+		DataDir: r.cliCtx.String(cmd.DataDirFlag.Name),
+	}
+	srv, err := p2p.NewService(&cfg)
 	if err != nil {
 		return err
 	}
@@ -269,14 +303,11 @@ func (r *RDONode) startDB(cliCtx *cli.Context) error {
 	dbPath := filepath.Join(baseDir, kv.RdoNodeDbDirName)
 	clearDB := cliCtx.Bool(cmd.ClearDB.Name)
 	forceClearDB := cliCtx.Bool(cmd.ForceClearDB.Name)
-	dbType := cliCtx.String(cmd.SQLType.Name)
 
 	log.WithField("database-path", dbPath).Info("Checking DB")
 
 	// Init key value database
-	kvStore, err := db.NewDB(r.ctx, dbPath, &kv.Config{
-		InitialMMapSize: cliCtx.Int(cmd.BoltMMapInitialSizeFlag.Name),
-	})
+	kvStore, err := db.NewDB(r.ctx, dbPath)
 	if err != nil {
 		return err
 	}
@@ -300,12 +331,12 @@ func (r *RDONode) startDB(cliCtx *cli.Context) error {
 		if err := kvStore.ClearDB(); err != nil {
 			return errors.Wrap(err, "could not clear database")
 		}
-		kvStore, err = db.NewDB(r.ctx, dbPath, &kv.Config{
-			InitialMMapSize: cliCtx.Int(cmd.BoltMMapInitialSizeFlag.Name),
-		})
+		kvStore, err = db.NewDB(r.ctx, dbPath)
 		if err != nil {
 			return errors.Wrap(err, "could not create new KV database")
 		}
+
+		// TODO drop SQL here
 	}
 
 	// save database instance to the node
@@ -319,7 +350,7 @@ func (r *RDONode) startDB(cliCtx *cli.Context) error {
 	}
 
 	// Init SQL database
-	sqlStore, err := db.NewUTxODB(r.ctx, dbType, &SQLCfg)
+	sqlStore, err := db.NewUTxODB(r.ctx, &SQLCfg)
 	if err != nil {
 		return errors.Wrap(err, "could not create new SQL database")
 	}
@@ -328,4 +359,12 @@ func (r *RDONode) startDB(cliCtx *cli.Context) error {
 	r.outDB = sqlStore
 
 	return nil
+}
+
+func (r *RDONode) BlockFeed() *events.Bus {
+	return &r.blockFeed
+}
+
+func (r *RDONode) StateFeed() *events.Bus {
+	return &r.stateFeed
 }

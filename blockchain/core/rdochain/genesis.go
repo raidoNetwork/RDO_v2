@@ -6,10 +6,9 @@ import (
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
-	"github.com/raidoNetwork/RDO_v2/shared/hashutil"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
+	"github.com/raidoNetwork/RDO_v2/utils/hash"
 	"io/ioutil"
-	"time"
 )
 
 var ErrMissedGenesis = errors.New("Unset Genesis JSON path.")
@@ -62,8 +61,6 @@ func (bc *BlockChain) castGenesisOutputs(data *types.GenesisBlock) []*prototype.
 
 // createGenesis return GenesisBlock
 func (bc *BlockChain) createGenesis() *prototype.Block {
-	timestamp := time.Now().UnixNano()
-
 	opts := types.TxOptions{
 		Type:    common.GenesisTxType,
 		Num:     GenesisBlockNum,
@@ -92,7 +89,7 @@ func (bc *BlockChain) createGenesis() *prototype.Block {
 	txArr := []*prototype.Transaction{tx}
 
 	// create tx merklee tree root
-	txRoot := hashutil.GenTxRoot(txArr)
+	txRoot := hash.GenTxRoot(txArr)
 
 	block := &prototype.Block{
 		Num:          GenesisBlockNum,
@@ -100,7 +97,7 @@ func (bc *BlockChain) createGenesis() *prototype.Block {
 		Hash:         bc.genesisHash,
 		Parent:       crypto.Keccak256([]byte{}),
 		Txroot:       txRoot,
-		Timestamp:    uint64(timestamp),
+		Timestamp:    genesisData.Timestamp,
 		Transactions: txArr,
 		Proposer: &prototype.Sign{
 			Address:   common.HexToAddress(common.BlackHoleAddress).Bytes(),

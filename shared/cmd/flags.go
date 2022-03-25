@@ -3,6 +3,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/raidoNetwork/RDO_v2/utils/file"
 	"strings"
 
 	"github.com/urfave/cli/v2"
@@ -21,24 +22,17 @@ var (
 		Usage: "Prompt for clearing any previously stored data at the data directory",
 	}
 
-	// SQLType defines SQL database type.
-	SQLType = altsrc.NewStringFlag(&cli.StringFlag{
-		Name:  "sql-db-type",
-		Usage: "Set SQL database type to use. When use MySQL database config path should be given.",
-		Value: "mysql",
-	})
-
 	// SQLConfigPath setups path to the MySQL config file.
 	SQLConfigPath = altsrc.NewStringFlag(&cli.StringFlag{
 		Name:  "sql-db-cfg",
-		Usage: "Config file directory with MySQL user and password",
+		Usage: "Config file path with MySQL user and password",
 	})
 
 	// DataDirFlag defines a path on disk.
 	DataDirFlag = altsrc.NewStringFlag(&cli.StringFlag{
 		Name:  "datadir",
 		Usage: "Data directory for the databases and keystore",
-		Value: DefaultDataDir(),
+		Value: file.DefaultDataDir(),
 	})
 	// LogFileName specifies the log output file name.
 	LogFileName = altsrc.NewStringFlag(&cli.StringFlag{
@@ -60,12 +54,6 @@ var (
 		Name:  "grpc-max-msg-size",
 		Usage: "Integer to define max recieve message call size (default: 4194304 (for 4MB))",
 		Value: 1 << 22,
-	})
-	// BoltMMapInitialSizeFlag specifies the initial size in bytes of boltdb's mmap syscall.
-	BoltMMapInitialSizeFlag = altsrc.NewIntFlag(&cli.IntFlag{
-		Name:  "bolt-mmap-initial-size",
-		Usage: "Specifies the size in bytes of bolt db's mmap syscall allocation",
-		Value: 536870912, // 512 Mb as a default value.
 	})
 )
 

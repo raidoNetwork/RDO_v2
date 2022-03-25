@@ -47,4 +47,10 @@ var (
 		Name:  "srv-debug-stat",
 		Usage: "Show debug statistics of services.",
 	})
+	// P2PPort specifies a p2p port.
+	P2PPort = altsrc.NewIntFlag(&cli.IntFlag{
+		Name:  "p2p-port",
+		Usage: "P2P service port to listen",
+		Value: 9999,
+	})
 )

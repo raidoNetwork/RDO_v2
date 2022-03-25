@@ -3,8 +3,8 @@ package main
 import (
 	"errors"
 	"flag"
-	"github.com/raidoNetwork/RDO_v2/shared/fileutil"
-	"github.com/raidoNetwork/RDO_v2/shared/keystore"
+	"github.com/raidoNetwork/RDO_v2/keystore"
+	"github.com/raidoNetwork/RDO_v2/utils/file"
 	"log"
 	"path/filepath"
 )
@@ -39,7 +39,7 @@ func genKey(outputPath string) error {
 	}
 
 	outputDir := filepath.Dir(outputPath)
-	exists, err := fileutil.HasDir(outputDir)
+	exists, err := file.HasDir(outputDir)
 	if err != nil {
 		return err
 	}

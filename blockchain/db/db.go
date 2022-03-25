@@ -7,11 +7,11 @@ import (
 )
 
 // NewDB initializes a new DB.
-func NewDB(ctx context.Context, dirPath string, config *kv.Config) (Database, error) {
-	return kv.NewKVStore(ctx, dirPath, config)
+func NewDB(ctx context.Context, dirPath string) (Database, error) {
+	return kv.NewKVStore(ctx, dirPath)
 }
 
 // NewUTxODB initializes a new UTxO DB.
-func NewUTxODB(ctx context.Context, dbType string, config *SQLConfig) (OutputDatabase, error) {
-	return utxo.NewStore(ctx, dbType, config)
+func NewUTxODB(ctx context.Context, config *SQLConfig) (OutputDatabase, error) {
+	return utxo.NewStore(ctx, config)
 }

@@ -3,18 +3,18 @@ package rdochain
 import (
 	"fmt"
 	"github.com/pkg/errors"
-	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
+	"github.com/raidoNetwork/RDO_v2/blockchain/state"
+	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/urfave/cli/v2"
 	"sync"
-	"time"
 )
 
-func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (*Service, error){
+func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage, stateFeed *events.Bus) (*Service, error){
 	cfg := params.RaidoConfig()
 
 	// create blockchain instance
@@ -22,13 +22,14 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (
 
 	// output manager
 	outm := NewOutputManager(bc, sql, &OutputManagerConfig{
-		ShowStat:     true,
+		ShowStat:     true, // TODO refactor this params
 		ShowWideStat: false,
 	})
 
 	srv := &Service{
 		bc: bc,
 		outm: outm,
+		stateFeed: stateFeed,
 	}
 
 	return srv, nil
@@ -37,6 +38,7 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage) (
 type Service struct{
 	bc *BlockChain
 	outm *OutputManager
+	stateFeed *events.Bus
 	mu sync.Mutex
 	ready bool
 	statusErr error
@@ -44,6 +46,11 @@ type Service struct{
 }
 
 func (s *Service) Start(){
+	// TODO service funcs:
+	// 	1. Sync with network
+
+	// TODO lock node till sync is in progress
+
 	log.Warn("Start Blockchain service.")
 
 	// load head data and Genesis
@@ -73,9 +80,7 @@ func (s *Service) Start(){
 	s.ready = true
 	s.mu.Unlock()
 
-	// start slot ticker
-	genesisTime := time.Unix(0, int64(s.bc.genesisBlock.Timestamp))
-	slot.Ticker().Start(genesisTime)
+	s.stateFeed.Send(state.LocalDatabaseReady)
 }
 
 func (s *Service) Status() error {
@@ -138,6 +143,7 @@ func (s *Service) FindAllUTxO(addr string) ([]*types.UTxO, error) {
 
 // GetSyncStatus return sync status of local blockchain with network
 func (s *Service) GetSyncStatus() (string, error) {
+	// TODO add network sync status
 	return s.getSQLsyncStatus()
 }
 
@@ -165,6 +171,7 @@ func (s *Service) getSQLsyncStatus() (string, error){
 }
 
 func (s *Service) GetServiceStatus() (string, error) {
+	// TODO add info for network sync
 	return s.GetSyncStatus()
 }
 
@@ -249,4 +256,8 @@ func (s *Service) ProcessBlock(block *prototype.Block) error {
 
 func (s *Service) SyncData() error {
 	return s.outm.SyncData()
+}
+
+func (s *Service) GetGenesis() *prototype.Block {
+	return s.bc.GetGenesis()
 }

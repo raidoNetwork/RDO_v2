@@ -2,11 +2,12 @@ package main
 
 import (
 	nested "github.com/antonfisher/nested-logrus-formatter"
+	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/node"
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
 	"github.com/raidoNetwork/RDO_v2/shared/cmd"
-	"github.com/raidoNetwork/RDO_v2/shared/logutil"
 	"github.com/raidoNetwork/RDO_v2/shared/version"
+	"github.com/raidoNetwork/RDO_v2/utils/logger"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"os"
@@ -34,7 +35,6 @@ var appFlags = []cli.Flag{
 	cmd.ChainConfigFileFlag,
 
 	// db flags
-	cmd.BoltMMapInitialSizeFlag,
 	cmd.ClearDB,
 	cmd.ForceClearDB,
 
@@ -43,8 +43,10 @@ var appFlags = []cli.Flag{
 	flags.SrvDebugStat,
 
 	// SQL config
-	cmd.SQLType,
 	cmd.SQLConfigPath,
+
+	// p2p
+	flags.P2PPort,
 }
 
 var log = logrus.WithField("prefix", "main")
@@ -78,7 +80,7 @@ func main() {
 
 		logFileName := ctx.String(cmd.LogFileName.Name)
 		if logFileName != "" {
-			if err := logutil.ConfigurePersistentLogging(logFileName); err != nil {
+			if err := logger.ConfigurePersistentLogging(logFileName); err != nil {
 				log.WithError(err).Error("Failed to configuring logging to disk.")
 			}
 		}
@@ -104,10 +106,8 @@ func main() {
 func startNode(ctx *cli.Context) error {
 	rdo, err := node.New(ctx)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Node start error")
 	}
-
-	log.Warn("Created node")
 
 	rdo.Start()
 	return nil

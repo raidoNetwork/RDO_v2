@@ -52,6 +52,9 @@ type BlockForger interface {
 	// SaveBlock store block to the blockchain.
 	SaveBlock(*prototype.Block) error
 
+	// GetGenesis returns Genesis block
+	GetGenesis() *prototype.Block
+
 	// GetBlockCount return block count in the blockchain
 	GetBlockCount() uint64 // same
 

@@ -4,7 +4,7 @@ import (
 	"crypto/ecdsa"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
-	"github.com/raidoNetwork/RDO_v2/shared/hasher"
+	"github.com/raidoNetwork/RDO_v2/utils/hash"
 	"github.com/sirupsen/logrus"
 	"sync"
 	"time"
@@ -45,7 +45,7 @@ func NewTx(opts TxOptions, key *ecdsa.PrivateKey) (*prototype.Transaction, error
 	tx.Inputs = opts.Inputs
 	tx.Outputs = opts.Outputs
 
-	hash, err := hasher.TxHash(tx)
+	hash, err := hash.TxHash(tx)
 	if err != nil {
 		log.Errorf("NewTx: Error generating tx hash. Error: %s", err)
 		return nil, err

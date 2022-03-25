@@ -19,7 +19,7 @@ import (
 
 var log = logrus.WithField("prefix", "OutputDB")
 
-func NewStore(ctx context.Context, dbType string, config *iface.SQLConfig) (*Store, error) {
+func NewStore(ctx context.Context, config *iface.SQLConfig) (*Store, error) {
 	path := config.ConfigPath
 	if path == "" {
 		return nil, errors.New("Empty database cfg path.")
@@ -27,7 +27,7 @@ func NewStore(ctx context.Context, dbType string, config *iface.SQLConfig) (*Sto
 
 	err := godotenv.Load(path)
 	if err != nil {
-		return nil, errors.Errorf("Error loading .env file %s.", path)
+		return nil, errors.Errorf("Error loading .env file %s. Error message: %s", path, err)
 	}
 
 	var uname, pass, host, port, dbname string
@@ -38,8 +38,7 @@ func NewStore(ctx context.Context, dbType string, config *iface.SQLConfig) (*Sto
 	dbname = os.Getenv("DB_NAME")
 
 	dataSource := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", uname, pass, host, port, dbname)
-
-	log.Info("Database config was parsed successfully.")
+	log.Infof("Database server: %s:%s", host, port)
 
 	db, err := sql.Open("mysql", dataSource)
 	if err != nil {
@@ -59,7 +58,6 @@ func NewStore(ctx context.Context, dbType string, config *iface.SQLConfig) (*Sto
 		cfg:          config,
 		canCreateTx:  true,
 		schema:       utxoSchema,
-		dbType:       dbType,
 	}
 
 	if err := str.createSchema(); err != nil {
@@ -80,7 +78,6 @@ type Store struct {
 	cfg          *iface.SQLConfig
 
 	schema string
-	dbType string
 }
 
 // Close - close database connections
