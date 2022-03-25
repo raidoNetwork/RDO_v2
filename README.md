@@ -4,7 +4,7 @@ RaidoChain node implementation.
 
 ## Building instructions
 
-Building `raido` requires Go (version 1.16 or higher), a C compiler (gcc version 12.0.5 or higher) and MySQL Database Server (version 8.0 or higher).
+Building `raido` requires Go (version 1.17 or higher), a C compiler (gcc version 12.0.5 or higher) and MySQL Database Server (version 8.0 or higher).
 When all dependencies are installed, run:
 ```bash
 $ make raido
