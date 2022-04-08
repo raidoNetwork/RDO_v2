@@ -28,8 +28,8 @@ var (
 
 var log = logrus.WithField("prefix", "TxPool")
 
-func NewTxPool(v consensus.TxValidator, cfg *PoolConfig) *TxPool {
-	ctx, finish := context.WithCancel(context.Background())
+func NewTxPool(ctx context.Context, v consensus.TxValidator, cfg *PoolConfig) *TxPool {
+	ctx, finish := context.WithCancel(ctx)
 
 	tp := TxPool{
 		validator:      v,
@@ -238,9 +238,6 @@ func (tp *TxPool) checkInputs(td *types.TransactionData) error {
 					return nil
 				}
 			}
-
-			//td.AddAlias(firstTxHash) // link current Transaction to the first tx
-			//tp.villainousPool[firstTxHash] = td
 
 			return errors.Errorf("%s Input hash index: %s. Tx hash: %s, double hash: %s", ErrInputExists, key, firstTxHash, hash)
 		}

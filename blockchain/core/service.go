@@ -22,11 +22,6 @@ import (
 
 var log = logrus.WithField("prefix", "core")
 
-type blockEvent struct {
-	data *prototype.Block
-	isLocal bool
-}
-
 type Config struct{
 	BlockForger consensus.BlockForger
 	AttestationPool consensus.AttestationPool
@@ -37,7 +32,7 @@ type Config struct{
 // NewService creates new CoreService
 func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 	statFlag := cliCtx.Bool(flags.SrvStat.Name)
-	debugStatFlag := cliCtx.Bool(flags.SrvDebugStat.Name)
+	debugStatFlag := cliCtx.Bool(flags.DebugLogging.Name)
 	dataDir := cliCtx.String(cmd.DataDirFlag.Name)
 
 	netCfg := params.RaidoConfig()
@@ -84,7 +79,7 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		expStatFlag:  debugStatFlag,
 
 		// events
-		blockEvent: make(chan blockEvent),
+		blockEvent: make(chan *prototype.Block, 1),
 		stateEvent: make(chan state.State),
 
 		// feeds
@@ -119,7 +114,7 @@ type Service struct {
 
 	// events
 	stateEvent chan state.State
-	blockEvent chan blockEvent
+	blockEvent chan *prototype.Block
 
 	blockFeed events.Emitter
 }
@@ -131,8 +126,6 @@ func (s *Service) Start() {
 	// start slot ticker
 	genesisTime := time.Unix(0, int64(s.bc.GetGenesis().Timestamp))
 	slot.Ticker().Start(genesisTime)
-
-	log.Warn("Start Core service.")
 
 	// start block generator main loop
 	go s.mainLoop()
@@ -171,19 +164,17 @@ func (s *Service) mainLoop() {
 			}
 
 			// push block to events
-			go s.SendBlock(block, true)
+			go s.SendBlock(block)
 
 			if s.fullStatFlag {
 				end = time.Since(start)
 				log.Infof("[CoreService] Create block in: %s", common.StatFmt(end))
 			}
-		case bEvent := <-s.blockEvent:
+		case block := <-s.blockEvent:
 			start = time.Now()
 
-			block := bEvent.data
-
 			// validate, save block and update SQL
-			err := s.miner.FinalizeBlock(block, bEvent.isLocal)
+			err := s.miner.FinalizeBlock(block)
 			if err != nil {
 				log.Errorf("[CoreService] Error finalizing block: %s", err.Error())
 
@@ -221,11 +212,8 @@ func (s *Service) Status() error {
 	return s.statusErr
 }
 
-func (s *Service) SendBlock(block *prototype.Block, isLocal bool){
-	s.blockFeed.Send(blockEvent{
-		data: block,
-		isLocal: isLocal,
-	})
+func (s *Service) SendBlock(block *prototype.Block){
+	s.blockFeed.Send(block)
 }
 
 func (s *Service) waitInitialized(){
@@ -234,7 +222,7 @@ func (s *Service) waitInitialized(){
 		case <-s.stop:
 			return
 		case st := <-s.stateEvent:
-			if st == state.LocalDatabaseReady {
+			if st == state.Synced {
 				return
 			}
 		}

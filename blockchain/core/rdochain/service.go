@@ -22,7 +22,7 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage, s
 
 	// output manager
 	outm := NewOutputManager(bc, sql, &OutputManagerConfig{
-		ShowStat:     true, // TODO refactor this params
+		ShowStat:     true,
 		ShowWideStat: false,
 	})
 
@@ -46,11 +46,6 @@ type Service struct{
 }
 
 func (s *Service) Start(){
-	// TODO service funcs:
-	// 	1. Sync with network
-
-	// TODO lock node till sync is in progress
-
 	log.Warn("Start Blockchain service.")
 
 	// load head data and Genesis
@@ -80,7 +75,7 @@ func (s *Service) Start(){
 	s.ready = true
 	s.mu.Unlock()
 
-	s.stateFeed.Send(state.LocalDatabaseReady)
+	s.stateFeed.Send(state.LocalSynced)
 }
 
 func (s *Service) Status() error {
@@ -88,6 +83,7 @@ func (s *Service) Status() error {
 }
 
 func (s *Service) Stop() error {
+	// TODO call stop on bc
 	return nil
 }
 

@@ -42,9 +42,9 @@ var (
 		Name:  "srv-stat",
 		Usage: "Show statistics of services",
 	})
-	// SrvDebugStat allows generating all debug logs.
-	SrvDebugStat = altsrc.NewBoolFlag(&cli.BoolFlag{
-		Name:  "srv-debug-stat",
+	// DebugLogging allows generating all debug logs.
+	DebugLogging = altsrc.NewBoolFlag(&cli.BoolFlag{
+		Name:  "debug-logging",
 		Usage: "Show debug statistics of services.",
 	})
 	// P2PPort specifies a p2p port.
@@ -52,5 +52,17 @@ var (
 		Name:  "p2p-port",
 		Usage: "P2P service port to listen",
 		Value: 9999,
+	})
+	// P2PHost specifies a p2p host.
+	P2PHost = altsrc.NewStringFlag(&cli.StringFlag{
+		Name:  "p2p-host",
+		Usage: "P2P service host",
+		Value: "",
+	})
+	// P2PBootstrapNodes first nodes to connect
+	P2PBootstrapNodes = altsrc.NewStringSliceFlag(&cli.StringSliceFlag{
+		Name: "p2p-bootstrap-nodes",
+		Usage: "P2P nodes addresses for initial connections",
+		Value: cli.NewStringSlice(),
 	})
 )

@@ -13,7 +13,11 @@ func (s *Service) setupDiscovery() error {
 }
 
 func (s *Service) HandlePeerFound(p peer.AddrInfo){
-	log.Infof("Found new node %s", p.ID.Pretty())
+	if p.ID == s.host.ID() {
+		return
+	}
+
+	log.Infof("Found new node %s/p2p/%s", p.Addrs[0].String(), p.ID.Pretty())
 
 	err := s.connectPeer(p)
 	if err != nil {

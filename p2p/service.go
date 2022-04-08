@@ -3,46 +3,53 @@ package p2p
 import (
 	"context"
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/host"
+	phost "github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
+	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/sirupsen/logrus"
+	"net"
 	"sync"
 )
 
-// TODO create feed for packets messaging
-
-const blockTopic = "rdo-block"
-const txTopic = "rdo-tx"
+const BlockTopic = "rdo-block"
+const TxTopic = "rdo-transactions"
 
 var log = logrus.WithField("prefix", "p2p")
-
-var emptyMsg = []byte("Empty p2p message")
 var maxDialTimeout = params.RaidoConfig().ResponseTimeout
 
 type Config struct {
+	Host           string
 	Port           int
 	BootstrapNodes []string
 	PeerLimit      int
 	DataDir        string
 }
 
-func NewService(cfg *Config) (*Service, error) {
-	ctx, cancel := context.WithCancel(context.Background())
+func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
+	ctx, cancel := context.WithCancel(ctx)
 
 	nodePrivKey, err := getNodeKey(cfg.DataDir)
 	if err != nil {
 		return nil, err
 	}
 
-	ipAddr, err := getIPaddr()
-	if err != nil {
-		return nil, err
+	host := cfg.Host
+	if host == "" {
+		host, err = getIPaddr()
+		if err != nil {
+			return nil, err
+		}
+	} else{
+		hostIp := net.ParseIP(host)
+		if hostIp.To4() == nil {
+			return nil, errors.Errorf("Invalid host IP address given %s", host)
+		}
 	}
 
-	opts, err := optionsList(nodePrivKey, ipAddr, cfg)
+	opts, err := optionsList(nodePrivKey, host, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -58,8 +65,6 @@ func NewService(cfg *Config) (*Service, error) {
 		pubsub.WithMessageIdFn(msgId),
 		pubsub.WithPeerOutboundQueueSize(256),
 		pubsub.WithValidateQueueSize(256),
-		//pubsub.WithPeerScore(peerScoringParams()), // TODO add peer score ?
-		//pubsub.WithPeerScoreInspect(s.peerInspector, time.Minute),
 		pubsub.WithGossipSubParams(pubsubGossipParam()),
 	}
 
@@ -68,7 +73,7 @@ func NewService(cfg *Config) (*Service, error) {
 		return nil, err
 	}
 
-	srv := &Service{
+	srv = &Service{
 		nodeKey: nodePrivKey,
 		host:    netHost,
 		pubsub:  gs,
@@ -85,7 +90,7 @@ func NewService(cfg *Config) (*Service, error) {
 
 type Service struct {
 	nodeKey *nodeKey
-	host    host.Host
+	host    phost.Host
 	id      peer.ID
 	pubsub  *pubsub.PubSub
 	topics map[string]*pubsub.Topic
@@ -98,9 +103,15 @@ type Service struct {
 	cfg *Config
 
 	startFail error
+
+	notifier events.Bus
 }
 
 func (s *Service) Start() {
+	// print host p2p address
+	s.logID()
+
+	// connect to bootstrap nodes
 	s.connectPeers()
 
 	// start new peer search
@@ -113,10 +124,12 @@ func (s *Service) Start() {
 	// join topics
 	err = s.SubscribeAll()
 	if err != nil {
+		log.Error(err)
 		s.startFail = err
 		return
 	}
 
+	// list new messages
 	go s.readMessages()
 }
 
@@ -172,8 +185,9 @@ func (s *Service) connectPeer(info peer.AddrInfo) error {
 }
 
 func (s *Service) readMessages(){
-	topics := s.activeTopics()
+	log.Info("Start listening messages")
 
+	topics := s.activeTopics()
 	for _, t := range topics {
 		go s.listenTopic(t)
 	}
@@ -192,7 +206,8 @@ func (s *Service) listenTopic(topic string){
 	for {
 		msg, err := sub.Next(s.ctx)
 		if err != nil {
-			log.Error(errors.Wrap(err, "error listening topic " + topic))
+			log.WithError(err).Error("error listening topic " + topic)
+			sub.Cancel()
 			return
 		}
 
@@ -200,8 +215,7 @@ func (s *Service) listenTopic(topic string){
 			continue
 		}
 
-		// TODO send message to the special feed
-
+		go s.receiveMessage(msg)
 	}
 }
 
@@ -246,8 +260,8 @@ func (s *Service) subscribeTopic(name string) error {
 
 func (s *Service) activeTopics() []string {
 	topics := []string{
-		blockTopic,
-		txTopic,
+		BlockTopic,
+		TxTopic,
 	}
 
 	return topics
@@ -264,8 +278,32 @@ func (s *Service) Publish(topicName string, message []byte) error {
 
 	err := topic.Publish(s.ctx, message)
 	if err != nil {
-		return errors.Wrap(err, "error publish message")
+		return errors.Wrap(err, "error Publish message")
 	}
 
+	log.Infof("Publish message to %s", topicName)
+
 	return nil
+}
+
+func (s *Service) logID(){
+	if len(s.host.Addrs()) == 0 {
+		return
+	}
+
+	log.Infof("Start listen on %s/p2p/%s", s.host.Addrs()[0].String(), s.id.Pretty())
+}
+
+func (s *Service) receiveMessage(msg *pubsub.Message){
+	n := Notty{
+		Data: msg.Data,
+		Topic: *msg.Topic,
+	}
+
+	// send event
+	s.notifier.Send(n)
+}
+
+func (s *Service) Notifier() *events.Bus {
+	return &s.notifier
 }

@@ -3,10 +3,10 @@ package kv
 import (
 	"encoding/hex"
 	ssz "github.com/ferranbt/fastssz"
-	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	bolt "go.etcd.io/bbolt"
 	"strings"
 	"time"
@@ -18,7 +18,7 @@ var ErrNoHead = errors.New("Header block was not found")
 func (s *Store) WriteBlock(block *prototype.Block) error {
 	start := time.Now()
 
-	data, err := marshalBlock(block)
+	data, err := serialize.MarshalBlock(block)
 	if err != nil {
 		return errors.Wrap(err, "Marshaling block error")
 	}
@@ -103,7 +103,7 @@ func (s *Store) GetBlock(num uint64, hash []byte) (*prototype.Block, error) {
 		log.Debugf("Read block from db in %s.", common.StatFmt(time.Since(start)))
 
 		var err error
-		blk, err = unmarshalBlock(enc)
+		blk, err = serialize.UnmarshalBlock(enc)
 		if err != nil {
 			return err
 		}
@@ -260,7 +260,7 @@ func (s *Store) GetGenesis() (*prototype.Block, error) {
 		start = time.Now()
 
 		var err error
-		blk, err = unmarshalBlock(enc)
+		blk, err = serialize.UnmarshalBlock(enc)
 		if err != nil {
 			return err
 		}
@@ -278,7 +278,7 @@ func (s *Store) GetGenesis() (*prototype.Block, error) {
 func (s *Store) SaveGenesis(block *prototype.Block) error {
 	start := time.Now()
 
-	data, err := marshalBlock(block)
+	data, err := serialize.MarshalBlock(block)
 	if err != nil {
 		log.Error("Genesis block marshal error")
 		return err
@@ -343,33 +343,6 @@ func (s *Store) GetAmountStats() (uint64, uint64) {
 	}
 
 	return reward, fee
-}
-
-func unmarshalBlock(enc []byte) (*prototype.Block, error) {
-	rawBlock := &prototype.Block{}
-
-	var err error
-	enc, err = snappy.Decode(nil, enc)
-	if err != nil {
-		return rawBlock, err
-	}
-
-	err = rawBlock.UnmarshalSSZ(enc)
-	if err != nil {
-		log.Errorf("Unmarshal block error: %s", err)
-		return rawBlock, err
-	}
-
-	return rawBlock, nil
-}
-
-func marshalBlock(blk *prototype.Block) ([]byte, error) {
-	obj, err := blk.MarshalSSZ()
-	if err != nil {
-		return nil, err
-	}
-
-	return snappy.Encode(nil, obj), nil
 }
 
 var statsBuf = make([]byte, 0, 16)

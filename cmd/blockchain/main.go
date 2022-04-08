@@ -24,7 +24,6 @@ var appFlags = []cli.Flag{
 	flags.GRPCGatewayHost,
 	flags.GRPCGatewayPort,
 	flags.GPRCGatewayCorsDomain,
-	cmd.GrpcMaxCallRecvMsgSizeFlag,
 
 	// data storage directories
 	cmd.DataDirFlag,
@@ -40,13 +39,15 @@ var appFlags = []cli.Flag{
 
 	// Logging flags
 	flags.SrvStat,
-	flags.SrvDebugStat,
+	flags.DebugLogging,
 
 	// SQL config
 	cmd.SQLConfigPath,
 
 	// p2p
+	flags.P2PHost,
 	flags.P2PPort,
+	flags.P2PBootstrapNodes,
 }
 
 var log = logrus.WithField("prefix", "main")
@@ -74,7 +75,7 @@ func main() {
 		})
 
 		// init debug logs with stat flag
-		if ctx.Bool(flags.SrvDebugStat.Name) {
+		if ctx.Bool(flags.DebugLogging.Name) {
 			logrus.SetLevel(logrus.DebugLevel)
 		}
 

@@ -33,6 +33,8 @@ import (
 
 var log = logrus.WithField("prefix", "node")
 
+const maxMsgSize =  1 << 22
+
 // RDONode defines a struct that handles the services running a random rdo chain
 // full PoS node. It handles the lifecycle of the entire system and registers
 // services to a service registry.
@@ -162,7 +164,6 @@ func (r *RDONode) registerRPCservice() error {
 
 	host := r.cliCtx.String(flags.RPCHost.Name)
 	port := r.cliCtx.String(flags.RPCPort.Name)
-	maxMsgSize := r.cliCtx.Int(cmd.GrpcMaxCallRecvMsgSizeFlag.Name)
 
 	genService := generator.NewService(blockchainService)
 
@@ -185,7 +186,6 @@ func (r *RDONode) registerGatewayService() error {
 	remoteAddr := fmt.Sprintf("%s:%d", host, rpcPort)
 	endpoint := fmt.Sprintf("%s:%d", host, port)
 	allowedOrigins := strings.Split(r.cliCtx.String(flags.GPRCGatewayCorsDomain.Name), ",")
-	maxMsgSize := r.cliCtx.Int(cmd.GrpcMaxCallRecvMsgSizeFlag.Name)
 
 	gatewayConfig := gateway.DefaultConfig()
 
@@ -215,7 +215,7 @@ func (r *RDONode) registerAttestationService() error {
 		return err
 	}
 
-	srv, err := attestation.NewService(blockchainService)
+	srv, err := attestation.NewService(r.ctx, blockchainService)
 	if err != nil {
 		return err
 	}
@@ -225,14 +225,13 @@ func (r *RDONode) registerAttestationService() error {
 
 func (r *RDONode) registerP2P() error {
 	cfg := p2p.Config{
+		Host: r.cliCtx.String(flags.P2PHost.Name),
 		Port: r.cliCtx.Int(flags.P2PPort.Name),
 		PeerLimit: 200, // TODO replace with flag
-		BootstrapNodes: []string{
-
-		},
+		BootstrapNodes: r.cliCtx.StringSlice(flags.P2PBootstrapNodes.Name),
 		DataDir: r.cliCtx.String(cmd.DataDirFlag.Name),
 	}
-	srv, err := p2p.NewService(&cfg)
+	srv, err := p2p.NewService(r.ctx, &cfg)
 	if err != nil {
 		return err
 	}
@@ -367,4 +366,8 @@ func (r *RDONode) BlockFeed() *events.Bus {
 
 func (r *RDONode) StateFeed() *events.Bus {
 	return &r.stateFeed
+}
+
+func (r *RDONode) TxFeed() *events.Bus {
+	return &r.txFeed
 }

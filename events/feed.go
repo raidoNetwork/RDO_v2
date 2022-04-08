@@ -42,7 +42,7 @@ func (b *Bus) Subscribe(ch interface{}) Subscription {
 	defer b.lock.Unlock()
 
 	cval := reflect.ValueOf(ch)
-	esub := &eventSubscription{ch: cval}
+	esub := &eventSubscription{ch: cval, bus: b}
 	b.cases = append(b.cases, reflect.SelectCase{Dir: reflect.SelectSend, Chan: cval})
 
 	return esub
@@ -84,6 +84,8 @@ func (b *Bus) Send(data interface{}) int {
 				cases = deleteItem(cases, i)
 				sent++
 				i--
+			} else{
+				log.Printf("Can't send %v", cases[i].Chan.Type().String())
 			}
 		}
 

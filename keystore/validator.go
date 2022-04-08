@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
+	"github.com/raidoNetwork/RDO_v2/utils/file"
 	"path/filepath"
 )
 
@@ -28,9 +29,13 @@ func NewValidatorAccount(key *ecdsa.PrivateKey) *ValidatorAccount {
 func NewValidatorAccountFromFile(dataDir string) (*ValidatorAccount, error) {
 	path := filepath.Join(dataDir, "validator", "validator.key")
 
+	if !file.FileExists(path) {
+		return &ValidatorAccount{}, nil
+	}
+
 	key, err := crypto.LoadECDSA(path)
 	if err != nil {
-		log.Error("Error loading validator", err)
+		log.Error("Error loading validator: ", err)
 		return nil, err
 	}
 

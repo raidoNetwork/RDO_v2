@@ -111,6 +111,7 @@ type StakePool interface {
 	UpdateStakeSlots(block *prototype.Block) error
 }
 
+// AttestationPool control block and transaction validation and staking
 type AttestationPool interface{
 	StakePool() StakePool
 

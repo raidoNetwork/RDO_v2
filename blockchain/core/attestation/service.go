@@ -1,6 +1,7 @@
 package attestation
 
 import (
+	"context"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/attestation"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/staking"
@@ -10,7 +11,7 @@ import (
 	"time"
 )
 
-func NewService(bc *rdochain.Service) (*Service, error) {
+func NewService(ctx context.Context, bc *rdochain.Service) (*Service, error) {
 	cfg := params.RaidoConfig()
 
 	stakeAmount := cfg.StakeSlotUnit * cfg.RoiPerRdo
@@ -38,7 +39,7 @@ func NewService(bc *rdochain.Service) (*Service, error) {
 	validator := attestation.NewCryspValidator(bc, stakePool, &validatorCfg)
 
 	// new tx pool
-	txPool := NewTxPool(validator, &PoolConfig{
+	txPool := NewTxPool(ctx, validator, &PoolConfig{
 		MinimalFee: cfg.MinimalFee,
 		BlockSize:  cfg.BlockSize,
 	})

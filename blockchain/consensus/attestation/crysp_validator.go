@@ -6,6 +6,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/shared/math"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/hash"
 	"github.com/sirupsen/logrus"
@@ -63,14 +64,16 @@ func (cv *CryspValidator) ValidateTransaction(tx *prototype.Transaction) error {
 
 // ValidateTransactionStruct validates transaction balances, signatures and hash. Use only for legacy tx type.
 func (cv *CryspValidator) ValidateTransactionStruct(tx *prototype.Transaction) error {
-	// if tx has type different from normal return error
-	if !common.IsLegacyTx(tx) {
-		return errors.Errorf("Transaction has wrong type: %d.", tx.Type)
-	}
+	if tx.Type != common.CollapseTxType {
+		// if tx has type different from normal return error
+		if !common.IsLegacyTx(tx) {
+			return errors.Errorf("Transaction has wrong type: %d.", tx.Type)
+		}
 
-	// check minimal fee value
-	if tx.Fee < cv.cfg.MinFee {
-		return consensus.ErrSmallFee
+		// check minimal fee value
+		if tx.Fee < cv.cfg.MinFee {
+			return consensus.ErrSmallFee
+		}
 	}
 
 	if len(tx.Inputs) == 0 {
@@ -108,16 +111,14 @@ func (cv *CryspValidator) validateTxInputs(tx *prototype.Transaction) error {
 	// get sender address
 	from := common.BytesToAddress(tx.Inputs[0].Address)
 
-	if tx.Type != common.CollapseTxType {
-		// get address nonce
-		nonce, err := cv.bc.GetTransactionsCount(from.Bytes())
-		if err != nil {
-			return err
-		}
+	// get address nonce
+	nonce, err := cv.bc.GetTransactionsCount(from.Bytes())
+	if err != nil {
+		return err
+	}
 
-		if tx.Num != nonce+1 {
-			return consensus.ErrBadNonce
-		}
+	if tx.Num != nonce+1 {
+		return consensus.ErrBadNonce
 	}
 
 	// get utxo for transaction
@@ -143,10 +144,9 @@ func (cv *CryspValidator) validateTxInputs(tx *prototype.Transaction) error {
 
 	// count balance and create spent map
 	var balance uint64
-	var key, indexStr string
 	for _, uo := range utxo {
-		indexStr = strconv.Itoa(int(uo.Index))
-		key = uo.Hash.Hex() + "_" + indexStr
+		indexStr := strconv.Itoa(int(uo.Index))
+		key := uo.Hash.Hex() + "_" + indexStr
 
 		// fill map with outputs from db
 		spentOutputsMap[key] = uo.ToInput()
@@ -175,7 +175,7 @@ func (cv *CryspValidator) validateTxInputs(tx *prototype.Transaction) error {
 	start = time.Now()
 
 	//Check that all outputs are spent
-	for _, isSpent := range alreadySpent {
+	for key, isSpent := range alreadySpent {
 		if isSpent != 1 {
 			return errors.Errorf("Unspent output of user %s with key %s.", from, key)
 		}
@@ -198,7 +198,23 @@ func (cv *CryspValidator) validateCollapseTx(tx *prototype.Transaction, block *p
 		return errors.New("Wrong collapse tx num.")
 	}
 
-	return cv.validateTxInputs(tx)
+	// check balance
+	err := cv.ValidateTransactionStruct(tx)
+	if err != nil {
+		return err
+	}
+
+	spentOutputsMap := map[string]*prototype.TxInput{}
+	// todo get from database inputs
+
+	// validate each input
+	_, err = cv.checkInputsData(tx, spentOutputsMap)
+	if err != nil {
+		log.Error("validateCollapseTx: Error checking inputs: %s.", err)
+		return err
+	}
+
+	return nil
 }
 
 // validateFeeTx validate fee transaction
@@ -315,23 +331,26 @@ func (cv *CryspValidator) validateTxBalance(tx *prototype.Transaction) error {
 	}
 
 	// check that inputs and outputs balance with fee are equal
-	var inputsBalance, outputsBalance uint64
+	var inputsBalance uint64
 	for _, in := range tx.Inputs {
-		inputsBalance += in.Amount
-
 		if in.Amount == 0 {
-			return errors.Errorf("Zero amount on input.")
+			return errors.New("Zero amount on input.")
 		}
 
 		if tx.Type == common.UnstakeTxType && in.Amount < cv.cfg.StakeUnit {
 			return consensus.ErrLowStakeAmount
 		}
+
+		var overflow bool
+		inputsBalance, overflow = math.Add64(in.Amount, inputsBalance)
+		if overflow {
+			return errors.New("Inputs sum amount overflow.")
+		}
 	}
 
 	stakeOutputs := 0
+	var outputsBalance uint64
 	for _, out := range tx.Outputs {
-		outputsBalance += out.Amount
-
 		if out.Amount == 0 {
 			return errors.Errorf("Zero amount on output.")
 		}
@@ -344,22 +363,34 @@ func (cv *CryspValidator) validateTxBalance(tx *prototype.Transaction) error {
 
 			stakeOutputs++
 		}
+
+		var overflow bool
+		outputsBalance, overflow = math.Add64(out.Amount, outputsBalance)
+		if overflow {
+			return errors.New("Outputs sum amount overflow.")
+		}
 	}
 
 	if tx.Type == common.StakeTxType && stakeOutputs == 0 {
 		return errors.New("transaction has no stake outputs.")
 	}
 
-	outputsBalance += tx.GetRealFee()
+	var overflow bool
+	outputsBalance, overflow = math.Add64(outputsBalance, tx.GetRealFee())
+	if overflow {
+		return errors.New("Outputs sum amount overflow.")
+	}
 
 	if inputsBalance != outputsBalance {
-		diff := outputsBalance - inputsBalance
-
+		var diff uint64
+		var underflow bool
 		if inputsBalance > outputsBalance {
-			diff = inputsBalance - outputsBalance
+			diff, underflow = math.Sub64(inputsBalance, outputsBalance)
+		} else{
+			diff, underflow = math.Sub64(outputsBalance, inputsBalance)
 		}
 
-		return errors.Errorf("tx balance is inconsistent. Mismatch is %d.", diff)
+		return errors.Errorf("tx balance is inconsistent. Mismatch is %d. Underflow %v", diff, underflow)
 	}
 
 	return nil
@@ -402,13 +433,11 @@ func (cv *CryspValidator) checkInputsData(tx *prototype.Transaction, spentOutput
 	txHash := common.Encode(tx.Hash)
 	alreadySpent := map[string]int{}
 
-	var hash, indexStr, key string
-
 	// Inputs verification
 	for _, in := range tx.Inputs {
-		hash = common.Encode(in.Hash)
-		indexStr = strconv.Itoa(int(in.Index))
-		key = hash + "_" + indexStr
+		hash := common.Encode(in.Hash)
+		indexStr := strconv.Itoa(int(in.Index))
+		key := hash + "_" + indexStr
 
 		dbInput, exists := spentOutputsMap[key]
 		if !exists {

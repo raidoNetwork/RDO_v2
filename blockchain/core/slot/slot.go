@@ -11,8 +11,6 @@ import (
 var mainTicker *SlotTicker
 var log = logrus.WithField("prefix", "SlotTicker")
 
-const SlotsPerEpoch = 200
-
 func NewSlotTicker(){
 	slotDuration := params.RaidoConfig().SlotTime
 
@@ -80,19 +78,19 @@ func (st *SlotTicker) Start(genesisTime time.Time) error {
 			waitTime := time.Until(nextTickTime)
 
 			select {
-				case <-time.After(waitTime):
-					st.c <- st.slot
+			case <-time.After(waitTime):
+				st.c <- st.slot
 
-					st.mu.Lock()
-					st.slot++
-					if st.slot % SlotsPerEpoch == 0 && st.slot > 0 {
-						st.epoch++
-					}
-					st.mu.Unlock()
+				st.mu.Lock()
+				st.slot++
+				if st.slot % params.RaidoConfig().SlotsPerEpoch == 0 && st.slot > 0 {
+					st.epoch++
+				}
+				st.mu.Unlock()
 
-					nextTickTime = nextTickTime.Add(st.slotDuration)
-				case <-st.done:
-					return
+				nextTickTime = nextTickTime.Add(st.slotDuration)
+			case <-st.done:
+				return
 			}
 		}
 	}()
@@ -127,5 +125,5 @@ func (st *SlotTicker) currentSlot(genesisTime time.Time) uint64 {
 }
 
 func (st *SlotTicker) currentEpoch() uint64 {
-	return st.slot / SlotsPerEpoch
+	return st.slot / params.RaidoConfig().SlotsPerEpoch
 }

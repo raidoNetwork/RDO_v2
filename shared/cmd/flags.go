@@ -49,12 +49,6 @@ var (
 		Name:  "chain-config-file",
 		Usage: "The path to a YAML file with chain config values",
 	}
-	// GrpcMaxCallRecvMsgSizeFlag defines the max call message size for GRPC
-	GrpcMaxCallRecvMsgSizeFlag = altsrc.NewIntFlag(&cli.IntFlag{
-		Name:  "grpc-max-msg-size",
-		Usage: "Integer to define max recieve message call size (default: 4194304 (for 4MB))",
-		Value: 1 << 22,
-	})
 )
 
 // LoadFlagsFromConfig sets flags values from config file if ConfigFileFlag is set.

@@ -1,8 +1,8 @@
 package state
 
 const (
-	LocalDatabaseReady = State(1)
-	NotReady
+	LocalSynced = State(1)
+	Synced      = State(2)
 )
 
 type State int

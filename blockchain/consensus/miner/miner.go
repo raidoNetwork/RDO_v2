@@ -190,10 +190,8 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 }
 
 // FinalizeBlock validate given block and save it to the blockchain
-func (m *Miner) FinalizeBlock(block *prototype.Block, isLocal bool) error {
+func (m *Miner) FinalizeBlock(block *prototype.Block) error {
 	start := time.Now()
-
-	// TODO check transactions stored in pool?
 
 	// validate block
 	err := m.att.Validator().ValidateBlock(block)
@@ -220,9 +218,6 @@ func (m *Miner) FinalizeBlock(block *prototype.Block, isLocal bool) error {
 		end := time.Since(start)
 		log.Infof("FinalizeBlock: Store block in %s", common.StatFmt(end))
 	}
-
-	// TODO refactor saving to SQL
-	// TODO try saving in parallel
 
 	// clear collapse list
 	m.collapsedAddr = map[string]int{}

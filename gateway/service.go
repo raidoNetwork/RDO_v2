@@ -48,7 +48,6 @@ func NewService(ctx context.Context, remoteAddr, gatewayAddr string, maxCallSize
 		ctx:            ctx,
 		remoteAddr:     remoteAddr,
 		gatewayAddr:    gatewayAddr,
-		mu:             sync.RWMutex{},
 		pbHandlers:     pbHandlers,
 		muxHandler:     muxHandler,
 		mux:            http.NewServeMux(),

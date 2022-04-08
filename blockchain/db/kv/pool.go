@@ -5,6 +5,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -106,7 +107,7 @@ func (s *Store) getTransactionByLink(tx *bolt.Tx, lnk []byte) (*prototype.Transa
 		return nil, errors.Errorf("Undefined block with key %s", blockKey)
 	}
 
-	block, err := unmarshalBlock(blockBuf)
+	block, err := serialize.UnmarshalBlock(blockBuf)
 	if err != nil {
 		return nil, errors.Errorf("Block unmarshal error: %s", err)
 	}

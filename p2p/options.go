@@ -7,7 +7,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-tcp-transport"
-	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
 	"github.com/raidoNetwork/RDO_v2/shared/version"
 	"time"
@@ -28,15 +27,15 @@ func optionsList(nodePrivKey *nodeKey, ip string, cfg *Config) ([]libp2p.Option,
 }
 
 func msgId(pmsg *pubsubpb.Message) string {
-	size := pmsg.Size()
-	data := make([]byte, 0, size)
-	_, err := pmsg.MarshalTo(data)
-	if err != nil {
-		log.Error(errors.Wrap(err, "Message marshal error"))
-		data = emptyMsg
-	}
+	topic := *pmsg.Topic
+	size := len(pmsg.Data) + len(topic)
 
-	return string(crypto.Keccak256(data))
+	data := make([]byte, 0, size)
+	data = append(data, topic...)
+	data = append(data, pmsg.Data...)
+
+	id := string(crypto.Keccak256(data)[:20])
+	return id
 }
 
 func pubsubGossipParam() pubsub.GossipSubParams {
