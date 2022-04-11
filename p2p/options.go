@@ -21,6 +21,7 @@ func optionsList(nodePrivKey *nodeKey, ip string, cfg *Config) ([]libp2p.Option,
 		libp2p.UserAgent(version.Version()),
 		libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.Security(noise.ID, noise.New),
+		libp2p.DisableRelay(),
 	}
 
 	return opts, nil
@@ -40,8 +41,8 @@ func msgId(pmsg *pubsubpb.Message) string {
 
 func pubsubGossipParam() pubsub.GossipSubParams {
 	gParams := pubsub.DefaultGossipSubParams()
-	gParams.Dlo = 6
-	gParams.D = 8
+	gParams.Dlo = 1 //6 test value
+	gParams.D = 1 //8 test value
 	gParams.HeartbeatInterval = 700 * time.Millisecond
 	gParams.HistoryLength = 6
 	gParams.HistoryGossip = 3

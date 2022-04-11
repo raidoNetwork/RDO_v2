@@ -14,9 +14,6 @@ import (
 	"sync"
 )
 
-const BlockTopic = "rdo-block"
-const TxTopic = "rdo-transactions"
-
 var log = logrus.WithField("prefix", "p2p")
 var maxDialTimeout = params.RaidoConfig().ResponseTimeout
 
@@ -59,24 +56,9 @@ func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
 		return nil, err
 	}
 
-	psOpts := []pubsub.Option{
-		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
-		pubsub.WithNoAuthor(),
-		pubsub.WithMessageIdFn(msgId),
-		pubsub.WithPeerOutboundQueueSize(256),
-		pubsub.WithValidateQueueSize(256),
-		pubsub.WithGossipSubParams(pubsubGossipParam()),
-	}
-
-	gs, err := pubsub.NewGossipSub(ctx, netHost, psOpts...)
-	if err != nil {
-		return nil, err
-	}
-
 	srv = &Service{
 		nodeKey: nodePrivKey,
 		host:    netHost,
-		pubsub:  gs,
 		ctx:     ctx,
 		cancel:  cancel,
 		cfg:     cfg,
@@ -84,6 +66,25 @@ func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
 		topics:  map[string]*pubsub.Topic{},
 		subs:	 map[string]*pubsub.Subscription{},
 	}
+
+	psOpts := []pubsub.Option{
+		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
+		pubsub.WithNoAuthor(),
+		pubsub.WithMessageIdFn(msgId),
+		pubsub.WithPeerOutboundQueueSize(256),
+		pubsub.WithValidateQueueSize(256),
+		pubsub.WithGossipSubParams(pubsubGossipParam()),
+		pubsub.WithSubscriptionFilter(srv),
+	}
+
+	cfg.BootstrapNodes = []string{} // reset bootstrap
+
+	gs, err := pubsub.NewGossipSub(ctx, netHost, psOpts...)
+	if err != nil {
+		return nil, err
+	}
+
+	srv.pubsub = gs
 
 	return srv, nil
 }
@@ -187,8 +188,7 @@ func (s *Service) connectPeer(info peer.AddrInfo) error {
 func (s *Service) readMessages(){
 	log.Info("Start listening messages")
 
-	topics := s.activeTopics()
-	for _, t := range topics {
+	for t, _ := range topicMap {
 		go s.listenTopic(t)
 	}
 }
@@ -220,9 +220,7 @@ func (s *Service) listenTopic(topic string){
 }
 
 func (s *Service) SubscribeAll() error {
-	topics := s.activeTopics()
-
-	for _, t := range topics {
+	for t, _ := range topicMap {
 		err := s.subscribeTopic(t)
 		if err != nil {
 			return err
