@@ -23,7 +23,7 @@ $ raido
 This command will start raido node with default parameters.
 
 ### Logging
- Logs are output to the path set with flag `-log-file`. If flag is not specified logs are output to `os.Stdout`.
+Logs are output to the path set with flag `-log-file`. If flag is not specified logs are output to `os.Stdout`.
 
 ### Recommended usage
 ```bash
@@ -45,18 +45,18 @@ Config file can take all flags from the list below as params.
 | `grpc-gateway-host` | The host on which the gateway server runs on. |
 | `grpc-gateway-port` | The port on which the gateway server runs on. |
 | `grpc-gateway-corsdomain` | Comma separated list of domains from which to accept cross origin requests (browser enforced). This flag has no effect if not used with --grpc-gateway-port. |
+| `p2p-host` | The host on which p2p service should listen. |
+| `p2p-port` | The port on which p2p service runs on. |
+| `p2p-bootstrap-nodes` | List of P2P nodes addresses for initial connections. |
 | `srv-stat` | Show statistics of services.             | 
-| `srv-debug-stat` | Show debug statistics of services.             |
-| `sql-db-type` | Set SQL database type to use. When use MySQL database config path should be given. |
+| `debug-logging` | Show debug statistics of services.             |
 | `sql-db-cfg` | Config file path with MySQL host, port, user and password. |
 | `datadir` | Data directory for the databases and keystore. |
 | `log-file` | Specify log file name, relative or absolute. |
-| `grpc-max-msg-size` | Integer to define max recieve message call size (default: 4194304 (for 4MB)). |
-| `bolt-mmap-initial-size` | Specifies the size in bytes of bolt db's mmap syscall allocation. |
 
 ### Network settings
 
-`--chain-config-file` specifies path to the network config file with the following params:  
+`--chain-config-file` specifies path to the network config file with the following params:
 
 |     **Param**     |  **Desciprtion** | 
 |--------------------------|-------------------------------|
@@ -83,10 +83,10 @@ To create special Genesis block use structure below:
 ```
 
 ## Web3 API
-`Raido node` has built-in support for a JSON-RPC based APIs to interact with it. This can be exposed **only** via HTTP. 
+`Raido node` has built-in support for a JSON-RPC based APIs to interact with it. This can be exposed **only** via HTTP.
 Full list of `raido node` API methods is presented in Swagger Docs.
 
-### Signing and verifying data 
+### Signing and verifying data
 Signing any data and signature verification with Node.js requires npm packages `keccak` and `secp256k1` to be installed.
 Example:
 ```javascript
