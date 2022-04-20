@@ -64,16 +64,14 @@ func (cv *CryspValidator) ValidateTransaction(tx *prototype.Transaction) error {
 
 // ValidateTransactionStruct validates transaction balances, signatures and hash. Use only for legacy tx type.
 func (cv *CryspValidator) ValidateTransactionStruct(tx *prototype.Transaction) error {
-	if tx.Type != common.CollapseTxType {
-		// if tx has type different from normal return error
-		if !common.IsLegacyTx(tx) {
-			return errors.Errorf("Transaction has wrong type: %d.", tx.Type)
-		}
+	// if tx has type different from normal return error
+	if !common.IsLegacyTx(tx) {
+		return errors.Errorf("Transaction has wrong type: %d.", tx.Type)
+	}
 
-		// check minimal fee value
-		if tx.Fee < cv.cfg.MinFee {
-			return consensus.ErrSmallFee
-		}
+	// check minimal fee value
+	if tx.Fee < cv.cfg.MinFee {
+		return consensus.ErrSmallFee
 	}
 
 	if len(tx.Inputs) == 0 {
@@ -90,9 +88,17 @@ func (cv *CryspValidator) ValidateTransactionStruct(tx *prototype.Transaction) e
 		return err
 	}
 
+	// check all inputs has the same sender
+	from := tx.Inputs[0].Address
+	for _, input := range tx.Inputs {
+		if !bytes.Equal(from, input.Address) {
+			return consensus.ErrBadInputOwner
+		}
+	}
+
 	// Validate that tx has no empty inputs or outputs
 	// also check that tx has correct balance
-	err = cv.validateTxBalance(tx)
+	err = cv.validateTxStructBase(tx)
 	if err != nil {
 		return err
 	}
@@ -100,7 +106,7 @@ func (cv *CryspValidator) ValidateTransactionStruct(tx *prototype.Transaction) e
 	return nil
 }
 
-// validateTxInputs chek that address has given inputs and enough balance.
+// validateTxInputs check that address has given inputs and enough balance.
 // If given normal transaction (send coins from one user to another)
 // makes sure that all address inputs are spent in this transaction.
 func (cv *CryspValidator) validateTxInputs(tx *prototype.Transaction) error {
@@ -163,7 +169,7 @@ func (cv *CryspValidator) validateTxInputs(tx *prototype.Transaction) error {
 	// validate each input
 	alreadySpent, err := cv.checkInputsData(tx, spentOutputsMap)
 	if err != nil {
-		log.Error("ValidateTransaction: Error checking inputs: %s.", err)
+		log.Errorf("ValidateTransaction: Error checking inputs: %s.", err.Error())
 		return err
 	}
 
@@ -198,14 +204,89 @@ func (cv *CryspValidator) validateCollapseTx(tx *prototype.Transaction, block *p
 		return errors.New("Wrong collapse tx num.")
 	}
 
-	// check balance
-	err := cv.ValidateTransactionStruct(tx)
+	// validate that tx has no empty inputs or outputs
+	// also check that tx has correct balance
+	err := cv.validateTxStructBase(tx)
 	if err != nil {
 		return err
 	}
 
+	// collect sender balances
+	addrBalance := map[string]uint64{}
+	lastAddr := make([]byte, 0, 20)
+	for _, in := range tx.Inputs {
+		key := string(in.Address)
+		if b, exists := addrBalance[key]; exists {
+			balance, overflow := math.Add64(b, in.Amount)
+			if overflow {
+				return errors.Errorf("Balance overflow for %s", common.BytesToAddress(in.Address).Hex())
+			}
+
+			addrBalance[key] = balance
+		} else {
+			addrBalance[key] = in.Amount
+		}
+
+		lastAddr = in.Address
+	}
+
+	// tx must contain one output for each address
+	// with amount equal to sum of address inputs
+	readedMap := map[string]int8{}
+	for _, out := range tx.Outputs {
+		key := string(out.Address)
+
+		if balance, exists := addrBalance[key]; exists {
+			if balance != out.Amount {
+				return errors.New("Address balance inconsistent sum")
+			}
+
+			if _, exists := readedMap[key]; exists {
+				return errors.New("Address has to many outputs")
+			}
+
+			readedMap[key] = 1
+		} else {
+			return errors.New("The recipient without sender")
+		}
+	}
+
+	// get last addr map
+	lastAddrOutputs := map[string]int8{}
+	for _, in := range tx.Inputs {
+		if !bytes.Equal(in.Address, lastAddr) {
+			continue
+		}
+
+		indexStr := strconv.Itoa(int(in.Index))
+		inputKey := common.BytesToHash(in.Hash).Hex() + "_" + indexStr
+		lastAddrOutputs[inputKey] = 1
+	}
+
+	// get all utxo
 	spentOutputsMap := map[string]*prototype.TxInput{}
-	// todo get from database inputs
+	for key, _ := range addrBalance {
+		addr := common.BytesToAddress([]byte(key)).Hex()
+		utxo, err := cv.bc.FindAllUTxO(addr)
+		if err != nil {
+			return err
+		}
+
+		isLastAddress := bytes.Equal([]byte(key), lastAddr)
+		for _, uo := range utxo {
+			indexStr := strconv.Itoa(int(uo.Index))
+			inputKey := uo.Hash.Hex() + "_" + indexStr
+
+			// last inputs
+			if isLastAddress {
+				if _, exists := lastAddrOutputs[inputKey]; !exists {
+					continue
+				}
+			}
+
+			spentOutputsMap[inputKey] = uo.ToInput()
+		}
+	}
 
 	// validate each input
 	_, err = cv.checkInputsData(tx, spentOutputsMap)
@@ -312,9 +393,9 @@ func (cv *CryspValidator) validateRewardTx(tx *prototype.Transaction, block *pro
 	return nil
 }
 
-// validateTxBalance validates tx inputs/outputs size
-// and check that total balance of all tx is equal to 0.
-func (cv *CryspValidator) validateTxBalance(tx *prototype.Transaction) error {
+// validateTxStructBase validates tx inputs/outputs size
+// verify signature and check that total balance of all tx is equal to 0.
+func (cv *CryspValidator) validateTxStructBase(tx *prototype.Transaction) error {
 	if len(tx.Inputs) == 0 {
 		return errors.Errorf("Empty tx inputs.")
 	}

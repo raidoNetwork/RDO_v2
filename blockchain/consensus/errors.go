@@ -12,4 +12,5 @@ var (
 	ErrBadTxType      = errors.New("Undefined tx type.")
 	ErrEmptyInputs    = errors.New("No inputs.")
 	ErrEmptyOutputs   = errors.New("No outputs.")
+	ErrBadInputOwner  = errors.New("Bad input owner")
 )
