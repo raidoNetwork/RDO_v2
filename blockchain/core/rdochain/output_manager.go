@@ -8,6 +8,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"math"
+	"strings"
 	"sync"
 	"time"
 )
@@ -72,8 +73,9 @@ func (om *OutputManager) ProcessBlock(block *prototype.Block) error {
 	var outputsCount int // outputs count of transaction
 	var txHash common.Hash
 
-	query := ""
 	blockOutputs := 0 // count of all block outputs
+
+	var queryBuilder strings.Builder
 
 	// update SQL
 	for _, tx := range block.Transactions {
@@ -106,12 +108,12 @@ func (om *OutputManager) ProcessBlock(block *prototype.Block) error {
 		queryPart, outputsCount = om.prepareOutputsQuery(tx, from, block.Num)
 
 		// add divide coma
-		if query != "" && queryPart != "" {
-			query += ", "
+		if queryBuilder.Len() > 0 && queryPart != "" {
+			queryBuilder.WriteString(", ")
 		}
 
 		// update query
-		query += queryPart
+		queryBuilder.WriteString(queryPart)
 
 		// update outputs counter
 		blockOutputs += outputsCount
@@ -126,6 +128,8 @@ func (om *OutputManager) ProcessBlock(block *prototype.Block) error {
 			log.Infof("OutputManager.processBlock: Update tx %s data in %s.", txHash, common.StatFmt(endTxInner))
 		}
 	}
+
+	query := queryBuilder.String()
 
 	// add all outputs batch
 	if query != "" {
@@ -459,8 +463,8 @@ func (om *OutputManager) processBlockInputs(blockTx int, tx *prototype.Transacti
 func (om *OutputManager) prepareOutputsQuery(tx *prototype.Transaction, from common.Address, blockNum uint64) (string, int) {
 	var uo *types.UTxO
 	counter := 0
-	query := ""
 
+	var queryBuilder strings.Builder
 	var index uint32
 	for _, out := range tx.Outputs {
 		// skip all fee outputs
@@ -472,15 +476,15 @@ func (om *OutputManager) prepareOutputsQuery(tx *prototype.Transaction, from com
 		uo = types.NewUTxO(tx.Hash, from.Bytes(), out.Address, out.Node, index, out.Amount, blockNum, tx.Type, tx.Timestamp)
 
 		if counter > 0 {
-			query += ", "
+			queryBuilder.WriteString(", ")
 		}
 
-		query += uo.ToInsertQuery()
+		queryBuilder.WriteString(uo.ToInsertQuery())
 		counter++
 		index++
 	}
 
-	return query, counter
+	return queryBuilder.String(), counter
 }
 
 // GetSyncStatus return current block num, max block num and percent of synchronisation.
