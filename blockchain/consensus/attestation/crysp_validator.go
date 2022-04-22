@@ -405,10 +405,12 @@ func (cv *CryspValidator) validateTxStructBase(tx *prototype.Transaction) error 
 	}
 
 	// verify tx signature
-	signer := types.MakeTxSigner("keccak256")
-	err := signer.Verify(tx)
-	if err != nil {
-		return err
+	if tx.Type != common.CollapseTxType {
+		signer := types.MakeTxSigner("keccak256")
+		err := signer.Verify(tx)
+		if err != nil {
+			return err
+		}
 	}
 
 	// check that inputs and outputs balance with fee are equal
