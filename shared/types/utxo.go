@@ -68,7 +68,7 @@ func NewUTxO(hash, from, to, node []byte, index uint32, amount uint64, blockNum 
 	return &uo
 }
 
-func NewUTxOFull(id uint64, hash, from, to, node string, index uint32, amount, blockNum, timestamp uint64, typev uint32) (*UTxO, error) {
+func NewUTxOFull(id uint64, hash, from, to, node string, index uint32, amount, blockNum, timestamp uint64, typev uint32) *UTxO {
 	uo := UTxO{
 		ID:        id,
 		Hash:      common.HexToHash(hash),
@@ -82,5 +82,5 @@ func NewUTxOFull(id uint64, hash, from, to, node string, index uint32, amount, b
 		TxType:    typev,
 	}
 
-	return &uo, nil
+	return &uo
 }

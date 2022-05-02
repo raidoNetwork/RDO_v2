@@ -28,7 +28,7 @@ var (
 
 var log = logrus.WithField("prefix", "TxPool")
 
-const txProcessLimit = 100
+const txProcessLimit = 500
 
 func NewTxPool(ctx context.Context, v consensus.TxValidator, cfg *PoolConfig) *TxPool {
 	ctx, finish := context.WithCancel(ctx)
@@ -107,8 +107,8 @@ func (tp *TxPool) ReadingLoop() {
 
 	for {
 		select {
-		case tx := <-tp.txEvent:
-			err := tp.RegisterTx(tx.GetTx())
+		case td := <-tp.txEvent:
+			err := tp.RegisterTx(td)
 			if err != nil {
 				log.Errorf("ReadingLoop: Registration error. %s", err)
 			}
@@ -119,16 +119,14 @@ func (tp *TxPool) ReadingLoop() {
 }
 
 // RegisterTx validate tx and add it to the pool if it is correct
-func (tp *TxPool) RegisterTx(tx *prototype.Transaction) error {
-	td := types.NewTxData(tx)
-
+func (tp *TxPool) RegisterTx(td *types.TransactionData) error {
 	err := tp.validateTx(td)
 	if err != nil {
 		return errors.Wrap(err, "TxPool.RegisterTx")
 	}
 
 	tp.lock.Lock()
-	hash := common.Encode(tx.Hash)
+	hash := common.Encode(td.GetTx().Hash)
 
 	// save tx to the pool
 	tp.pool[hash] = td
@@ -156,16 +154,6 @@ func (tp *TxPool) RegisterTx(tx *prototype.Transaction) error {
 // validateTx validates tx by validator, finds double spends and checks tx exists in the pool
 func (tp *TxPool) validateTx(td *types.TransactionData) error {
 	txHash := common.Encode(td.GetTx().Hash)
-	start := time.Now()
-
-	// validate balance, signatures and hash check
-	err := tp.validator.ValidateTransactionStruct(td.GetTx())
-	if err != nil {
-		return err
-	}
-
-	end := time.Since(start)
-	log.Infof("Validate tx %s struct in: %s.", txHash, common.StatFmt(end))
 
 	// check tx is in pool already
 	tp.lock.Lock()
@@ -176,6 +164,17 @@ func (tp *TxPool) validateTx(td *types.TransactionData) error {
 	if exists || reserved {
 		return ErrTxExists
 	}
+
+	start := time.Now()
+
+	// validate balance, signatures and hash check
+	err := tp.validator.ValidateTransactionStruct(td.GetTx())
+	if err != nil {
+		return err
+	}
+
+	end := time.Since(start)
+	log.Infof("Validate tx %s struct in: %s.", txHash, common.StatFmt(end))
 
 	start = time.Now()
 

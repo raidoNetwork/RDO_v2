@@ -168,9 +168,9 @@ func (om *OutputManager) SyncData() error {
 		return err
 	}
 
-	log.Infof("SQL database max block num %d.", lastSQLBlockNum)
-
 	lastKVBlockNum := om.bc.GetHeadBlockNum()
+
+	log.Infof("Current block in KV %d - SQL %d.", lastKVBlockNum, lastSQLBlockNum)
 
 	om.mu.Lock()
 	om.syncing = true

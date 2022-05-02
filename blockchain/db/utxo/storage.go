@@ -90,11 +90,7 @@ func (s *Store) Close() error {
 // createSchema generates needed database structure if not exist.
 func (s *Store) createSchema() error {
 	_, err := s.db.Exec(s.schema)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 // DatabasePath at which this database writes files.
@@ -166,8 +162,18 @@ func (s *Store) FindStakeDepositsOfAddress(address string) ([]*types.UTxO, error
 // getOutputsList return outputs list with given query and params.
 func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*types.UTxO, err error) {
 	start := time.Now()
-	prefix := `SELECT id, hash, tx_index, address_from, address_to, address_node, amount, timestamp, blockId, tx_type FROM ` + dbshared.UtxoTable + ` `
-	rows, err := s.db.Query(prefix+query, params...)
+	prefix := `SELECT id, 
+					hash,
+					tx_index, 
+					address_from, 
+					address_to, 
+					address_node, 
+					amount, 
+					timestamp, 
+					blockId, 
+					tx_type FROM ` + dbshared.UtxoTable + ` `
+
+	rows, err := s.db.Query(prefix + query, params...)
 	if err != nil {
 		return nil, err
 	}
@@ -192,10 +198,7 @@ func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*ty
 			return
 		}
 
-		uo, err := types.NewUTxOFull(id, hash, from, to, node, index, amount, blockNum, timestamp, typev)
-		if err != nil {
-			return nil, err
-		}
+		uo := types.NewUTxOFull(id, hash, from, to, node, index, amount, blockNum, timestamp, typev)
 
 		uoArr = append(uoArr, uo)
 	}
@@ -206,4 +209,10 @@ func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*ty
 	}
 
 	return uoArr, nil
+}
+
+func (s *Store) ClearDatabase() error {
+	query := `DROP TABLE ` + dbshared.UtxoTable
+	_, err := s.db.Exec(query)
+	return err
 }

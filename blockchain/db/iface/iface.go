@@ -87,6 +87,8 @@ type OutputStorage interface {
 
 	GetTotalAmount() (uint64, error)
 
+	ClearDatabase() error
+
 	StakeStorage
 }
 

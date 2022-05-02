@@ -46,7 +46,6 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ctx:                 ctx,
 		cancel:              cancel,
 		cfg:                 cfg,
-		connectionMu:        sync.RWMutex{},
 		connectedRPCClients: map[net.Addr]bool{},
 	}
 

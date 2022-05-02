@@ -344,6 +344,9 @@ func (r *RDONode) startDB(cliCtx *cli.Context) error {
 		if err := kvStore.ClearDB(); err != nil {
 			return errors.Wrap(err, "could not clear KV database")
 		}
+		if err := sqlStore.ClearDatabase(); err != nil {
+			return errors.Wrap(err, "could not clear Outputs database")
+		}
 		kvStore, err = db.NewDB(r.ctx, dbPath)
 		if err != nil {
 			return errors.Wrap(err, "could not create new KV database")

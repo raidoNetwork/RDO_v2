@@ -17,12 +17,32 @@ func (s *Store) AddOutputIfNotExists(txID int, uo *types.UTxO) (err error) {
 		return errors.Errorf("Undefined transaction #%d", txID)
 	}
 
-	query := `INSERT INTO ` + dbshared.UtxoTable + ` (tx_type, hash, tx_index, address_from, address_to, amount, timestamp, blockId, address_node) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE tx_type = ?`
+	query := `INSERT INTO ` + dbshared.UtxoTable + ` 
+			(
+				tx_type, 
+				hash, 
+				tx_index, 
+				address_from, 
+				address_to, 
+				amount, 
+				timestamp, 
+				blockId, 
+				address_node
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE tx_type = ?`
 
-	_, err = tx.Exec(query, uo.TxType, uo.Hash.Hex(), uo.Index, uo.From.Hex(), uo.To.Hex(), uo.Amount, uo.Timestamp, uo.BlockNum, uo.Node.Hex(), uo.TxType)
-	if err != nil {
-		return
-	}
+	_, err = tx.Exec(
+		query,
+		uo.TxType,
+		uo.Hash.Hex(),
+		uo.Index,
+		uo.From.Hex(),
+		uo.To.Hex(),
+		uo.Amount,
+		uo.Timestamp,
+		uo.BlockNum,
+		uo.Node.Hex(),
+		uo.TxType,
+	)
 
 	return
 }
