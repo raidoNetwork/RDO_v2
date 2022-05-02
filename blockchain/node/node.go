@@ -215,7 +215,8 @@ func (r *RDONode) registerAttestationService() error {
 		return err
 	}
 
-	srv, err := attestation.NewService(r.ctx, blockchainService)
+	enableStats := r.cliCtx.Bool(flags.SrvStat.Name)
+	srv, err := attestation.NewService(r.ctx, blockchainService, r.TxFeed(), enableStats)
 	if err != nil {
 		return err
 	}
@@ -311,6 +312,19 @@ func (r *RDONode) startDB(cliCtx *cli.Context) error {
 		return err
 	}
 
+	// Prepare SQL database config
+	SQLCfg := db.SQLConfig{
+		ShowFullStat: cliCtx.Bool(flags.SrvStat.Name),
+		ConfigPath:   cliCtx.String(cmd.SQLConfigPath.Name),
+		DataDir:      dbPath,
+	}
+
+	// Init SQL database
+	sqlStore, err := db.NewUTxODB(r.ctx, &SQLCfg)
+	if err != nil {
+		return errors.Wrap(err, "could not create new SQL database")
+	}
+
 	clearDBConfirmed := false
 	if clearDB && !forceClearDB {
 		actionText := "This will delete your raido blockchain database stored in your data directory. " +
@@ -328,33 +342,16 @@ func (r *RDONode) startDB(cliCtx *cli.Context) error {
 			return errors.Wrap(err, "could not close db prior to clearing")
 		}
 		if err := kvStore.ClearDB(); err != nil {
-			return errors.Wrap(err, "could not clear database")
+			return errors.Wrap(err, "could not clear KV database")
 		}
 		kvStore, err = db.NewDB(r.ctx, dbPath)
 		if err != nil {
 			return errors.Wrap(err, "could not create new KV database")
 		}
-
-		// TODO drop SQL here
 	}
 
 	// save database instance to the node
 	r.kvStore = kvStore
-
-	// Prepare SQL database config
-	SQLCfg := db.SQLConfig{
-		ShowFullStat: cliCtx.Bool(flags.SrvStat.Name),
-		ConfigPath:   cliCtx.String(cmd.SQLConfigPath.Name),
-		DataDir:      dbPath,
-	}
-
-	// Init SQL database
-	sqlStore, err := db.NewUTxODB(r.ctx, &SQLCfg)
-	if err != nil {
-		return errors.Wrap(err, "could not create new SQL database")
-	}
-
-	// Save database instance to the node
 	r.outDB = sqlStore
 
 	return nil

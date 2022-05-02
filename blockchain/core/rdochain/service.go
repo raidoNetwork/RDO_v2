@@ -14,7 +14,7 @@ import (
 	"sync"
 )
 
-func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage, stateFeed *events.Bus) (*Service, error){
+func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage, stateFeed events.Feed) (*Service, error){
 	cfg := params.RaidoConfig()
 
 	// create blockchain instance
@@ -22,7 +22,7 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage, s
 
 	// output manager
 	outm := NewOutputManager(bc, sql, &OutputManagerConfig{
-		ShowStat:     true,
+		ShowStat:     true, // TODO refactor this params
 		ShowWideStat: false,
 	})
 
@@ -38,7 +38,7 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage, s
 type Service struct{
 	bc *BlockChain
 	outm *OutputManager
-	stateFeed *events.Bus
+	stateFeed events.Feed
 	mu sync.Mutex
 	ready bool
 	statusErr error
@@ -83,14 +83,12 @@ func (s *Service) Status() error {
 }
 
 func (s *Service) Stop() error {
-	// TODO call stop on bc
+
 	return nil
 }
 
 // SyncDatabase sync SQL with KV.
 func (s *Service) SyncDatabase() error {
-	log.Warn("Start database syncing.")
-
 	// sync database data
 	err := s.outm.SyncData()
 	if err != nil {
@@ -124,7 +122,7 @@ func (s *Service) checkBalance() error {
 		return errors.New("Wrong total supply.")
 	}
 
-	log.Warnf("SQL sum is correct. Total supply: %d", currentSum)
+	log.Warnf("System balance is correct. Total supply: %d", currentSum)
 
 	return nil
 }
@@ -153,14 +151,14 @@ func (s *Service) getSQLsyncStatus() (string, error){
 
 	if statusError == nil {
 		min, max, percent := s.outm.GetSyncStatus()
-		statMsg = fmt.Sprintf("Syncing with SQL: blocks %d / %d (%.2f%%)", min, max, percent)
+		statMsg = fmt.Sprintf("Local sync: blocks %d / %d (%.2f%%)", min, max, percent)
 	} else {
-		statMsg = "Error creating block."
+		statMsg = "Bye..."
 	}
 
 	statusMsg := "Not ready. " + statMsg
 	if isNodeReady && !s.outm.IsSyncing() {
-		statusMsg = "Ready. Synced."
+		statusMsg = "Ready"
 	}
 
 	return statusMsg, nil

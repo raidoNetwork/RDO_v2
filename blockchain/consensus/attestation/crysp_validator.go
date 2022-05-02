@@ -24,7 +24,6 @@ type CryspValidatorConfig struct {
 	MinFee                 uint64        // MinFee setups minimal transaction fee price.
 	StakeUnit              uint64        // StakeUnit roi amount needed for stake.
 	LogStat                bool          // LogStat enables time statistic log entries.
-	LogDebugStat           bool          // LogDebugStat enable debug log entries
 	ValidatorRegistryLimit int           // ValidatorRegistryLimit defines validator slots count
 }
 
@@ -187,10 +186,8 @@ func (cv *CryspValidator) validateTxInputs(tx *prototype.Transaction) error {
 		}
 	}
 
-	if cv.cfg.LogDebugStat {
-		end := time.Since(start)
-		log.Infof("ValidateTransaction: Verify all inputs are lock for spent in %s.", common.StatFmt(end))
-	}
+	end := time.Since(start)
+	log.Debugf("ValidateTransaction: Verify all inputs are lock for spent in %s.", common.StatFmt(end))
 
 	log.Warnf("Validated tx %s", common.BytesToHash(tx.Hash))
 
@@ -469,7 +466,7 @@ func (cv *CryspValidator) validateTxStructBase(tx *prototype.Transaction) error 
 		var underflow bool
 		if inputsBalance > outputsBalance {
 			diff, underflow = math.Sub64(inputsBalance, outputsBalance)
-		} else{
+		} else {
 			diff, underflow = math.Sub64(outputsBalance, inputsBalance)
 		}
 

@@ -8,8 +8,9 @@ import (
 
 var log = logrus.WithField("prefix", "events")
 
-type Emitter interface{
+type Feed interface{
 	Send(interface{}) int
+	Subscribe(interface{}) Subscription
 }
 
 type Subscription interface{
@@ -84,7 +85,7 @@ func (b *Bus) Send(data interface{}) int {
 				cases = deleteItem(cases, i)
 				sent++
 				i--
-			} else{
+			} else {
 				log.Printf("Can't send %v", cases[i].Chan.Type().String())
 			}
 		}
@@ -108,6 +109,10 @@ func (b *Bus) Send(data interface{}) int {
 }
 
 func (b *Bus) deleteCase(index int){
+	if index < 0 || index >= len(b.cases) {
+		return
+	}
+
 	b.cases = deleteItem(b.cases, index)
 }
 

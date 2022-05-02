@@ -5,6 +5,7 @@ import (
 	"context"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
+	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
@@ -22,11 +23,12 @@ var (
 	ErrInputExists            = errors.New("tx input is locked for spend")
 	ErrTxNotFound             = errors.New("tx was not found in the pool")
 	ErrTxNotFoundInPricedPool = errors.New("tx was not found in priced pool")
-	ErrPoolClosed             = errors.New("tx pool is closed for writing")
 	ErrAlreadyReserved        = errors.New("tx already reserved")
 )
 
 var log = logrus.WithField("prefix", "TxPool")
+
+const txProcessLimit = 100
 
 func NewTxPool(ctx context.Context, v consensus.TxValidator, cfg *PoolConfig) *TxPool {
 	ctx, finish := context.WithCancel(ctx)
@@ -43,8 +45,8 @@ func NewTxPool(ctx context.Context, v consensus.TxValidator, cfg *PoolConfig) *T
 		ctx:    ctx,
 		finish: finish,
 		// channel
-		dataC: make(chan *prototype.Transaction),
-		cfg:   cfg,
+		txEvent: make(chan *types.TransactionData, txProcessLimit),
+		cfg:     cfg,
 	}
 
 	return &tp
@@ -53,6 +55,7 @@ func NewTxPool(ctx context.Context, v consensus.TxValidator, cfg *PoolConfig) *T
 type PoolConfig struct {
 	BlockSize  int
 	MinimalFee uint64
+	TxFeed 	   events.Feed
 }
 
 type TxPool struct {
@@ -76,7 +79,7 @@ type TxPool struct {
 	// double spend tx
 	villainousPool map[string]*types.TransactionData
 
-	dataC chan *prototype.Transaction
+	txEvent chan *types.TransactionData
 
 	ctx    context.Context
 	finish context.CancelFunc
@@ -88,36 +91,29 @@ type TxPool struct {
 func (tp *TxPool) SendRawTx(tx *prototype.Transaction) error {
 	_, err := tx.MarshalSSZ()
 	if err != nil {
-		return status.Error(17, "Transaction ")
+		return status.Error(17, "Transaction has bad format")
 	}
 
-	err = tp.SendTx(tx)
-	if err != nil {
-		return status.Error(17, err.Error())
-	}
+	// send transaction to the feed
+	tp.cfg.TxFeed.Send(types.NewTxData(tx))
 
 	return nil
 }
 
-// SendTx add tx to the pool
-func (tp *TxPool) SendTx(tx *prototype.Transaction) error {
-	select {
-	case <-tp.ctx.Done():
-		// got interrupt stop
-		close(tp.dataC)
-		return ErrPoolClosed
-	case tp.dataC <- tx:
-		// write to the pool
-		return nil
-	}
-}
-
 // ReadingLoop loop that waits for new transactions and read it
 func (tp *TxPool) ReadingLoop() {
-	for tx := range tp.dataC {
-		err := tp.RegisterTx(tx)
-		if err != nil {
-			log.Errorf("ReadingLoop: Registration error. %s", err)
+	sub := tp.cfg.TxFeed.Subscribe(tp.txEvent)
+	defer sub.Unsubscribe()
+
+	for {
+		select {
+		case tx := <-tp.txEvent:
+			err := tp.RegisterTx(tx.GetTx())
+			if err != nil {
+				log.Errorf("ReadingLoop: Registration error. %s", err)
+			}
+		case <-tp.ctx.Done():
+			return
 		}
 	}
 }
@@ -160,7 +156,6 @@ func (tp *TxPool) RegisterTx(tx *prototype.Transaction) error {
 // validateTx validates tx by validator, finds double spends and checks tx exists in the pool
 func (tp *TxPool) validateTx(td *types.TransactionData) error {
 	txHash := common.Encode(td.GetTx().Hash)
-
 	start := time.Now()
 
 	// validate balance, signatures and hash check
@@ -405,9 +400,9 @@ func (tp *TxPool) checkTxOut(tx *prototype.Transaction) bool {
 
 	hash := common.Encode(tx.Hash)
 	for _, val := range tp.lockedInputs {
-		fhash := strings.Split(val, "_")[0]
+		inputHash := strings.Split(val, "_")[0]
 
-		if fhash == hash {
+		if inputHash == hash {
 			return true
 		}
 	}

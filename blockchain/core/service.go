@@ -25,8 +25,8 @@ var log = logrus.WithField("prefix", "core")
 type Config struct{
 	BlockForger consensus.BlockForger
 	AttestationPool consensus.AttestationPool
-	StateFeed *events.Bus
-	BlockFeed *events.Bus
+	StateFeed events.Feed
+	BlockFeed events.Feed
 }
 
 // NewService creates new CoreService
@@ -46,7 +46,7 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 	var msg string
 	if proposer.Key() != nil {
 		msg = fmt.Sprintf("Master node with proposer %s", proposer.Addr().Hex())
-	} else{
+	} else {
 		msg = "Slave node"
 	}
 	log.Info(msg)
@@ -116,7 +116,7 @@ type Service struct {
 	stateEvent chan state.State
 	blockEvent chan *prototype.Block
 
-	blockFeed events.Emitter
+	blockFeed events.Feed
 }
 
 // Start service work
@@ -212,11 +212,11 @@ func (s *Service) Status() error {
 	return s.statusErr
 }
 
-func (s *Service) SendBlock(block *prototype.Block){
+func (s *Service) SendBlock(block *prototype.Block) {
 	s.blockFeed.Send(block)
 }
 
-func (s *Service) waitInitialized(){
+func (s *Service) waitInitialized() {
 	for {
 		select{
 		case <-s.stop:

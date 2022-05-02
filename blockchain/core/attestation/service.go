@@ -6,19 +6,17 @@ import (
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/attestation"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/staking"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/rdochain"
+	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"time"
 )
 
-func NewService(ctx context.Context, bc *rdochain.Service) (*Service, error) {
+func NewService(ctx context.Context, bc *rdochain.Service, txFeed events.Feed, enableStats bool) (*Service, error) {
 	cfg := params.RaidoConfig()
 
 	stakeAmount := cfg.StakeSlotUnit * cfg.RoiPerRdo
 	slotTime := time.Duration(cfg.SlotTime) * time.Second
-
-	statFlag := true
-	debugStatFlag := false
 
 	// create new staking pool
 	stakePool, err := staking.NewPool(bc, cfg.ValidatorRegistryLimit, cfg.RewardBase, stakeAmount)
@@ -29,10 +27,9 @@ func NewService(ctx context.Context, bc *rdochain.Service) (*Service, error) {
 	validatorCfg := attestation.CryspValidatorConfig{
 		SlotTime:               slotTime,
 		MinFee:                 cfg.MinimalFee,
-		LogStat:                statFlag,
-		LogDebugStat:           debugStatFlag,
 		StakeUnit:              stakeAmount,
 		ValidatorRegistryLimit: cfg.ValidatorRegistryLimit,
+		LogStat: enableStats,
 	}
 
 	// new block and tx validator
@@ -42,6 +39,7 @@ func NewService(ctx context.Context, bc *rdochain.Service) (*Service, error) {
 	txPool := NewTxPool(ctx, validator, &PoolConfig{
 		MinimalFee: cfg.MinimalFee,
 		BlockSize:  cfg.BlockSize,
+		TxFeed: txFeed,
 	})
 
 	srv := &Service{
