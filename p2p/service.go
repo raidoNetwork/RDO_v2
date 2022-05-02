@@ -5,13 +5,16 @@ import (
 	"github.com/libp2p/go-libp2p"
 	phost "github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
+	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
+	"github.com/raidoNetwork/RDO_v2/utils/async"
 	"github.com/sirupsen/logrus"
 	"net"
 	"sync"
+	"time"
 )
 
 var log = logrus.WithField("prefix", "p2p")
@@ -26,27 +29,35 @@ type Config struct {
 }
 
 func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
-	ctx, cancel := context.WithCancel(ctx)
-
 	nodePrivKey, err := getNodeKey(cfg.DataDir)
 	if err != nil {
 		return nil, err
 	}
 
-	host := cfg.Host
-	if host == "" {
-		host, err = getIPaddr()
+	p2pHostAddr := cfg.Host
+	if p2pHostAddr == "" {
+		p2pHostAddr, err = getIPaddr()
 		if err != nil {
 			return nil, err
 		}
-	} else{
-		hostIp := net.ParseIP(host)
+	} else {
+		hostIp := net.ParseIP(p2pHostAddr)
 		if hostIp.To4() == nil {
-			return nil, errors.Errorf("Invalid host IP address given %s", host)
+			return nil, errors.Errorf("Invalid host IP address given %s", p2pHostAddr)
 		}
 	}
 
-	opts, err := optionsList(nodePrivKey, host, cfg)
+	ctx, cancel := context.WithCancel(ctx)
+	srv = &Service{
+		nodeKey: nodePrivKey,
+		ctx:     ctx,
+		cancel:  cancel,
+		cfg:     cfg,
+		topics:  map[string]*pubsub.Topic{},
+		subs:	 map[string]*pubsub.Subscription{},
+	}
+
+	opts, err := srv.optionsList(nodePrivKey, p2pHostAddr, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -56,16 +67,8 @@ func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
 		return nil, err
 	}
 
-	srv = &Service{
-		nodeKey: nodePrivKey,
-		host:    netHost,
-		ctx:     ctx,
-		cancel:  cancel,
-		cfg:     cfg,
-		id:      netHost.ID(),
-		topics:  map[string]*pubsub.Topic{},
-		subs:	 map[string]*pubsub.Subscription{},
-	}
+	srv.host = netHost
+	srv.id = netHost.ID()
 
 	psOpts := []pubsub.Option{
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
@@ -77,14 +80,16 @@ func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
 		pubsub.WithSubscriptionFilter(srv),
 	}
 
-	cfg.BootstrapNodes = []string{} // reset bootstrap
-
 	gs, err := pubsub.NewGossipSub(ctx, netHost, psOpts...)
 	if err != nil {
 		return nil, err
 	}
 
 	srv.pubsub = gs
+
+	async.WithInterval(srv.ctx, 7 * time.Second, func() {
+		log.WithField("prefix", "peerstore").Info(srv.host.Peerstore().PeersWithAddrs())
+	})
 
 	return srv, nil
 }
@@ -106,14 +111,14 @@ type Service struct {
 	startFail error
 
 	notifier events.Bus
+
+	// discovery
+	dht *dht.IpfsDHT
 }
 
 func (s *Service) Start() {
 	// print host p2p address
 	s.logID()
-
-	// connect to bootstrap nodes
-	s.connectPeers()
 
 	// start new peer search
 	err := s.setupDiscovery()
@@ -121,6 +126,9 @@ func (s *Service) Start() {
 		s.startFail = err
 		return
 	}
+
+	// connect to bootstrap nodes
+	s.connectPeers()
 
 	// join topics
 	err = s.SubscribeAll()
@@ -154,23 +162,30 @@ func (s *Service) Status() error {
 }
 
 func (s *Service) connectPeers() {
-	for _, addr := range s.cfg.BootstrapNodes {
-		if addr == "" {
-			continue
-		}
+	infos := s.getPeerInfo(s.cfg.BootstrapNodes)
+	if len(infos) == 0 {
+		log.Error("There are no peers to connect.")
+		return
+	}
 
-		go s.connectPeerWithAddr(addr)
+	for _, info := range infos {
+		go s.connectPeer(info)
 	}
 }
 
-func (s *Service) connectPeerWithAddr(addr string) error {
-	peerInfo, err := peer.AddrInfoFromString(addr)
-	if err != nil {
-		log.Errorf("Error parsing peer info: %s", err)
-		return err
+func (s *Service) getPeerInfo(addrs []string) []peer.AddrInfo {
+	res := make([]peer.AddrInfo, 0, len(addrs))
+	for _, addr := range addrs {
+		peerInfo, err := peer.AddrInfoFromString(addr)
+		if err != nil {
+			log.WithError(err).Error("Error parsing peer info")
+			continue
+		}
+
+		res = append(res, *peerInfo)
 	}
 
-	return s.connectPeer(*peerInfo)
+	return res
 }
 
 func (s *Service) connectPeer(info peer.AddrInfo) error {
@@ -181,6 +196,8 @@ func (s *Service) connectPeer(info peer.AddrInfo) error {
 		log.Errorf("Error connection to the peer %v: %s", info.Addrs, err)
 		return err
 	}
+
+	log.Infof("Connect to the %s", info.String())
 
 	return nil
 }

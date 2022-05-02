@@ -12,6 +12,8 @@ require (
 	github.com/joho/godotenv v1.4.0
 	github.com/libp2p/go-libp2p v0.18.0
 	github.com/libp2p/go-libp2p-core v0.14.0
+	github.com/libp2p/go-libp2p-discovery v0.6.0
+	github.com/libp2p/go-libp2p-kad-dht v0.15.0
 	github.com/libp2p/go-libp2p-noise v0.3.0
 	github.com/libp2p/go-libp2p-pubsub v0.6.1
 	github.com/libp2p/go-tcp-transport v0.5.1
