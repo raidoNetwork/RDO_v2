@@ -262,7 +262,7 @@ func (cv *CryspValidator) validateCollapseTx(tx *prototype.Transaction, block *p
 
 	// get all utxo
 	spentOutputsMap := map[string]*prototype.TxInput{}
-	for key, _ := range addrBalance {
+	for key := range addrBalance {
 		addr := common.BytesToAddress([]byte(key)).Hex()
 		utxo, err := cv.bc.FindAllUTxO(addr)
 		if err != nil {
@@ -288,7 +288,7 @@ func (cv *CryspValidator) validateCollapseTx(tx *prototype.Transaction, block *p
 	// validate each input
 	_, err = cv.checkInputsData(tx, spentOutputsMap)
 	if err != nil {
-		log.Error("validateCollapseTx: Error checking inputs: %s.", err)
+		log.Errorf("validateCollapseTx: Error checking inputs: %s.", err)
 		return err
 	}
 

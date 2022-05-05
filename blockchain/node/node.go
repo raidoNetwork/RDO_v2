@@ -50,8 +50,6 @@ type RDONode struct {
 	stateFeed events.Bus
 	blockFeed events.Bus
 	txFeed	  events.Bus
-
-	slotTicker *slot.SlotTicker
 }
 
 // New creates a new node instance, sets up configuration options, and registers

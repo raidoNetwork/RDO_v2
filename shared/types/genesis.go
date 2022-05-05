@@ -22,7 +22,7 @@ func CreateGenesisJSON(accman *keystore.AccountManager, path string) error {
 	genesisStruct := new(GenesisBlock)
 
 	balances := map[string]uint64{}
-	for addr, _ := range accman.GetPairs() {
+	for addr := range accman.GetPairs() {
 		balances[addr] = common.StartAmount
 	}
 

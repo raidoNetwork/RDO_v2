@@ -84,11 +84,8 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 
 		// feeds
 		blockFeed: cfg.BlockFeed,
+		stateFeed: cfg.StateFeed,
 	}
-
-	// subscribe on events
-	cfg.StateFeed.Subscribe(srv.stateEvent)
-	cfg.BlockFeed.Subscribe(srv.blockEvent)
 
 	return srv, nil
 }
@@ -117,15 +114,20 @@ type Service struct {
 	blockEvent chan *prototype.Block
 
 	blockFeed events.Feed
+	stateFeed events.Feed
 }
 
 // Start service work
 func (s *Service) Start() {
+	s.subscribeOnEvents()
 	s.waitInitialized()
 
 	// start slot ticker
 	genesisTime := time.Unix(0, int64(s.bc.GetGenesis().Timestamp))
-	slot.Ticker().Start(genesisTime)
+	err := slot.Ticker().Start(genesisTime)
+	if err != nil {
+		panic("Zero Genesis time")
+	}
 
 	// start block generator main loop
 	go s.mainLoop()
@@ -227,5 +229,10 @@ func (s *Service) waitInitialized() {
 			}
 		}
 	}
+}
+
+func (s *Service) subscribeOnEvents() {
+	s.stateFeed.Subscribe(s.stateEvent)
+	s.blockFeed.Subscribe(s.blockEvent)
 }
 

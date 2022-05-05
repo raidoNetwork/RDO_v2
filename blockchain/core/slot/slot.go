@@ -3,13 +3,11 @@ package slot
 import (
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
-	"github.com/sirupsen/logrus"
 	"sync"
 	"time"
 )
 
 var mainTicker *SlotTicker
-var log = logrus.WithField("prefix", "SlotTicker")
 
 func NewSlotTicker(){
 	slotDuration := params.RaidoConfig().SlotTime
@@ -62,7 +60,7 @@ func (st *SlotTicker) Start(genesisTime time.Time) error {
 	timePassed := time.Since(genesisTime)
 	if timePassed < st.slotDuration {
 		nextTickTime = genesisTime
-	} else{
+	} else {
 		nextTick := timePassed.Truncate(st.slotDuration) + st.slotDuration
 		nextTickTime = genesisTime.Add(nextTick)
 	}

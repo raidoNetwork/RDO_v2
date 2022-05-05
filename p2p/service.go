@@ -237,7 +237,7 @@ func (s *Service) listenTopic(topic string){
 }
 
 func (s *Service) SubscribeAll() error {
-	for t, _ := range topicMap {
+	for t := range topicMap {
 		err := s.subscribeTopic(t)
 		if err != nil {
 			return err
@@ -271,15 +271,6 @@ func (s *Service) subscribeTopic(name string) error {
 	s.subs[name] = sub
 
 	return nil
-}
-
-func (s *Service) activeTopics() []string {
-	topics := []string{
-		BlockTopic,
-		TxTopic,
-	}
-
-	return topics
 }
 
 func (s *Service) Publish(topicName string, message []byte) error {

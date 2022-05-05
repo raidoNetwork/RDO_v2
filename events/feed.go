@@ -74,7 +74,7 @@ func (b *Bus) Send(data interface{}) int {
 	sent := 0
 
 	// setup value for all send cases
-	for i, _ := range cases {
+	for i := range cases {
 		cases[i].Send = dval
 	}
 
@@ -101,7 +101,7 @@ func (b *Bus) Send(data interface{}) int {
 	}
 
 	// reset value of all send cases
-	for i, _ := range b.cases {
+	for i := range b.cases {
 		b.cases[i].Send = reflect.Value{}
 	}
 

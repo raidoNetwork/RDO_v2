@@ -230,12 +230,11 @@ func (s *Store) GetBlockNum(hash []byte) (uint64, error) {
 		bkt := tx.Bucket(blocksNumBucket)
 		val := bkt.Get(genNumKey(hash))
 
-		if val != nil && len(val) == 8 {
-			res = ssz.UnmarshallUint64(val)
-		} else {
+		if len(val) != 8 {
 			return errors.Errorf("Not found block num connected to given hash %s.", hex.EncodeToString(hash))
 		}
 
+		res = ssz.UnmarshallUint64(val)
 		return nil
 	})
 

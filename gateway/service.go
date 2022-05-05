@@ -10,7 +10,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"net/http"
-	"sync"
 	"time"
 )
 
@@ -35,7 +34,6 @@ type Gateway struct {
 	gatewayAddr        string
 	ctx                context.Context
 	cancel             context.CancelFunc
-	mu                 sync.RWMutex
 	maxCallRecvMsgSize int
 	startFailure       error
 	mux                *http.ServeMux

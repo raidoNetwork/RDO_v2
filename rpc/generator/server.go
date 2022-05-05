@@ -7,11 +7,8 @@ import (
 	"github.com/raidoNetwork/RDO_v2/rpc/api"
 	"github.com/raidoNetwork/RDO_v2/rpc/cast"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
-
-var log = logrus.WithField("prefix", "RPC GeneratorService")
 
 type Server struct {
 	Server  *grpc.Server

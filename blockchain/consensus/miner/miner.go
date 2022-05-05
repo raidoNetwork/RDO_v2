@@ -9,7 +9,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/sirupsen/logrus"
-	"sync"
 	"time"
 )
 
@@ -39,10 +38,7 @@ func NewMiner(bc consensus.BlockForger, att consensus.AttestationPool, cfg *Mine
 type Miner struct {
 	bc   consensus.BlockForger
 	att  consensus.AttestationPool
-
 	cfg *MinerConfig
-	mu  sync.RWMutex
-
 	collapsedAddr map[string]int
 }
 
@@ -344,6 +340,8 @@ func (m *Miner) createCollapseTx(tx *prototype.Transaction, blockNum uint64) (*p
 		}
 
 		inputsCount := len(utxo)
+
+		// check address need collapsing
 		if inputsCount + 1 <= CollapseOutputsNum {
 			continue
 		}
@@ -351,6 +349,7 @@ func (m *Miner) createCollapseTx(tx *prototype.Transaction, blockNum uint64) (*p
 		skipAddr := true
 		inputsLimitReached := false
 
+		// process address outputs
 		var balance uint64 = 0
 		storedInputs := 0
 		for _, uo := range utxo {
@@ -366,6 +365,7 @@ func (m *Miner) createCollapseTx(tx *prototype.Transaction, blockNum uint64) (*p
 			}
 		}
 
+		// add new output for address
 		collapsedOutput := types.NewOutput(out.Address, balance, nil)
 		opts.Outputs = append(opts.Outputs, collapsedOutput)
 
@@ -410,7 +410,7 @@ func (m *Miner) createRewardOutputs(slots []string) []*prototype.TxOutput {
 	for _, addrHex := range slots {
 		if _, exists := rewardMap[addrHex]; exists {
 			rewardMap[addrHex] += reward
-		} else{
+		} else {
 			rewardMap[addrHex] = reward
 		}
 	}
