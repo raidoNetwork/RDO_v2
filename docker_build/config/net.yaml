@@ -1,0 +1,9 @@
+# RDO main net config
+ SLOT_TIME: 7 # sec
+ REWARD_BASE: 1100000 # roi unit
+ STAKE_SLOT_UNIT: 5000 # RDO unit
+ MINIMAL_FEE: 1
+ BLOCK_SIZE: 350000 # block size 350kB
+ VALIDATOR_REGISTRY_LIMIT: 100
+ GENESIS_PATH: /usr/local/config/genesis.json
+

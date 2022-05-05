@@ -1,0 +1,8 @@
+sql-db-cfg: "/usr/local/config/db.env"
+datadir: "/usr/local/data/"
+log-file: "/usr/local/data/raido.log"
+rpc-host: 0.0.0.0
+grpc-gateway-host: 0.0.0.0
+srv-stat: true
+debug-logging: false
+p2p-host: "0.0.0.0"

@@ -1,0 +1,31 @@
+services:
+
+  db:
+    image: mysql
+    restart: on-failure:5
+    environment:
+      MYSQL_ROOT_PASSWORD: 123
+      MYSQL_DATABASE: utxo
+    healthcheck:
+      test: "mysqladmin ping -h localhost"
+      interval: 20s
+      timeout: 3s
+      retries: 5
+
+  adminer:
+    image: adminer
+    restart: on-failure:5
+    ports:
+      - 8082:8080
+
+  raido:
+    image: rdo_node
+    restart: on-failure:5
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - 5556:5555
+      - 9000:9999
+    volumes:
+      - ./docker_build/config:/usr/local/config
