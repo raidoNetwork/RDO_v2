@@ -29,3 +29,5 @@ services:
       - 9000:9999
     volumes:
       - ./docker_build/config:/usr/local/config
+    environment:
+      - BOOTSTRAP

@@ -10,12 +10,10 @@ WORKDIR /rdo
 RUN go build -o /rdo/bin/raido /rdo/cmd/blockchain/main.go
 
 FROM alpine:latest
-
-RUN apk add --no-cache ca-certificates
-
 COPY --from=build /rdo/bin/raido /usr/local/bin/
+ENV BOOTSTRAP = ""
 RUN cd /usr/local && mkdir config && mkdir data
 
 EXPOSE 4000 5555 9999
 
-ENTRYPOINT ["raido", "--config-file=/usr/local/config/config.yaml", "--chain-config-file=/usr/local/config/net.yaml"]
+ENTRYPOINT raido --p2p-bootstrap-nodes "${BOOTSTRAP}" --config-file=/usr/local/config/config.yaml --chain-config-file=/usr/local/config/net.yaml
