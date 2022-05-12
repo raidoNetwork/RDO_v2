@@ -28,7 +28,7 @@ var log = logrus.WithField("prefix", "keystore")
 
 func NewAccountManager(ctx *cli.Context) *AccountManager {
 	am := &AccountManager{
-		store:   map[string]*ecdsa.PrivateKey{},
+		store:   map[string]KeyPair{},
 		list:    make([]KeyPair, 0),
 		ctx:     ctx,
 		dataDir: ctx.String(cmd.DataDirFlag.Name),
@@ -43,38 +43,39 @@ type KeyPair struct {
 }
 
 type AccountManager struct {
-	store   map[string]*ecdsa.PrivateKey
+	store   map[string]KeyPair
 	list    []KeyPair
 	ctx     *cli.Context
 	keyPath string
 	dataDir string
 }
 
-func (am *AccountManager) CreatePair() (string, error) {
+func (am *AccountManager) CreateAccount() (string, error) {
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		return "", err
 	}
 
-	addr := am.createAddress(key)
+	addr := crypto.PubkeyToAddress(key.PublicKey)
 	hash := addr.Hex()
 
 	if _, exists := am.store[hash]; exists {
 		return "", errors.New("key " + hash + " already exists!")
 	}
 
-	am.store[hash] = key
-	am.list = append(am.list, KeyPair{
+	kpair := KeyPair{
 		Address: addr,
 		Private: key,
-	})
+	}
+	am.store[hash] = kpair
+	am.list = append(am.list, kpair)
 
 	return hash, nil
 }
 
 func (am *AccountManager) CreatePairs(n int) error {
 	for i := 0; i < n; i++ {
-		_, err := am.CreatePair()
+		_, err := am.CreateAccount()
 		if err != nil {
 			return err
 		}
@@ -83,7 +84,7 @@ func (am *AccountManager) CreatePairs(n int) error {
 	return nil
 }
 
-func (am *AccountManager) GetPairs() map[string]*ecdsa.PrivateKey {
+func (am *AccountManager) GetAccounts() map[string]KeyPair {
 	return am.store
 }
 
@@ -91,12 +92,8 @@ func (am *AccountManager) GetPairsList() []KeyPair {
 	if len(am.list) == 0 || len(am.list) != len(am.store) {
 		am.list = make([]KeyPair, 0, len(am.store))
 
-		for hex, priv := range am.store {
-			addr := common.HexToAddress(hex)
-			am.list = append(am.list, KeyPair{
-				Address: addr,
-				Private: priv,
-			})
+		for _, kpair := range am.store {
+			am.list = append(am.list, kpair)
 		}
 	}
 
@@ -104,7 +101,7 @@ func (am *AccountManager) GetPairsList() []KeyPair {
 }
 
 func (am *AccountManager) GetKey(addr string) *ecdsa.PrivateKey {
-	return am.store[addr]
+	return am.store[addr].Private
 }
 
 func (am *AccountManager) createKeyDir() error {
@@ -140,11 +137,11 @@ func (am *AccountManager) StoreToDisk() error {
 	}
 
 	i := 0
-	for _, key := range am.store {
+	for _, kpair := range am.store {
 		fname := "account_" + strconv.Itoa(i)
 		path := filepath.Join(am.keyPath, fname)
 
-		err := crypto.SaveECDSA(path, key)
+		err := crypto.SaveECDSA(path, kpair.Private)
 		if err != nil {
 			return err
 		}
@@ -187,8 +184,11 @@ func (am *AccountManager) LoadFromDisk() error {
 			return err
 		}
 
-		addr := am.createAddress(key)
-		am.store[addr.Hex()] = key
+		addr := crypto.PubkeyToAddress(key.PublicKey)
+		am.store[addr.Hex()] = KeyPair{
+			Address: addr,
+			Private: key,
+		}
 	}
 
 	if flen == 0 {
@@ -196,10 +196,6 @@ func (am *AccountManager) LoadFromDisk() error {
 	}
 
 	return nil
-}
-
-func (am *AccountManager) createAddress(key *ecdsa.PrivateKey) common.Address {
-	return crypto.PubkeyToAddress(key.PublicKey)
 }
 
 func (am *AccountManager) GetHexPrivateKey(pubKey string) string {

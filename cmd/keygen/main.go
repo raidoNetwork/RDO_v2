@@ -22,14 +22,13 @@ func main() {
 func genKey(outputPath string) error {
 	accman := keystore.NewAccountManager(nil)
 
-	pubKey, err := accman.CreatePair()
+	pubKey, err := accman.CreateAccount()
 	if err != nil {
 		return err
 	}
 
 	privKey := accman.GetHexPrivateKey(pubKey)
 
-	log.Printf("Generate key:")
 	log.Printf("PublicKey: %s", pubKey)
 
 	isPathGiven := len(outputPath) > 0

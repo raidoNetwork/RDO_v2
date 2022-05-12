@@ -3,11 +3,14 @@ package types
 import (
 	"encoding/json"
 	"github.com/raidoNetwork/RDO_v2/keystore"
-	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
 	"io/ioutil"
 	"path/filepath"
 	"time"
+)
+
+const (
+	StartAmount = 1e12 //10000000000000 // 1 * 10e12
 )
 
 type GenesisBlock struct {
@@ -22,8 +25,8 @@ func CreateGenesisJSON(accman *keystore.AccountManager, path string) error {
 	genesisStruct := new(GenesisBlock)
 
 	balances := map[string]uint64{}
-	for addr := range accman.GetPairs() {
-		balances[addr] = common.StartAmount
+	for addr := range accman.GetAccounts() {
+		balances[addr] = StartAmount
 	}
 
 	genesisStruct.Hash = crypto.Keccak256Hash([]byte("genesis-block")).Hex()

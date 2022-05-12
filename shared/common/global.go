@@ -21,12 +21,6 @@ const (
 	BlackHoleAddress = "0x0000000000000000000000000000000000000000"
 )
 
-// Test settings
-const (
-	AccountNum  = 700
-	StartAmount = 1e12 //10000000000000 // 1 * 10e12
-)
-
 // StatFmt parse time.Duration to the needed string format
 func StatFmt(d time.Duration) string {
 	return fmt.Sprintf("%d μs", int64(d/time.Microsecond))
