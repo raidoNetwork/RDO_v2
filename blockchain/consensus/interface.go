@@ -56,10 +56,10 @@ type BlockForger interface {
 	GetGenesis() *prototype.Block
 
 	// GetBlockCount return block count in the blockchain
-	GetBlockCount() uint64 // same
+	GetBlockCount() uint64
 
 	// FindAllUTxO find all address unspent outputs
-	FindAllUTxO(string) ([]*types.UTxO, error) // same
+	FindAllUTxO(string) ([]*types.UTxO, error)
 
 	// ParentHash return parent block hash for current block
 	ParentHash() []byte

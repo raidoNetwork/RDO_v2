@@ -6,7 +6,7 @@ import (
 )
 
 // The value of these vars are set through linker options.
-var ver = "0.2.8"
+var ver = "0.2.9"
 var buildDate = "{DATE}"
 
 func Version() string {

@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -85,6 +86,8 @@ type TxPool struct {
 	finish context.CancelFunc
 
 	cfg *PoolConfig
+
+	forgeFailed int32
 }
 
 // SendRawTx implements PoolAPI for gRPC gateway
@@ -108,6 +111,12 @@ func (tp *TxPool) ReadingLoop() {
 	for {
 		select {
 		case td := <-tp.txEvent:
+			if atomic.LoadInt32(&tp.forgeFailed) == 1 {
+				tp.clearPool()
+				log.Error("Block forging failed stop all tx registrations and clear pool")
+				return
+			}
+
 			err := tp.RegisterTx(td)
 			if err != nil {
 				log.Errorf("ReadingLoop: Registration error. %s", err)
@@ -485,6 +494,19 @@ func (tp *TxPool) GetPendingTransactions() ([]*prototype.Transaction, error) {
 	}
 
 	return batch, nil
+}
+
+func (tp *TxPool) catchForgeError() {
+	atomic.StoreInt32(&tp.forgeFailed, 1)
+}
+
+func (tp *TxPool) clearPool() {
+	tp.lock.Lock()
+	tp.pool = map[string]*types.TransactionData{}
+	tp.reservedPool = map[string]*types.TransactionData{}
+	tp.lockedInputs = map[string]string{}
+	tp.pricedPool = make(pricedTxPool, 0)
+	tp.lock.Unlock()
 }
 
 func genKeyFromInput(in *prototype.TxInput) string {

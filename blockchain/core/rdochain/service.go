@@ -22,7 +22,7 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage, s
 
 	// output manager
 	outm := NewOutputManager(bc, sql, &OutputManagerConfig{
-		ShowStat:     true, // TODO refactor this params
+		ShowStat:     true,
 		ShowWideStat: false,
 	})
 
@@ -118,11 +118,10 @@ func (s *Service) checkBalance() error {
 	currentSum := balanceSum + feeAmount
 
 	if targetSum != currentSum {
-		log.Errorf("Wrong total supply. Expected: %d. Given: %d.", targetSum, currentSum)
-		return errors.New("Wrong total supply.")
+		return errors.Errorf("Wrong total supply. Expected: %d. Given: %d.", targetSum, currentSum)
 	}
 
-	log.Warnf("System balance is correct. Total supply: %d", currentSum)
+	log.Warnf("System balance is correct. Total supply: %d roi", currentSum)
 
 	return nil
 }
@@ -137,7 +136,6 @@ func (s *Service) FindAllUTxO(addr string) ([]*types.UTxO, error) {
 
 // GetSyncStatus return sync status of local blockchain with network
 func (s *Service) GetSyncStatus() (string, error) {
-	// TODO add network sync status
 	return s.getSQLsyncStatus()
 }
 
@@ -165,7 +163,6 @@ func (s *Service) getSQLsyncStatus() (string, error){
 }
 
 func (s *Service) GetServiceStatus() (string, error) {
-	// TODO add info for network sync
 	return s.GetSyncStatus()
 }
 

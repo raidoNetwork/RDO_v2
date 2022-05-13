@@ -4,7 +4,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/keystore"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
-	hash2 "github.com/raidoNetwork/RDO_v2/utils/hash"
+	"github.com/raidoNetwork/RDO_v2/utils/hash"
 	"time"
 )
 
@@ -32,12 +32,21 @@ type BlockSheet struct {
 	Slashers []*prototype.Sign
 }
 
+func NewHeader(block *prototype.Block) *BlockHeader {
+	return &BlockHeader{
+		Num: block.Num,
+		Parent: block.Parent,
+		Version: block.Version,
+		TxRoot: block.Txroot,
+	}
+}
+
 func NewBlock(blockNum uint64, parent []byte, txBatch []*prototype.Transaction, validator *keystore.ValidatorAccount) *prototype.Block {
 	header := BlockHeader{
 		Num:     blockNum,
 		Parent:  parent,
 		Version: []byte{1, 0, 0},
-		TxRoot:  hash2.GenTxRoot(txBatch),
+		TxRoot:  hash.GenTxRoot(txBatch),
 	}
 
 	// sign block
@@ -46,7 +55,7 @@ func NewBlock(blockNum uint64, parent []byte, txBatch []*prototype.Transaction, 
 	}
 
 	tstamp := uint64(time.Now().UnixNano())
-	header.Hash = hash2.BlockHash(header.Num, header.Version, header.Parent, header.TxRoot, tstamp)
+	header.Hash = hash.BlockHash(header.Num, header.Version, header.Parent, header.TxRoot, tstamp)
 
 	block := &prototype.Block{
 		Num:          header.Num,

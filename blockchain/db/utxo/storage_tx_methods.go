@@ -64,12 +64,7 @@ func (s *Store) AddOutputBatch(txID int, values string) (rows int64, err error) 
 		return
 	}
 
-	rows, err = res.RowsAffected()
-	if err != nil {
-		return
-	}
-
-	return
+	return res.RowsAffected()
 }
 
 // SpendOutput delete output in the database

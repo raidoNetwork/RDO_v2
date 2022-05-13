@@ -24,7 +24,6 @@ type Config struct {
 	Host           string
 	Port           int
 	BootstrapNodes []string
-	PeerLimit      int
 	DataDir        string
 }
 
@@ -205,7 +204,7 @@ func (s *Service) connectPeer(info peer.AddrInfo) error {
 func (s *Service) readMessages(){
 	log.Info("Start listening messages")
 
-	for t, _ := range topicMap {
+	for t := range topicMap {
 		go s.listenTopic(t)
 	}
 }

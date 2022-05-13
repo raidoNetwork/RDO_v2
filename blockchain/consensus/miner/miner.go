@@ -16,15 +16,17 @@ var log = logrus.WithField("prefix", "Miner")
 
 var ErrZeroFeeAmount = errors.New("Block has no transactions with fee.")
 
-// MinerConfig miner options
-type MinerConfig struct {
+const txBatchLimit = 1000
+
+// Config miner options
+type Config struct {
 	ShowStat     bool
 	ShowFullStat bool
 	BlockSize    int
 	Proposer 	 *keystore.ValidatorAccount
 }
 
-func NewMiner(bc consensus.BlockForger, att consensus.AttestationPool, cfg *MinerConfig) *Miner {
+func NewMiner(bc consensus.BlockForger, att consensus.AttestationPool, cfg *Config) *Miner {
 	m := Miner{
 		bc:  bc,
 		att: att,
@@ -38,7 +40,7 @@ func NewMiner(bc consensus.BlockForger, att consensus.AttestationPool, cfg *Mine
 type Miner struct {
 	bc   consensus.BlockForger
 	att  consensus.AttestationPool
-	cfg *MinerConfig
+	cfg *Config
 	collapsedAddr map[string]int
 }
 
@@ -81,13 +83,13 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 	}
 
 	// limit tx count in block according to marshaller settings
-	txBatchLimit := 1000
+	txLimit := txBatchLimit
 	if txListLen < txBatchLimit {
-		txBatchLimit = txListLen
+		txLimit = txListLen
 	}
 
 	var size int
-	for i := 0; i < txBatchLimit; i++ {
+	for i := 0; i < txLimit; i++ {
 		size = txList[i].Size()
 		totalSize += size
 
@@ -308,7 +310,6 @@ func (m *Miner) createRewardTx(blockNum uint64) (*prototype.Transaction, error) 
 	return ntx, nil
 }
 
-// TODO add optimization
 func (m *Miner) createCollapseTx(tx *prototype.Transaction, blockNum uint64) (*prototype.Transaction, error) {
 	const CollapseOutputsNum = 100
 	const InputsPerTxLimit = 2000

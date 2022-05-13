@@ -6,6 +6,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/attestation"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/staking"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/rdochain"
+	"github.com/raidoNetwork/RDO_v2/blockchain/state"
 	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
@@ -43,9 +44,10 @@ func NewService(ctx context.Context, bc *rdochain.Service, txFeed events.Feed, e
 	})
 
 	srv := &Service{
-		txPool,
-		stakePool,
-		validator,
+		txPool: txPool,
+		stakePool: stakePool,
+		validator: validator,
+		stateEvent: make(chan state.State, 1),
 	}
 
 	return srv, nil
@@ -55,9 +57,14 @@ type Service struct{
 	txPool *TxPool
 	stakePool consensus.StakePool
 	validator consensus.Validator
+	stateEvent chan state.State
 }
 
 func (s *Service) Start(){
+	s.waitNodeSync()
+
+	// listen events for forge error
+	go s.lookForgeError()
 
 	// start tx pool work
 	go s.txPool.ReadingLoop()
@@ -104,4 +111,21 @@ func (s *Service) TxPool() consensus.TxPool {
 
 func (s *Service) Validator() consensus.Validator {
 	return s.validator
+}
+
+func (s *Service) waitNodeSync() {
+	for st := range s.stateEvent {
+		if st == state.Synced {
+			return
+		}
+	}
+}
+
+func (s *Service) lookForgeError() {
+	for st := range s.stateEvent {
+		if st == state.ForgeFailed {
+			s.txPool.catchForgeError()
+			return
+		}
+	}
 }

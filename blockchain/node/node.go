@@ -226,7 +226,6 @@ func (r *RDONode) registerP2P() error {
 	cfg := p2p.Config{
 		Host: r.cliCtx.String(flags.P2PHost.Name),
 		Port: r.cliCtx.Int(flags.P2PPort.Name),
-		PeerLimit: 200, // TODO replace with flag
 		BootstrapNodes: r.cliCtx.StringSlice(flags.P2PBootstrapNodes.Name),
 		DataDir: r.cliCtx.String(cmd.DataDirFlag.Name),
 	}

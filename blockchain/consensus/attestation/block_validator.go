@@ -5,6 +5,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/hash"
 	"strconv"
 	"time"
@@ -106,6 +107,11 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 		return errors.Errorf("Wrong block timestamp: %d. Timestamp with slot time: %d.", block.Timestamp, tstamp)
 	}
 
+	err = cv.verifyBlockSign(block, block.Proposer)
+	if err != nil {
+		return errors.New("Wrong block proposer signature")
+	}
+
 	start = time.Now()
 
 	// check if block is already exists in the database
@@ -144,8 +150,32 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 		return errors.Errorf("ValidateBlock: Timestamp is too small. Previous: %d. Current: %d.", prevBlock.Timestamp, block.Timestamp)
 	}
 
+	approversCount := cv.countValidSigns(block, block.Approvers)
+	slashersCount := cv.countValidSigns(block, block.Slashers)
+
+	log.Infof("Approvers %d, slashers %d", approversCount, slashersCount)
+
 	// TODO check block approvers and slashers
 
 	return nil
 
+}
+
+func (cv *CryspValidator) verifyBlockSign(block *prototype.Block, sign *prototype.Sign) error {
+	header := types.NewHeader(block)
+	return types.GetBlockSigner().Verify(header, sign)
+}
+
+func (cv *CryspValidator) countValidSigns(block *prototype.Block, signatures []*prototype.Sign) int {
+	validCount := 0
+	for _, sign := range signatures {
+		err := cv.verifyBlockSign(block, sign)
+		if err != nil {
+			continue
+		}
+
+		validCount += 1
+	}
+
+	return validCount
 }

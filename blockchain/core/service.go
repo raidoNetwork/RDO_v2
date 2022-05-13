@@ -51,7 +51,7 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 	}
 	log.Info(msg)
 
-	minerCfg := &miner.MinerConfig{
+	minerCfg := &miner.Config{
 		ShowStat:     statFlag,
 		ShowFullStat: debugStatFlag,
 		BlockSize:    netCfg.BlockSize,
@@ -162,11 +162,13 @@ func (s *Service) mainLoop() {
 				s.mu.Lock()
 				s.statusErr = err
 				s.mu.Unlock()
+
+				s.stateFeed.Send(state.ForgeFailed)
 				return
 			}
 
 			// push block to events
-			go s.SendBlock(block)
+			s.blockFeed.Send(block)
 
 			if s.fullStatFlag {
 				end = time.Since(start)
@@ -212,10 +214,6 @@ func (s *Service) Status() error {
 	defer s.mu.Unlock()
 
 	return s.statusErr
-}
-
-func (s *Service) SendBlock(block *prototype.Block) {
-	s.blockFeed.Send(block)
 }
 
 func (s *Service) waitInitialized() {

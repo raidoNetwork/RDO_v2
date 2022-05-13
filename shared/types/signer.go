@@ -7,7 +7,6 @@ import (
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
-	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
 	"github.com/raidoNetwork/RDO_v2/shared/crypto/secp256k1"
 )
@@ -17,7 +16,7 @@ type BlockSigner interface {
 	Sign(*BlockHeader, *ecdsa.PrivateKey) (*prototype.Sign, error)
 
 	// Verify sign of given input.
-	Verify(*BlockHeader, *prototype.Sign, common.Address) error
+	Verify(*BlockHeader, *prototype.Sign) error
 }
 
 type KeccakBlockSigner struct {}
@@ -40,7 +39,7 @@ func (kbs *KeccakBlockSigner) Sign(header *BlockHeader, key *ecdsa.PrivateKey) (
 	return sign, nil
 }
 
-func (kbs *KeccakBlockSigner) Verify(header *BlockHeader, sign *prototype.Sign, addr common.Address) error {
+func (kbs *KeccakBlockSigner) Verify(header *BlockHeader, sign *prototype.Sign) error {
 	dgst := kbs.getBlockDomain(header)
 
 	pubKey, err := crypto.SigToPub(dgst, sign.Signature)
@@ -49,7 +48,7 @@ func (kbs *KeccakBlockSigner) Verify(header *BlockHeader, sign *prototype.Sign, 
 	}
 
 	recAddr := crypto.PubkeyToAddress(*pubKey)
-	if !bytes.Equal(recAddr.Bytes(), addr) {
+	if !bytes.Equal(recAddr.Bytes(), sign.Address) {
 		return errors.New("Wrong signature given!!!")
 	}
 
