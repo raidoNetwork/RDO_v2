@@ -183,7 +183,7 @@ func (tp *TxPool) validateTx(td *types.TransactionData) error {
 	}
 
 	end := time.Since(start)
-	log.Infof("Validate tx %s struct in: %s.", txHash, common.StatFmt(end))
+	log.Infof("Validate tx struct for %s in: %s.", txHash, common.StatFmt(end))
 
 	start = time.Now()
 
@@ -220,17 +220,17 @@ func (tp *TxPool) checkInputs(td *types.TransactionData) error {
 		firstTxHash, exists := tp.lockedInputs[key]
 
 		if exists {
-			ftd, existsInPool := tp.pool[firstTxHash]
+			existTd, existsInPool := tp.pool[firstTxHash]
 
 			if existsInPool {
 				// If tx has the same sender address reject it.
-				if !bytes.Equal(td.GetTx().Inputs[0].Address, ftd.GetTx().Inputs[0].Address) {
+				if !bytes.Equal(td.GetTx().Inputs[0].Address, existTd.GetTx().Inputs[0].Address) {
 					return errors.Errorf("%s Input hash index: %s. Tx hash: %s, double hash: %s", ErrInputExists, key, firstTxHash, hash)
 				}
 
 				// If given tx has the same num and bigger fee add it to the pool
 				// and remove first tx from the pool.
-				if td.Num() == ftd.Num() && td.Fee() > ftd.Fee() {
+				if td.Num() == existTd.Num() && td.Fee() > existTd.Fee() {
 					err := tp.deleteTransactionByHash(firstTxHash)
 					if err != nil {
 						return err
@@ -261,41 +261,51 @@ func (tp *TxPool) GetTxQueue() []*types.TransactionData {
 
 // ReserveTransactions set status of given tx batch as reserved for block
 func (tp *TxPool) ReserveTransactions(arr []*prototype.Transaction) error {
+	for _, tx := range arr {
+		if err := tp.ReserveTransaction(tx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (tp *TxPool) ReserveTransaction(tx *prototype.Transaction) error {
 	tp.lock.Lock()
 	defer tp.lock.Unlock()
 
-	for _, tx := range arr {
-		if common.IsSystemTx(tx) {
-			continue
-		}
-
-		hash := common.Encode(tx.Hash)
-
-		td, exists := tp.pool[hash]
-		_, reservExists := tp.reservedPool[hash]
-
-		if !exists {
-			log.Errorf("TxPool.ReserveTransactions: Not found transaction %s.", hash)
-			return ErrTxNotFound
-		}
-
-		// if tx is already reserved block cann't use it
-		if reservExists {
-			log.Errorf("TxPool.ReserveTransactions: Tx %s already reserved.", hash)
-			return ErrAlreadyReserved
-		}
-
-		// switch tx to the reserved status
-		tp.reservedPool[hash] = td // copy to reserved pool
-		delete(tp.pool, hash)
-
-		// delete from priced pool
-		err := tp.DeleteFromPricedPool(tx)
-		if err != nil {
-			log.Errorf("TxPool.ReserveTransactions: Not found in priced pool tx %s.", hash)
-			return ErrTxNotFoundInPricedPool
-		}
+	if common.IsSystemTx(tx) {
+		return nil
 	}
+
+	hash := common.Encode(tx.Hash)
+
+	td, exists := tp.pool[hash]
+	_, reservedExists := tp.reservedPool[hash]
+
+	if !exists {
+		log.Errorf("TxPool.ReserveTransaction: Not found transaction %s.", hash)
+		return ErrTxNotFound
+	}
+
+	// if tx is already reserved block can't use it
+	if reservedExists {
+		log.Errorf("TxPool.ReserveTransaction: Tx %s already reserved.", hash)
+		return ErrAlreadyReserved
+	}
+
+	// switch tx to the reserved status
+	tp.reservedPool[hash] = td // copy to reserved pool
+	delete(tp.pool, hash)
+
+	// delete from priced pool
+	err := tp.DeleteFromPricedPool(tx)
+	if err != nil {
+		log.Errorf("TxPool.ReserveTransaction: Not found in priced pool tx %s.", hash)
+		return ErrTxNotFoundInPricedPool
+	}
+
+	log.Infof("Reserved tx %s", hash)
 
 	return nil
 }
@@ -364,7 +374,7 @@ func (tp *TxPool) DeleteFromPricedPool(tx *prototype.Transaction) error {
 	}
 
 	// delete found element
-	tp.pricedPool = DeleteFromPricedPool(tp.pricedPool, index)
+	tp.pricedPool = tp.pricedPool.DeleteFromPricedPool(index)
 
 	return nil
 }
@@ -384,9 +394,11 @@ func (tp *TxPool) deleteTransactionByHash(hash string) error {
 
 	err := tp.DeleteFromPricedPool(tx)
 	if err != nil {
-		log.Errorf("Error deleting stake transaction %s", hash)
+		log.Errorf("Error deleting transaction %s from priced pool", hash)
 		return err
 	}
+
+	log.Infof("Deleted from pool tx %s", hash)
 
 	return nil
 }
@@ -548,7 +560,7 @@ func (ptp pricedTxPool) FindByTx(tx *prototype.Transaction) (int, error) {
 	return -1, ErrTxNotFoundInPricedPool
 }
 
-func DeleteFromPricedPool(ptp pricedTxPool, index int) pricedTxPool {
+func (ptp pricedTxPool) DeleteFromPricedPool(index int) pricedTxPool {
 	if index >= ptp.Len() || index < 0 {
 		return ptp
 	}

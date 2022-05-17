@@ -214,7 +214,13 @@ func (r *RDONode) registerAttestationService() error {
 	}
 
 	enableStats := r.cliCtx.Bool(flags.SrvStat.Name)
-	srv, err := attestation.NewService(r.ctx, blockchainService, r.TxFeed(), enableStats)
+	cfg := attestation.Config{
+		TxFeed: r.TxFeed(),
+		StateFeed: r.StateFeed(),
+		EnableStats: enableStats,
+		Blockchain: blockchainService,
+	}
+	srv, err := attestation.NewService(r.ctx, &cfg)
 	if err != nil {
 		return err
 	}

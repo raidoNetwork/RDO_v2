@@ -79,15 +79,14 @@ type TxPool interface {
 	// DeleteTransaction removes given transaction from pool.
 	DeleteTransaction(transaction *prototype.Transaction) error
 
-	// ReserveTransactions remove given transactions from pool
-	// and mark it as reserved.
-	ReserveTransactions([]*prototype.Transaction) error
+	// ReserveTransaction remove given transaction from the pool
+	ReserveTransaction(*prototype.Transaction) error
 
 	// RollbackReserved returns reserved transactions to the pool.
 	RollbackReserved()
 
 	// FlushReserved removes all reserved transactions from pool.
-	FlushReserved(bool)
+	FlushReserved(cleanInputs bool)
 }
 
 // StakePool regulates stake slots condition.

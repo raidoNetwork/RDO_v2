@@ -44,23 +44,13 @@ type Miner struct {
 	collapsedAddr map[string]int
 }
 
-// ForgeBlock create block from tx pool data
-func (m *Miner) ForgeBlock() (*prototype.Block, error) {
-	start := time.Now()
-	totalSize := 0 // current size of block in bytes
-
-	txList := m.att.TxPool().GetTxQueue()
-	txListLen := len(txList)
-	txBatch := make([]*prototype.Transaction, 0, txListLen)
-	collapseBatch := make([]*prototype.Transaction, 0, 4)
-
-	// create reward transaction for current block
+func (m *Miner) addRewardTxToBatch(txBatch []*prototype.Transaction, collapseBatch []*prototype.Transaction, totalSize int) ([]*prototype.Transaction, []*prototype.Transaction, int, error) {
 	rewardTx, err := m.createRewardTx(m.bc.GetBlockCount())
 	if err != nil {
 		if errors.Is(err, consensus.ErrNoStakers) {
 			log.Warn("No stakers on current block.")
 		} else {
-			return nil, err
+			return nil, nil, 0, err
 		}
 	} else {
 		txBatch = append(txBatch, rewardTx)
@@ -71,7 +61,7 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 		collapseTx, err := m.createCollapseTx(rewardTx, m.bc.GetBlockCount())
 		if err != nil {
 			log.Errorf("Can't collapse reward tx %s outputs", common.Encode(rewardTx.Hash))
-			return nil, errors.Wrap(err, "Error collapsing tx outputs")
+			return nil, nil, 0, errors.Wrap(err, "Error collapsing tx outputs")
 		}
 
 		if collapseTx != nil {
@@ -82,15 +72,38 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 		}
 	}
 
+	return txBatch, collapseBatch, totalSize, nil
+}
+
+// ForgeBlock create block from tx pool data
+func (m *Miner) ForgeBlock() (*prototype.Block, error) {
+	start := time.Now()
+	totalSize := 0 // current size of block in bytes
+
+	txQueue := m.att.TxPool().GetTxQueue()
+	txQueueLen := len(txQueue)
+	txBatch := make([]*prototype.Transaction, 0, txQueueLen)
+	collapseBatch := make([]*prototype.Transaction, 0, 4)
+
+	// create reward transaction for current block
+	txBatch, collapseBatch, totalSize, err := m.addRewardTxToBatch(txBatch, collapseBatch, totalSize)
+	if err != nil {
+		return nil, err
+	}
+
 	// limit tx count in block according to marshaller settings
-	txLimit := txBatchLimit
-	if txListLen < txBatchLimit {
-		txLimit = txListLen
+	txCountPerBlock := txBatchLimit - len(txBatch) - len(collapseBatch)
+	if txQueueLen < txCountPerBlock {
+		txCountPerBlock = txQueueLen
 	}
 
 	var size int
-	for i := 0; i < txLimit; i++ {
-		size = txList[i].Size()
+	for i := 0; i < txQueueLen; i++ {
+		if len(txBatch) + len(collapseBatch) == txCountPerBlock {
+			break
+		}
+
+		size = txQueue[i].Size()
 		totalSize += size
 
 		// tx is too big try for look up another one
@@ -99,7 +112,7 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 			continue
 		}
 
-		tx := txList[i].GetTx()
+		tx := txQueue[i].GetTx()
 		hash := common.Encode(tx.Hash)
 
 		// check if empty validator slots exists and skip stake tx if not exist
@@ -120,6 +133,7 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 				// Delete stake tx from pool
 				err = m.att.TxPool().DeleteTransaction(tx)
 				if err != nil {
+					m.att.TxPool().FlushReserved(false)
 					return nil, errors.Wrap(err, "Error creating block")
 				}
 
@@ -131,8 +145,16 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 
 		txBatch = append(txBatch, tx)
 
+		// reserve tx for block forging
+		err = m.att.TxPool().ReserveTransaction(tx)
+		if err != nil {
+			m.att.TxPool().FlushReserved(false)
+			return nil, err
+		}
+
 		collapseTx, err := m.createCollapseTx(tx, m.bc.GetBlockCount())
 		if err != nil {
+			m.att.TxPool().FlushReserved(false)
 			log.Errorf("Can't collapse tx %s outputs", hash)
 			return nil, errors.Wrap(err, "Error collapsing tx outputs")
 		}
@@ -148,14 +170,6 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 		// we fill block successfully
 		if totalSize == m.cfg.BlockSize {
 			break
-		}
-	}
-
-	// set given tx as received in order to delete them from pool
-	if txListLen > 0 {
-		err = m.att.TxPool().ReserveTransactions(txBatch)
-		if err != nil {
-			return nil, err
 		}
 	}
 
@@ -182,7 +196,7 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 	block := m.generateBlockBody(txBatch)
 
 	end := time.Since(start)
-	log.Warnf("Generate block with transactions count: %d. TxPool transactions count: %d. Size: %d kB. Time: %s", len(txBatch), txListLen, totalSize/1024, common.StatFmt(end))
+	log.Warnf("Generate block with transactions count: %d. TxPool transactions count: %d. Size: %d kB. Time: %s", len(txBatch), txQueueLen, totalSize/1024, common.StatFmt(end))
 
 	return block, nil
 }
@@ -343,7 +357,7 @@ func (m *Miner) createCollapseTx(tx *prototype.Transaction, blockNum uint64) (*p
 		inputsCount := len(utxo)
 
 		// check address need collapsing
-		if inputsCount + 1 <= CollapseOutputsNum {
+		if inputsCount < CollapseOutputsNum {
 			continue
 		}
 

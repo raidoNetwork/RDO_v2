@@ -13,41 +13,51 @@ import (
 	"time"
 )
 
-func NewService(ctx context.Context, bc *rdochain.Service, txFeed events.Feed, enableStats bool) (*Service, error) {
-	cfg := params.RaidoConfig()
+type Config struct {
+	TxFeed events.Feed
+	StateFeed events.Feed
+	EnableStats bool
+	Blockchain *rdochain.Service
+}
 
-	stakeAmount := cfg.StakeSlotUnit * cfg.RoiPerRdo
-	slotTime := time.Duration(cfg.SlotTime) * time.Second
+func NewService(ctx context.Context, cfg *Config) (*Service, error) {
+	chainConfig := params.RaidoConfig()
+
+	stakeAmount := chainConfig.StakeSlotUnit * chainConfig.RoiPerRdo
+	slotTime := time.Duration(chainConfig.SlotTime) * time.Second
 
 	// create new staking pool
-	stakePool, err := staking.NewPool(bc, cfg.ValidatorRegistryLimit, cfg.RewardBase, stakeAmount)
+	stakePool, err := staking.NewPool(cfg.Blockchain, chainConfig.ValidatorRegistryLimit, chainConfig.RewardBase, stakeAmount)
 	if err != nil {
 		return nil, err
 	}
 
 	validatorCfg := attestation.CryspValidatorConfig{
 		SlotTime:               slotTime,
-		MinFee:                 cfg.MinimalFee,
+		MinFee:                 chainConfig.MinimalFee,
 		StakeUnit:              stakeAmount,
-		ValidatorRegistryLimit: cfg.ValidatorRegistryLimit,
-		LogStat: enableStats,
+		ValidatorRegistryLimit: chainConfig.ValidatorRegistryLimit,
+		LogStat:                cfg.EnableStats,
 	}
 
 	// new block and tx validator
-	validator := attestation.NewCryspValidator(bc, stakePool, &validatorCfg)
+	validator := attestation.NewCryspValidator(cfg.Blockchain, stakePool, &validatorCfg)
 
 	// new tx pool
 	txPool := NewTxPool(ctx, validator, &PoolConfig{
-		MinimalFee: cfg.MinimalFee,
-		BlockSize:  cfg.BlockSize,
-		TxFeed: txFeed,
+		MinimalFee: chainConfig.MinimalFee,
+		BlockSize:  chainConfig.BlockSize,
+		TxFeed:     cfg.TxFeed,
 	})
+
+	stateEvent := make(chan state.State, 1)
+	cfg.StateFeed.Subscribe(stateEvent)
 
 	srv := &Service{
 		txPool: txPool,
 		stakePool: stakePool,
 		validator: validator,
-		stateEvent: make(chan state.State, 1),
+		stateEvent: stateEvent,
 	}
 
 	return srv, nil
@@ -61,8 +71,6 @@ type Service struct{
 }
 
 func (s *Service) Start(){
-	s.waitNodeSync()
-
 	// listen events for forge error
 	go s.lookForgeError()
 
@@ -111,14 +119,6 @@ func (s *Service) TxPool() consensus.TxPool {
 
 func (s *Service) Validator() consensus.Validator {
 	return s.validator
-}
-
-func (s *Service) waitNodeSync() {
-	for st := range s.stateEvent {
-		if st == state.Synced {
-			return
-		}
-	}
 }
 
 func (s *Service) lookForgeError() {
