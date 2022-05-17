@@ -148,14 +148,12 @@ function signTx(hash, privateKey){
     let dgst = createSignDigest(hash);
     let {signature, recid} = ecdsaSign(dgst, Buffer.from(privateKey, 'hex'));
 
-    recid += 27;
-
     return Buffer.concat([Buffer.from(signature), Buffer.from([recid])]);
 }
 
 function verifySign(signature, hash, address){
     let sigBuf = Buffer.from(signature, 'hex');
-    const recid = sigBuf[sigBuf.length - 1] - 27; // set recid to the 0 or 1
+    const recid = sigBuf[sigBuf.length - 1]; // set recid to the 0 or 1
 
     sigBuf = sigBuf.slice(0, -1);
 

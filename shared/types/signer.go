@@ -109,8 +109,6 @@ func (s *KeccakTxSigner) Sign(tx *prototype.Transaction, key *ecdsa.PrivateKey) 
 		return nil, err
 	}
 
-	sign[64] += 27
-
 	return sign, nil
 }
 
@@ -121,8 +119,6 @@ func (s *KeccakTxSigner) Verify(tx *prototype.Transaction) error {
 
 	dgst := s.GetTxDomain(tx)
 	sign := tx.Signature
-
-	sign[64] -= 27
 
 	pubKey, err := crypto.SigToPub(dgst, sign)
 	if err != nil {
