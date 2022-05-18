@@ -1,7 +1,6 @@
 package rdochain
 
 import (
-	"fmt"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -16,6 +15,8 @@ import (
 var (
 	ErrAffectedRows = errors.New("Rows affected are different from expected")
 )
+
+const blocksPerTx = 10
 
 type OutputManagerConfig struct {
 	ShowStat     bool
@@ -58,7 +59,7 @@ func (om *OutputManager) FindAllUTxO(from string) ([]*types.UTxO, error) {
 func (om *OutputManager) ProcessBlock(block *prototype.Block) error {
 	start := time.Now()
 
-	blockTx, err := om.db.CreateTx()
+	blockTx, err := om.db.CreateTx(true)
 	if err != nil {
 		log.Errorf("OutputManager.processBlock: Error creating DB tx. %s.", err)
 		return err
@@ -91,7 +92,7 @@ func (om *OutputManager) ProcessBlock(block *prototype.Block) error {
 			// update tx inputs in database
 			err = om.processBlockInputs(blockTx, tx)
 			if err != nil {
-				log.Error("Error processing block inputs on tx", txHash, ":", err)
+				log.Errorf("Error processing block inputs on tx %s: %s", txHash, err)
 				return err
 			}
 		}
@@ -228,7 +229,6 @@ func (om *OutputManager) syncBlock(block *prototype.Block, blockTx int) error {
 	var index uint32
 	var from []byte
 	var hash common.Hash
-	var key string
 
 	for _, tx := range block.Transactions {
 		for _, in := range tx.Inputs {
@@ -240,8 +240,6 @@ func (om *OutputManager) syncBlock(block *prototype.Block, blockTx int) error {
 			if err != nil {
 				return om.rollbackAndGetError(blockTx, err)
 			}
-
-			log.Debugf("SyncData: Delete input with key %s_%d.", hash, in.Index)
 		}
 
 		if common.IsLegacyTx(tx) {
@@ -259,9 +257,6 @@ func (om *OutputManager) syncBlock(block *prototype.Block, blockTx int) error {
 			if tx.Type == common.FeeTxType && common.BytesToAddress(out.Address).Hex() == common.BlackHoleAddress {
 				continue
 			}
-
-			key = hash.Hex() + "_" + fmt.Sprintf("%d", index)
-			log.Debugf("SyncData: Insert or updated output %s to the database.", key)
 
 			uo := types.NewUTxO(tx.Hash, from, out.Address, out.Node, index, out.Amount, block.Num, tx.Type, tx.Timestamp)
 
@@ -289,9 +284,21 @@ func (om *OutputManager) syncLastBlock() error {
 		return err
 	}
 
-	tx, err := om.db.CreateTx()
+	tx, err := om.db.CreateTx(false)
 	if err != nil {
 		return err
+	}
+
+	if block.Num == GenesisBlockNum {
+		err := om.db.DeleteOutputs(tx, GenesisBlockNum)
+		if err != nil {
+			errb := om.db.RollbackTx(tx)
+			if errb != nil {
+				log.Errorf("SyncData: %s", errb)
+			}
+
+			return err
+		}
 	}
 
 	err = om.syncBlock(block, tx)
@@ -315,7 +322,6 @@ func (om *OutputManager) syncLastBlock() error {
 // syncDataInRange sync range of the blocks with SQL.
 // If param clear is true all data with blockId in range [min, max] will be removed.
 // With false clear param all data with blockId in range [min, max] will be updated.
-// cb - callback function
 func (om *OutputManager) syncDataInRange(min, max uint64, clear bool) error {
 	logMsg := "Start syncing SQL with KV."
 
@@ -331,11 +337,10 @@ func (om *OutputManager) syncDataInRange(min, max uint64, clear bool) error {
 
 	counter := 0
 	txIsOpen := false
-	for i := min; i <= max; i++ {
-		// commit tx each 10 blocks
-		if counter%10 == 0 {
+	for blockNum := min; blockNum <= max; blockNum++ {
+		if counter%blocksPerTx == 0 {
 			// commit tx
-			if i != min {
+			if blockNum != min {
 				txIsOpen = false
 				err = om.db.CommitTx(tx)
 				if err != nil {
@@ -345,22 +350,21 @@ func (om *OutputManager) syncDataInRange(min, max uint64, clear bool) error {
 
 			// create new tx
 			txIsOpen = true
-			tx, err = om.db.CreateTx()
+			tx, err = om.db.CreateTx(false)
 			if err != nil {
 				return err
 			}
 		}
 
-		log.Debugf("Counter: %d BlockNum: %d DB tx: %d opened: %v", counter, i, tx, txIsOpen)
+		log.Debugf("Counter: %d BlockNum: %d DB tx: %d opened: %v", counter, blockNum, tx, txIsOpen)
 
-		if clear {
-			// delete
-			err = om.db.DeleteOutputs(tx, i)
+		if clear && blockNum != min {
+			err = om.db.DeleteOutputs(tx, blockNum)
 			if err != nil {
 				return err
 			}
 		} else {
-			block, err = om.bc.GetBlockByNum(i)
+			block, err = om.bc.GetBlockByNum(blockNum)
 			if err != nil {
 				return errors.Wrap(err, "GetBlockByNum error: ")
 			}
@@ -441,18 +445,17 @@ func (om *OutputManager) processBlockInputs(blockTx int, tx *prototype.Transacti
 	// update inputs
 	for _, in := range tx.Inputs {
 		hash = common.BytesToHash(in.Hash).Hex()
-
 		startIn = time.Now()
 
 		arows, err = om.db.SpendOutput(blockTx, hash, in.Index)
 		if err != nil || arows != 1 {
-			log.Errorf("Error deleting input: %s_%d.", hash, in.Index)
+			log.WithError(err).Errorf("Error deleting input: %s_%d.", hash, in.Index)
 			return om.processUpdateError(arows, 1, blockTx, err)
 		}
 
 		if om.cfg.ShowWideStat {
 			endIn = time.Since(startIn)
-			log.Infof("OutputManager.processBlockInputs: Spent one output %s_%d in %s", hash, in.Index, common.StatFmt(endIn))
+			log.Infof("OutputManager.processBlockInputs: Spent output %s_%d in %s", hash, in.Index, common.StatFmt(endIn))
 		}
 	}
 

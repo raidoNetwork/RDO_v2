@@ -69,12 +69,12 @@ type OutputStorage interface {
 	FindAllUTxO(string) ([]*types.UTxO, error)
 
 	// CreateTx creates database transaction and returns it's ID.
-	CreateTx() (int, error)
+	CreateTx(bool) (int, error)
 
 	// CommitTx - commits transaction with given ID if it exists.
 	CommitTx(int) error
 
-	// RollbackTx - rollbacks all changes maded by tx.
+	// RollbackTx - rollbacks all changes made by tx.
 	RollbackTx(int) error
 
 	SpendOutput(txID int, hash string, index uint32) (int64, error)

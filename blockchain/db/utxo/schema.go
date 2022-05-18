@@ -9,7 +9,7 @@ const (
 CREATE TABLE IF NOT EXISTS ` + "`" + dbshared.UtxoTable + "`" + `(
   ` + "`" + `id` + "`" + ` BIGINT UNSIGNED AUTO_INCREMENT,
   ` + "`" + `tx_type` + "`" + ` INT DEFAULT NULL,
-  ` + "`" + `blockId` + "`" + ` BIGINT UNSIGNED DEFAULT NULL,
+  ` + "`" + `block_id` + "`" + ` BIGINT UNSIGNED DEFAULT NULL,
   ` + "`" + `hash` + "`" + ` VARCHAR(66) DEFAULT NULL,
   ` + "`" + `tx_index` + "`" + ` INT DEFAULT NULL,
   ` + "`" + `address_from` + "`" + ` VARCHAR(44) DEFAULT NULL,
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS ` + "`" + dbshared.UtxoTable + "`" + `(
    PRIMARY KEY (` + "`" + `id` + "`" + `),
    KEY ` + dbshared.AddrToNode + ` (address_to, address_node),
    UNIQUE KEY ` + dbshared.HashToTxIndex + ` (hash, tx_index),
-   KEY ` + dbshared.BlockIdIndex + `(blockId),
+   KEY ` + dbshared.BlockIdIndex + `(block_id),
    KEY ` + dbshared.TxTypeToNodeIndex + ` (tx_type, address_node)
 );
 `

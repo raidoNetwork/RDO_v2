@@ -14,7 +14,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"os"
 	"sync"
-	"time"
 )
 
 var log = logrus.WithField("prefix", "OutputDB")
@@ -38,7 +37,7 @@ func NewStore(ctx context.Context, config *iface.SQLConfig) (*Store, error) {
 	dbname = os.Getenv("DB_NAME")
 
 	dataSource := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", uname, pass, host, port, dbname)
-	log.Infof("Database server: %s:%s", host, port)
+	log.Debugf("SQL database server: %s:%s", host, port)
 
 	db, err := sql.Open("mysql", dataSource)
 	if err != nil {
@@ -106,7 +105,7 @@ func (s *Store) FindAllUTxO(addr string) (uoArr []*types.UTxO, err error) {
 
 // FindLastBlockNum search max block num in the database.
 func (s *Store) FindLastBlockNum() (num uint64, err error) {
-	query := `SELECT IFNULL(MAX(blockId), 0) as maxBlockId FROM ` + dbshared.UtxoTable
+	query := `SELECT IFNULL(MAX(block_id), 0) as maxBlockId FROM ` + dbshared.UtxoTable
 	rows, err := s.db.Query(query)
 	if err != nil {
 		return
@@ -161,7 +160,6 @@ func (s *Store) FindStakeDepositsOfAddress(address string) ([]*types.UTxO, error
 
 // getOutputsList return outputs list with given query and params.
 func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*types.UTxO, err error) {
-	start := time.Now()
 	prefix := `SELECT id, 
 					hash,
 					tx_index, 
@@ -170,7 +168,7 @@ func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*ty
 					address_node, 
 					amount, 
 					timestamp, 
-					blockId, 
+					block_id, 
 					tx_type FROM ` + dbshared.UtxoTable + ` `
 
 	rows, err := s.db.Query(prefix + query, params...)
@@ -178,16 +176,9 @@ func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*ty
 		return nil, err
 	}
 
-	if s.cfg.ShowFullStat {
-		end := time.Since(start)
-		log.Debugf("Get query object in %s.", common.StatFmt(end))
-	}
-
 	defer rows.Close()
 
 	uoArr = make([]*types.UTxO, 0)
-
-	start = time.Now()
 
 	var hash, from, to, node string
 	var id, blockNum, amount, timestamp uint64
@@ -201,11 +192,6 @@ func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*ty
 		uo := types.NewUTxOFull(id, hash, from, to, node, index, amount, blockNum, timestamp, typev)
 
 		uoArr = append(uoArr, uo)
-	}
-
-	if s.cfg.ShowFullStat {
-		end := time.Since(start)
-		log.Debugf("Get query parsed result in %s.", common.StatFmt(end))
 	}
 
 	return uoArr, nil

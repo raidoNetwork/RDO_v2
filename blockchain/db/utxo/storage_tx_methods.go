@@ -2,6 +2,7 @@ package utxo
 
 import (
 	"context"
+	"database/sql"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/utxo/dbshared"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
@@ -26,7 +27,7 @@ func (s *Store) AddOutputIfNotExists(txID int, uo *types.UTxO) (err error) {
 				address_to, 
 				amount, 
 				timestamp, 
-				blockId, 
+				block_id, 
 				address_node
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE tx_type = ?`
 
@@ -57,7 +58,7 @@ func (s *Store) AddOutputBatch(txID int, values string) (rows int64, err error) 
 		return 0, errors.Errorf("Undefined transaction #%d", txID)
 	}
 
-	query := `INSERT INTO ` + dbshared.UtxoTable + ` (tx_type, hash, tx_index, address_from, address_to, address_node, amount, timestamp, blockId) VALUES ` + values
+	query := `INSERT INTO ` + dbshared.UtxoTable + ` (tx_type, hash, tx_index, address_from, address_to, address_node, amount, timestamp, block_id) VALUES ` + values
 
 	res, err := tx.Exec(query)
 	if err != nil {
@@ -84,17 +85,7 @@ func (s *Store) SpendOutput(txID int, hash string, index uint32) (int64, error) 
 		return 0, err
 	}
 
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return 0, err
-	}
-
-	// rows can be equal to 0 when sync databases
-	if rows != 1 && s.cfg.ShowFullStat {
-		log.Debugf("Execute query: DELETE FROM %s WHERE hash = %s AND tx_index = %d", dbshared.UtxoTable, hash, index)
-	}
-
-	return rows, nil
+	return res.RowsAffected()
 }
 
 // DeleteOutputs delete all outputs with given block number.
@@ -107,7 +98,7 @@ func (s *Store) DeleteOutputs(txID int, blockNum uint64) error {
 		return errors.Errorf("OutputDB.DeleteOutputs: Undefined transaction #%d", txID)
 	}
 
-	query := `DELETE FROM ` + dbshared.UtxoTable + ` WHERE blockId = ?`
+	query := `DELETE FROM ` + dbshared.UtxoTable + ` WHERE block_id = ?`
 
 	_, err := tx.Exec(query, blockNum)
 	if err != nil {
@@ -118,7 +109,7 @@ func (s *Store) DeleteOutputs(txID int, blockNum uint64) error {
 }
 
 // CreateTx create new database transaction and return it's ID.
-func (s *Store) CreateTx() (int, error) {
+func (s *Store) CreateTx(isolated bool) (int, error) {
 	s.lock.RLock()
 	canCreate := s.canCreateTx
 	s.lock.RUnlock()
@@ -127,7 +118,14 @@ func (s *Store) CreateTx() (int, error) {
 		return 0, errors.New("Database is closing.")
 	}
 
-	tx, err := s.db.BeginTx(context.Background(), nil)
+	txIsolation := sql.LevelDefault
+	if isolated {
+		txIsolation = sql.LevelSerializable
+	}
+
+	tx, err := s.db.BeginTx(context.Background(), &sql.TxOptions{
+		Isolation: txIsolation,
+	})
 	if err != nil {
 		return 0, err
 	}
