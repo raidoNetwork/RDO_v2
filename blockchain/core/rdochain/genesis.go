@@ -13,6 +13,8 @@ import (
 
 var ErrMissedGenesis = errors.New("Unset Genesis JSON path.")
 
+const outputsPerTxLimit = 2000
+
 // insertGenesis inserts Genesis to the database if it is not exists
 func (bc *BlockChain) insertGenesis() error {
 	block, err := bc.db.GetGenesis()
@@ -23,12 +25,12 @@ func (bc *BlockChain) insertGenesis() error {
 	// Genesis already in database
 	if block != nil {
 		bc.genesisBlock = block
+		bc.genesisHash = block.Hash
 		return nil
 	}
 
 	block = bc.createGenesis()
 	if block == nil {
-		log.Error("Null Genesis.")
 		return errors.New("Error creating Genesis.")
 	}
 
@@ -61,15 +63,6 @@ func (bc *BlockChain) castGenesisOutputs(data *types.GenesisBlock) []*prototype.
 
 // createGenesis return GenesisBlock
 func (bc *BlockChain) createGenesis() *prototype.Block {
-	opts := types.TxOptions{
-		Type:    common.GenesisTxType,
-		Num:     GenesisBlockNum,
-		Inputs:  make([]*prototype.TxInput, 0),
-		Outputs: make([]*prototype.TxOutput, 0),
-		Fee:     0,
-		Data:    make([]byte, 0),
-	}
-
 	// try to load Genesis data from JSON file.
 	genesisData, err := bc.loadGenesisData()
 	if err != nil {
@@ -77,20 +70,44 @@ func (bc *BlockChain) createGenesis() *prototype.Block {
 		return nil
 	}
 
-	opts.Outputs = bc.castGenesisOutputs(genesisData)
-	log.Debugf("Create Genesis from JSON. Outputs: %d", len(opts.Outputs))
+	genesisOutputs := bc.castGenesisOutputs(genesisData)
+	genesisOutputsCount := len(genesisOutputs)
+	log.Debugf("Create Genesis from JSON. Outputs: %d", genesisOutputsCount)
+	txCount := genesisOutputsCount / outputsPerTxLimit
+	left := genesisOutputsCount % outputsPerTxLimit
 
-	tx, err := types.NewTx(opts, nil)
-	if err != nil {
-		log.Errorf("You have no genesis. Error: %s", err)
-		return nil
+	if left != 0 {
+		txCount++
 	}
 
-	txArr := []*prototype.Transaction{tx}
+	txArr := make([]*prototype.Transaction, 0)
+	for i := 0; i < txCount; i++ {
+		start := i * outputsPerTxLimit
+		end := start + outputsPerTxLimit
+
+		if i == txCount - 1 && left != 0 {
+			end = start + left
+		}
+
+		opts := types.TxOptions{
+			Type:    common.GenesisTxType,
+			Num:     GenesisBlockNum,
+			Inputs:  make([]*prototype.TxInput, 0),
+			Outputs: genesisOutputs[start:end],
+			Fee:     0,
+			Data:    make([]byte, 0),
+		}
+		tx, err := types.NewTx(opts, nil)
+		if err != nil {
+			log.Errorf("You have no genesis. Error: %s", err)
+			return nil
+		}
+
+		txArr = append(txArr, tx)
+	}
 
 	// create tx merklee tree root
 	txRoot := hash.GenTxRoot(txArr)
-
 	block := &prototype.Block{
 		Num:          GenesisBlockNum,
 		Version:      []byte{1, 0, 0},
