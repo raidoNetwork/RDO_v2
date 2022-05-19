@@ -28,10 +28,10 @@ type Config struct {
 
 func NewMiner(bc consensus.BlockForger, att consensus.AttestationPool, cfg *Config) *Miner {
 	m := Miner{
-		bc:  bc,
-		att: att,
-		cfg: cfg,
-		collapsedAddr: map[string]int{},
+		bc:       bc,
+		att:      att,
+		cfg:      cfg,
+		skipAddr: map[string]uint8{},
 	}
 
 	return &m
@@ -40,8 +40,8 @@ func NewMiner(bc consensus.BlockForger, att consensus.AttestationPool, cfg *Conf
 type Miner struct {
 	bc   consensus.BlockForger
 	att  consensus.AttestationPool
-	cfg *Config
-	collapsedAddr map[string]int
+	cfg      *Config
+	skipAddr map[string]uint8
 }
 
 func (m *Miner) addRewardTxToBatch(txBatch []*prototype.Transaction, collapseBatch []*prototype.Transaction, totalSize int) ([]*prototype.Transaction, []*prototype.Transaction, int, error) {
@@ -92,7 +92,7 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 	}
 
 	// limit tx count in block according to marshaller settings
-	txCountPerBlock := txBatchLimit - len(txBatch) - len(collapseBatch)
+	txCountPerBlock := txBatchLimit - len(txBatch) - len(collapseBatch) - 1
 	if txQueueLen < txCountPerBlock {
 		txCountPerBlock = txQueueLen
 	}
@@ -180,10 +180,10 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 	if len(txBatch) > 0 {
 		txFee, err := m.createFeeTx(txBatch)
 		if err != nil {
-			if !errors.Is(err, ErrZeroFeeAmount) {
-				return nil, err
-			} else {
+			if errors.Is(err, ErrZeroFeeAmount) {
 				log.Debug(err)
+			} else {
+				return nil, err
 			}
 		} else {
 			txBatch = append(txBatch, txFee)
@@ -191,6 +191,9 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 			log.Warnf("Add FeeTx %s to the block", common.Encode(txFee.Hash))
 		}
 	}
+
+	// clear collapse list
+	m.skipAddr = map[string]uint8{}
 
 	// get block instance
 	block := m.generateBlockBody(txBatch)
@@ -231,9 +234,6 @@ func (m *Miner) FinalizeBlock(block *prototype.Block) error {
 		log.Infof("FinalizeBlock: Store block in %s", common.StatFmt(end))
 	}
 
-	// clear collapse list
-	m.collapsedAddr = map[string]int{}
-
 	// update SQL
 	err = m.bc.ProcessBlock(block)
 	if err != nil {
@@ -263,6 +263,11 @@ func (m *Miner) FinalizeBlock(block *prototype.Block) error {
 	if m.cfg.ShowStat {
 		endInner := time.Since(startInner)
 		log.Infof("FinalizeBlock: Clean transaction pool in %s", common.StatFmt(endInner))
+	}
+
+	err = m.bc.CheckBalance()
+	if err != nil {
+		return errors.Wrap(err, "Balances inconsistency")
 	}
 
 	return nil
@@ -325,12 +330,12 @@ func (m *Miner) createRewardTx(blockNum uint64) (*prototype.Transaction, error) 
 }
 
 func (m *Miner) createCollapseTx(tx *prototype.Transaction, blockNum uint64) (*prototype.Transaction, error) {
-	const CollapseOutputsNum = 100
+	const CollapseOutputsNum = 100 // minimal count of UTxO to collapse address outputs
 	const InputsPerTxLimit = 2000
 
 	opts := types.TxOptions{
-		Inputs: []*prototype.TxInput{},
-		Outputs: []*prototype.TxOutput{},
+		Inputs: make([]*prototype.TxInput, 0, len(tx.Inputs)),
+		Outputs: make([]*prototype.TxOutput, 0, len(tx.Outputs) - 1),
 		Fee: 0,
 		Num: blockNum,
 		Type: common.CollapseTxType,
@@ -339,13 +344,15 @@ func (m *Miner) createCollapseTx(tx *prototype.Transaction, blockNum uint64) (*p
 	from := ""
 	if tx.Type != common.RewardTxType {
 		from = common.BytesToAddress(tx.Inputs[0].Address).Hex()
+		m.skipAddr[from] = 1
 	}
 
+	inputsLimitReached := false
 	for _, out := range tx.Outputs {
 		addr := common.BytesToAddress(out.Address).Hex()
 
 		// skip already collapsed addresses and sender address
-		if _, exists := m.collapsedAddr[addr]; exists || addr == from {
+		if _, exists := m.skipAddr[addr]; exists {
 			continue
 		}
 
@@ -354,27 +361,27 @@ func (m *Miner) createCollapseTx(tx *prototype.Transaction, blockNum uint64) (*p
 			return nil, err
 		}
 
-		inputsCount := len(utxo)
+		utxoCount := len(utxo)
+		m.skipAddr[addr] = 1
 
 		// check address need collapsing
-		if inputsCount < CollapseOutputsNum {
+		if utxoCount < CollapseOutputsNum {
 			continue
 		}
 
-		skipAddr := true
-		inputsLimitReached := false
-
 		// process address outputs
-		var balance uint64 = 0
-		storedInputs := 0
+		var balance uint64
 		for _, uo := range utxo {
 			balance += uo.Amount
-			opts.Inputs = append(opts.Inputs, uo.ToInput())
+			input := uo.ToInput()
 
-			storedInputs++
+			if m.att.TxPool().IsLockedInput(input) {
+				break
+			}
+
+			opts.Inputs = append(opts.Inputs, input)
 
 			if len(opts.Inputs) == InputsPerTxLimit {
-				skipAddr = inputsCount - storedInputs > CollapseOutputsNum
 				inputsLimitReached = true
 				break
 			}
@@ -383,13 +390,6 @@ func (m *Miner) createCollapseTx(tx *prototype.Transaction, blockNum uint64) (*p
 		// add new output for address
 		collapsedOutput := types.NewOutput(out.Address, balance, nil)
 		opts.Outputs = append(opts.Outputs, collapsedOutput)
-
-		// if address has a lot of inputs yet and
-		// block has another transaction with inputs for given address
-		// skip this address for generation new collapse tx
-		if skipAddr {
-			m.collapsedAddr[addr] = 1
-		}
 
 		// break generation when inputs limit is reached
 		if inputsLimitReached {
@@ -405,6 +405,8 @@ func (m *Miner) createCollapseTx(tx *prototype.Transaction, blockNum uint64) (*p
 		if err != nil {
 			return nil, err
 		}
+
+		log.Debugf("Collapse tx for %s with hash %s", common.Encode(tx.Hash), common.Encode(collapseTx.Hash))
 	}
 
 	return collapseTx, nil

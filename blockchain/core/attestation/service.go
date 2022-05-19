@@ -27,10 +27,7 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 	slotTime := time.Duration(chainConfig.SlotTime) * time.Second
 
 	// create new staking pool
-	stakePool, err := staking.NewPool(cfg.Blockchain, chainConfig.ValidatorRegistryLimit, chainConfig.RewardBase, stakeAmount)
-	if err != nil {
-		return nil, err
-	}
+	stakePool := staking.NewPool(cfg.Blockchain, chainConfig.ValidatorRegistryLimit, chainConfig.RewardBase, stakeAmount)
 
 	validatorCfg := attestation.CryspValidatorConfig{
 		SlotTime:               slotTime,
@@ -71,6 +68,13 @@ type Service struct{
 }
 
 func (s *Service) Start(){
+	// lock for sync
+	err := s.waitSyncing()
+	if err != nil {
+		log.WithError(err).Error("Can't start attestation service")
+		return
+	}
+
 	// listen events for forge error
 	go s.lookForgeError()
 
@@ -128,4 +132,16 @@ func (s *Service) lookForgeError() {
 			return
 		}
 	}
+}
+
+func (s *Service) waitSyncing() error {
+	for st := range s.stateEvent {
+		if st == state.Synced {
+			return s.stakePool.LoadData()
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	return nil
 }

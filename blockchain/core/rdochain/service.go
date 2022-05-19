@@ -46,8 +46,6 @@ type Service struct{
 }
 
 func (s *Service) Start(){
-	log.Warn("Start Blockchain service.")
-
 	// load head data and Genesis
 	err := s.bc.Init()
 	if err != nil {
@@ -83,7 +81,6 @@ func (s *Service) Status() error {
 }
 
 func (s *Service) Stop() error {
-
 	return nil
 }
 
@@ -95,7 +92,7 @@ func (s *Service) SyncDatabase() error {
 		return err
 	}
 
-	err = s.checkBalance()
+	err = s.CheckBalance()
 	if err != nil {
 		return err
 	}
@@ -103,8 +100,8 @@ func (s *Service) SyncDatabase() error {
 	return nil
 }
 
-// checkBalance check that total supply of chain is correct
-func (s *Service) checkBalance() error {
+// CheckBalance check that total supply of chain is correct
+func (s *Service) CheckBalance() error {
 	// get amount stats from KV
 	rewardAmount, feeAmount, genesisSupply := s.bc.GetAmountStats()
 
@@ -116,6 +113,8 @@ func (s *Service) checkBalance() error {
 
 	targetSum := genesisSupply + rewardAmount
 	currentSum := balanceSum + feeAmount
+
+	log.Debugf("Genesis supply: %d Balances: %d Reward: %d Fee: %d", genesisSupply, balanceSum, rewardAmount, feeAmount)
 
 	if targetSum != currentSum {
 		return errors.Errorf("Wrong total supply. Expected: %d. Given: %d.", targetSum, currentSum)

@@ -8,7 +8,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
-	"github.com/raidoNetwork/RDO_v2/shared/crypto"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -23,7 +22,7 @@ const (
 var log = logrus.WithField("prefix", "blockchain")
 
 func NewBlockChain(db db.BlockStorage, ctx *cli.Context, cfg *params.RDOBlockChainConfig) *BlockChain {
-	genesisHash := crypto.Keccak256Hash([]byte("genesis"))
+	genesisHash := make([]byte, 32)
 
 	bc := BlockChain{
 		db:             db,
@@ -50,29 +49,20 @@ type BlockChain struct {
 	genesisBlock   *prototype.Block
 	genesisHash    []byte
 
-	lock sync.RWMutex
+	lock sync.Mutex
 
 	cfg *params.RDOBlockChainConfig
 }
 
 // Init check database and update block num and previous hash
 func (bc *BlockChain) Init() error {
-	log.Info("Init blockchain data.")
-
 	// get head block
 	head, err := bc.db.GetHeadBlockNum()
 	if err != nil {
 		if errors.Is(err, kv.ErrNoHead) {
-			start := time.Now()
-
 			count, err := bc.db.CountBlocks()
 			if err != nil {
 				return err
-			}
-
-			if bc.showTimeStat {
-				end := time.Since(start)
-				log.Infof("Init: Count KV rows num in %s.", common.StatFmt(end))
 			}
 
 			// save head block link
@@ -92,12 +82,11 @@ func (bc *BlockChain) Init() error {
 		return err
 	}
 
-	var block *prototype.Block
-
 	// update counter according to the database
 	bc.headBlockNum = head                  // head block number
 	bc.futureBlockNum = bc.headBlockNum + 1 // future block num
 
+	var block *prototype.Block
 	if head != 0 {
 		// get last block
 		block, err = bc.GetBlockByNum(bc.headBlockNum)
@@ -173,7 +162,7 @@ func (bc *BlockChain) SaveBlock(block *prototype.Block) error {
 			for _, out := range tx.Outputs {
 				if tx.Type == common.RewardTxType {
 					reward += out.Amount
-				} else{
+				} else {
 					fee += out.Amount
 				}
 			}
@@ -208,6 +197,7 @@ func (bc *BlockChain) GetBlockByNum(num uint64) (*prototype.Block, error) {
 	}
 
 	if num > bc.GetHeadBlockNum() {
+		log.Debugf("Bad block number %d", num)
 		return nil, errors.New("Given block number is not forged yet.")
 	}
 
@@ -225,8 +215,8 @@ func (bc *BlockChain) GetBlockByHash(hash []byte) (*prototype.Block, error) {
 
 // GetBlockCount return block count
 func (bc *BlockChain) GetBlockCount() uint64 {
-	bc.lock.RLock()
-	defer bc.lock.RUnlock()
+	bc.lock.Lock()
+	defer bc.lock.Unlock()
 
 	return bc.futureBlockNum
 }
@@ -255,8 +245,8 @@ func (bc *BlockChain) GetHeadBlock() (*prototype.Block, error) {
 
 // GetHeadBlockNum get number of last block in the chain
 func (bc *BlockChain) GetHeadBlockNum() uint64 {
-	bc.lock.RLock()
-	defer bc.lock.RUnlock()
+	bc.lock.Lock()
+	defer bc.lock.Unlock()
 
 	return bc.headBlockNum
 }

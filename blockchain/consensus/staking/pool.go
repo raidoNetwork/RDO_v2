@@ -11,7 +11,7 @@ import (
 
 var log = logrus.WithField("prefix", "stake pool")
 
-func NewPool(outm consensus.BlockchainReader, slotsLimit int, reward uint64, stakeAmount uint64) (consensus.StakePool, error) {
+func NewPool(outm consensus.BlockchainReader, slotsLimit int, reward uint64, stakeAmount uint64) consensus.StakePool {
 	p := &Pool{
 		slots:         make([]string, 0, slotsLimit),
 		reservedSlots: make([]int, 0),
@@ -22,13 +22,7 @@ func NewPool(outm consensus.BlockchainReader, slotsLimit int, reward uint64, sta
 		outm:       outm,
 	}
 
-	// Load stake deposits data
-	err := p.LoadSlots()
-	if err != nil {
-		return nil, err
-	}
-
-	return p, nil
+	return p
 }
 
 type Pool struct {
@@ -42,7 +36,7 @@ type Pool struct {
 	outm consensus.BlockchainReader
 }
 
-func (p *Pool) LoadSlots() error {
+func (p *Pool) LoadData() error {
 	deposits, err := p.outm.FindStakeDeposits()
 	if err != nil {
 		return err

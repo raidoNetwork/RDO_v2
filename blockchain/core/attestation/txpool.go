@@ -521,6 +521,15 @@ func (tp *TxPool) clearPool() {
 	tp.lock.Unlock()
 }
 
+func (tp *TxPool) IsLockedInput(input *prototype.TxInput) bool {
+	tp.lock.Lock()
+	defer tp.lock.Unlock()
+
+	key := genKeyFromInput(input)
+	_, exists := tp.lockedInputs[key]
+	return exists
+}
+
 func genKeyFromInput(in *prototype.TxInput) string {
 	return common.Encode(in.Hash) + "_" + strconv.Itoa(int(in.Index))
 }

@@ -226,6 +226,13 @@ func (om *OutputManager) SyncData() error {
 func (om *OutputManager) syncBlock(block *prototype.Block, blockTx int) error {
 	start := time.Now()
 
+	if block.Num == GenesisBlockNum {
+		err := om.cleanGenesisUTxO(blockTx)
+		if err != nil {
+			return err
+		}
+	}
+
 	var index uint32
 	var from []byte
 	var hash common.Hash
@@ -290,13 +297,8 @@ func (om *OutputManager) syncLastBlock() error {
 	}
 
 	if block.Num == GenesisBlockNum {
-		err := om.db.DeleteOutputs(tx, GenesisBlockNum)
+		err := om.cleanGenesisUTxO(tx)
 		if err != nil {
-			errb := om.db.RollbackTx(tx)
-			if errb != nil {
-				log.Errorf("SyncData: %s", errb)
-			}
-
 			return err
 		}
 	}
@@ -524,4 +526,18 @@ func (om *OutputManager) IsSyncing() bool {
 
 func (om *OutputManager) GetTotalAmount() (uint64, error) {
 	return om.db.GetTotalAmount()
+}
+
+func (om *OutputManager) cleanGenesisUTxO(tx int) error {
+	err := om.db.DeleteOutputs(tx, GenesisBlockNum)
+	if err != nil {
+		errb := om.db.RollbackTx(tx)
+		if errb != nil {
+			log.Errorf("Clearing Genesis: %s", errb)
+		}
+
+		return err
+	}
+
+	return nil
 }

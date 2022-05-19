@@ -69,6 +69,9 @@ type BlockForger interface {
 
 	// SyncData syncs data in the KV with data in the SQL.
 	SyncData() error
+
+	// CheckBalance check if system balance is correct
+	CheckBalance() error
 }
 
 // TxPool provides and updates transaction queue.
@@ -87,6 +90,9 @@ type TxPool interface {
 
 	// FlushReserved removes all reserved transactions from pool.
 	FlushReserved(cleanInputs bool)
+
+	// IsLockedInput checks if given input is locked in the pool
+	IsLockedInput(input *prototype.TxInput) bool
 }
 
 // StakePool regulates stake slots condition.
@@ -108,6 +114,9 @@ type StakePool interface {
 
 	// UpdateStakeSlots update stake slots state according to the given block
 	UpdateStakeSlots(block *prototype.Block) error
+
+	// LoadData load initial pool data
+	LoadData() error
 }
 
 // AttestationPool control block and transaction validation and staking
