@@ -28,6 +28,7 @@ var appFlags = []cli.Flag{
 	// data storage directories
 	cmd.DataDirFlag,
 	cmd.LogFileName,
+	cmd.VerbosityFlag,
 
 	// config flags
 	cmd.ConfigFileFlag,
@@ -37,10 +38,6 @@ var appFlags = []cli.Flag{
 	cmd.ClearDB,
 	cmd.ForceClearDB,
 
-	// Logging flags
-	flags.SrvStat,
-	flags.DebugLogging,
-
 	// SQL config
 	cmd.SQLConfigPath,
 
@@ -48,6 +45,11 @@ var appFlags = []cli.Flag{
 	flags.P2PHost,
 	flags.P2PPort,
 	flags.P2PBootstrapNodes,
+
+	// metrics
+	flags.EnableMetrics,
+	flags.MetricsHost,
+	flags.MetricsPort,
 }
 
 var log = logrus.WithField("prefix", "main")
@@ -74,10 +76,12 @@ func main() {
 			TimestampFormat: "2006-01-02 15:04:05.000",
 		})
 
-		// init debug logs with stat flag
-		if ctx.Bool(flags.DebugLogging.Name) {
-			logrus.SetLevel(logrus.DebugLevel)
+		verbosity := ctx.String(cmd.VerbosityFlag.Name)
+		level, err := logrus.ParseLevel(verbosity)
+		if err != nil {
+			return err
 		}
+		logrus.SetLevel(level)
 
 		logFileName := ctx.String(cmd.LogFileName.Name)
 		if logFileName != "" {

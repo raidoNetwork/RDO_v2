@@ -21,9 +21,14 @@ const (
 	BlackHoleAddress = "0x0000000000000000000000000000000000000000"
 )
 
+var (
+	MillisecondsBuckets   = []float64{250, 500, 1000, 1500, 2000, 4000, 8000, 16000}
+	KVMillisecondsBuckets = []float64{50, 100, 150, 200, 250, 400, 500, 1000, 2000}
+)
+
 // StatFmt parse time.Duration to the needed string format
 func StatFmt(d time.Duration) string {
-	return fmt.Sprintf("%d μs", int64(d/time.Microsecond))
+	return fmt.Sprintf("%d μs", d.Microseconds())
 }
 
 // IsLegacyTx check transaction type and return true if transaction is legacy:
@@ -53,4 +58,9 @@ func IsSystemTx(tx *prototype.Transaction) bool {
 	default:
 		return false
 	}
+}
+
+// HasInputs check transactions should have inputs
+func HasInputs(tx *prototype.Transaction) bool {
+	return IsLegacyTx(tx) || tx.Type == CollapseTxType
 }

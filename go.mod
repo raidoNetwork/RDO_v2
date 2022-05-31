@@ -8,6 +8,8 @@ require (
 	github.com/ferranbt/fastssz v0.0.0-20210905181407-59cf6761a7d5
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/snappy v0.0.4
+	github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4
+	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0
 	github.com/joho/godotenv v1.4.0
 	github.com/libp2p/go-libp2p v0.18.0
@@ -19,6 +21,7 @@ require (
 	github.com/libp2p/go-tcp-transport v0.5.1
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/pkg/errors v0.9.1
+	github.com/prometheus/client_golang v1.11.0
 	github.com/rs/cors v1.8.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/urfave/cli/v2 v2.3.0

@@ -12,7 +12,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/keystore"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/cmd"
-	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -31,8 +30,6 @@ type Config struct{
 
 // NewService creates new CoreService
 func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
-	statFlag := cliCtx.Bool(flags.SrvStat.Name)
-	debugStatFlag := cliCtx.Bool(flags.DebugLogging.Name)
 	dataDir := cliCtx.String(cmd.DataDirFlag.Name)
 
 	netCfg := params.RaidoConfig()
@@ -52,10 +49,9 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 	log.Info(msg)
 
 	minerCfg := &miner.Config{
-		ShowStat:     statFlag,
-		ShowFullStat: debugStatFlag,
-		BlockSize:    netCfg.BlockSize,
-		Proposer:     proposer,
+		EnableMetrics: cliCtx.Bool(flags.EnableMetrics.Name),
+		BlockSize:     netCfg.BlockSize,
+		Proposer:      proposer,
 	}
 
 	// new block miner
@@ -74,13 +70,9 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		stop:       make(chan struct{}),
 		ticker:     slot.Ticker(),
 
-		// flags
-		fullStatFlag: statFlag,
-		expStatFlag:  debugStatFlag,
-
 		// events
 		blockEvent: make(chan *prototype.Block, 1),
-		stateEvent: make(chan state.State),
+		stateEvent: make(chan state.State, 1),
 
 		// feeds
 		blockFeed: cfg.BlockFeed,
@@ -102,10 +94,6 @@ type Service struct {
 
 	miner *miner.Miner            // block miner
 	ticker *slot.SlotTicker
-
-	// flags
-	fullStatFlag bool
-	expStatFlag  bool
 
 	mu sync.Mutex
 
@@ -137,22 +125,17 @@ func (s *Service) Start() {
 func (s *Service) mainLoop() {
 	log.Warn("[CoreService] Start main loop.")
 
-	var start time.Time
-	var end time.Duration
-
 	for {
 		select {
 		case <-s.stop:
 			return
 		case <-s.ticker.C():
-			log.Warnf("Slot: %d. Epoch: %d.", s.ticker.Slot(), s.ticker.Epoch())
+			updateCoreMetrics()
 
 			// Master node has key
 			if s.proposer.Key() == nil {
 				continue
 			}
-
-			start = time.Now()
 
 			// generate block with block miner
 			block, err := s.miner.ForgeBlock()
@@ -169,14 +152,7 @@ func (s *Service) mainLoop() {
 
 			// push block to events
 			s.blockFeed.Send(block)
-
-			if s.fullStatFlag {
-				end = time.Since(start)
-				log.Infof("[CoreService] Create block in: %s", common.StatFmt(end))
-			}
 		case block := <-s.blockEvent:
-			start = time.Now()
-
 			// validate, save block and update SQL
 			err := s.miner.FinalizeBlock(block)
 			if err != nil {
@@ -185,12 +161,9 @@ func (s *Service) mainLoop() {
 				s.mu.Lock()
 				s.statusErr = err
 				s.mu.Unlock()
-				return
-			}
 
-			if s.fullStatFlag {
-				end = time.Since(start)
-				log.Infof("[CoreService] Finalize block in %s.", common.StatFmt(end))
+				s.stateFeed.Send(state.ForgeFailed)
+				return
 			}
 
 			blockSize := block.SizeSSZ() / 1024

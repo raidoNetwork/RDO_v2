@@ -143,7 +143,7 @@ func (bc *BlockChain) loadGenesisData() (*types.GenesisBlock, error) {
 		return nil, err
 	}
 
-	bc.genesisHash = common.HexToHash(genesisData.Hash).Bytes()
+	bc.genesisHash = common.HexToHash(genesisData.Hash)
 
 	return genesisData, nil
 }

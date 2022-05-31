@@ -108,7 +108,6 @@ type OutputDatabase interface {
 
 // SQLConfig create config for any SQL database.
 type SQLConfig struct {
-	ShowFullStat bool
 	ConfigPath   string
 	DataDir      string
 }

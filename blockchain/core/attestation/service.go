@@ -15,9 +15,9 @@ import (
 
 type Config struct {
 	TxFeed events.Feed
-	StateFeed events.Feed
-	EnableStats bool
-	Blockchain *rdochain.Service
+	StateFeed     events.Feed
+	EnableMetrics bool
+	Blockchain    *rdochain.Service
 }
 
 func NewService(ctx context.Context, cfg *Config) (*Service, error) {
@@ -34,7 +34,7 @@ func NewService(ctx context.Context, cfg *Config) (*Service, error) {
 		MinFee:                 chainConfig.MinimalFee,
 		StakeUnit:              stakeAmount,
 		ValidatorRegistryLimit: chainConfig.ValidatorRegistryLimit,
-		LogStat:                cfg.EnableStats,
+		EnableMetrics:          cfg.EnableMetrics,
 	}
 
 	// new block and tx validator

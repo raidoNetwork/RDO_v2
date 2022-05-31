@@ -136,9 +136,7 @@ func (s *Store) CreateTx(isolated bool) (int, error) {
 	s.txID++
 	s.lock.Unlock()
 
-	if s.cfg.ShowFullStat {
-		log.Debugf("OutputDB.CreateTx: new database tx id #%d.", id)
-	}
+	log.Debugf("OutputDB.CreateTx: new database tx id #%d.", id)
 
 	return id, nil
 }
@@ -180,9 +178,7 @@ func (s *Store) CommitTx(txID int) (err error) {
 		return err
 	}
 
-	if s.cfg.ShowFullStat {
-		log.Debugf("OutputDB.CommitTx: commit database tx id #%d.", txID)
-	}
+	log.Debugf("OutputDB.CommitTx: commit database tx id #%d.", txID)
 
 	return nil
 }

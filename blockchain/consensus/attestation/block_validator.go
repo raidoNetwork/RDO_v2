@@ -18,10 +18,13 @@ func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
 
 	var blockInputsBalance, blockOutputsBalance uint64
 	for txIndex, tx := range block.Transactions {
+		txHash := common.BytesToHash(tx.Hash).Hex()
+
 		// skip collapse tx
 		if tx.Type == common.CollapseTxType {
 			err := cv.validateCollapseTx(tx, block)
 			if err != nil {
+				log.Debugf("Error validating collapse tx %s", txHash)
 				return errors.Wrap(err, "Error validation CollapseTx")
 			}
 			continue
@@ -46,19 +49,17 @@ func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
 			}
 		}
 
-		txHash := common.BytesToHash(tx.Hash)
-
 		// check inputs
 		for _, in := range tx.Inputs {
 			inHash := common.BytesToHash(in.Hash)
 			key := inHash.Hex() + "_" + strconv.Itoa(int(in.Index))
-			txHashIndex := txHash.Hex() + "_" + strconv.Itoa(txIndex)
+			txHashIndex := txHash + "_" + strconv.Itoa(txIndex)
 
-			hash, exists := inputExists[key]
+			inputHash, exists := inputExists[key]
 			if exists {
 				curHash := txHashIndex
 
-				log.Errorf("Saved tx: %s", hash)
+				log.Errorf("Saved tx: %s", inputHash)
 				log.Errorf("Double spend tx: %s", curHash)
 				return errors.Errorf("Block #%d has double input with key %s", block.Num, key)
 			}
@@ -91,7 +92,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 		return err
 	}
 
-	if cv.cfg.LogStat {
+	if cv.cfg.EnableMetrics {
 		end := time.Since(start)
 		log.Infof("ValidateBlock: Count block balance in %s", common.StatFmt(end))
 	}
@@ -120,7 +121,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 		return errors.New("Error reading block from database.")
 	}
 
-	if cv.cfg.LogStat {
+	if cv.cfg.EnableMetrics {
 		end := time.Since(start)
 		log.Infof("ValidateBlock: Get block by hash in %s", common.StatFmt(end))
 	}
@@ -137,7 +138,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 		return errors.Errorf("ValidateBlock: Error reading previous block from database. Hash: %s.", common.BytesToHash(block.Parent))
 	}
 
-	if cv.cfg.LogStat {
+	if cv.cfg.EnableMetrics {
 		end := time.Since(start)
 		log.Infof("ValidateBlock: Get prev block in %s", common.StatFmt(end))
 	}

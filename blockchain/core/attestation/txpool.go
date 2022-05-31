@@ -9,10 +9,10 @@ import (
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
+	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/status"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -24,7 +24,6 @@ var (
 	ErrInputExists            = errors.New("tx input is locked for spend")
 	ErrTxNotFound             = errors.New("tx was not found in the pool")
 	ErrTxNotFoundInPricedPool = errors.New("tx was not found in priced pool")
-	ErrAlreadyReserved        = errors.New("tx already reserved")
 )
 
 var log = logrus.WithField("prefix", "TxPool")
@@ -36,17 +35,18 @@ func NewTxPool(ctx context.Context, v consensus.TxValidator, cfg *PoolConfig) *T
 
 	tp := TxPool{
 		validator:      v,
-		pool:           map[string]*types.TransactionData{},
+		pool:           map[string]*types.Transaction{},
 		lockedInputs:   map[string]string{},
 		pricedPool:     make(pricedTxPool, 0),
-		reservedPool:   map[string]*types.TransactionData{},
-		villainousPool: map[string]*types.TransactionData{},
+		reservedPool:   map[string]*types.Transaction{},
+		villainousPool: map[string]*types.Transaction{},
 
 		// ctx
 		ctx:    ctx,
 		finish: finish,
+
 		// channel
-		txEvent: make(chan *types.TransactionData, txProcessLimit),
+		txEvent: make(chan *types.Transaction, txProcessLimit),
 		cfg:     cfg,
 	}
 
@@ -68,19 +68,19 @@ type TxPool struct {
 	// and avoid double spend
 	lockedInputs map[string]string
 
-	// valid tx pool map[tx hash] -> tx
-	pool map[string]*types.TransactionData
+	// valid tx pool map[tx hash] -> txData
+	pool map[string]*types.Transaction
 
 	// priced list
 	pricedPool pricedTxPool
 
 	// reserved tx list for future block
-	reservedPool map[string]*types.TransactionData
+	reservedPool map[string]*types.Transaction
 
 	// double spend tx
-	villainousPool map[string]*types.TransactionData
+	villainousPool map[string]*types.Transaction
 
-	txEvent chan *types.TransactionData
+	txEvent chan *types.Transaction
 
 	ctx    context.Context
 	finish context.CancelFunc
@@ -128,7 +128,7 @@ func (tp *TxPool) ReadingLoop() {
 }
 
 // RegisterTx validate tx and add it to the pool if it is correct
-func (tp *TxPool) RegisterTx(td *types.TransactionData) error {
+func (tp *TxPool) RegisterTx(td *types.Transaction) error {
 	err := tp.validateTx(td)
 	if err != nil {
 		return errors.Wrap(err, "TxPool.RegisterTx")
@@ -145,7 +145,7 @@ func (tp *TxPool) RegisterTx(td *types.TransactionData) error {
 
 	// mark inputs as already spent
 	for _, in := range td.GetTx().Inputs {
-		key := genKeyFromInput(in)
+		key := serialize.GenKeyFromInput(in)
 
 		// mark the input is spent with tx hash
 		tp.lockedInputs[key] = hash
@@ -161,7 +161,7 @@ func (tp *TxPool) RegisterTx(td *types.TransactionData) error {
 }
 
 // validateTx validates tx by validator, finds double spends and checks tx exists in the pool
-func (tp *TxPool) validateTx(td *types.TransactionData) error {
+func (tp *TxPool) validateTx(td *types.Transaction) error {
 	txHash := common.Encode(td.GetTx().Hash)
 
 	// check tx is in pool already
@@ -208,7 +208,7 @@ func (tp *TxPool) validateTx(td *types.TransactionData) error {
 	return nil
 }
 
-func (tp *TxPool) checkInputs(td *types.TransactionData) error {
+func (tp *TxPool) checkInputs(td *types.Transaction) error {
 	hash := common.Encode(td.GetTx().Hash)
 
 	tp.lock.Lock()
@@ -216,40 +216,28 @@ func (tp *TxPool) checkInputs(td *types.TransactionData) error {
 
 	// lock inputs
 	for _, in := range td.GetTx().Inputs {
-		key := genKeyFromInput(in)
+		key := serialize.GenKeyFromInput(in)
 		firstTxHash, exists := tp.lockedInputs[key]
 
-		if exists {
-			existTd, existsInPool := tp.pool[firstTxHash]
-
-			if existsInPool {
-				// If tx has the same sender address reject it.
-				if !bytes.Equal(td.GetTx().Inputs[0].Address, existTd.GetTx().Inputs[0].Address) {
-					return errors.Errorf("%s Input hash index: %s. Tx hash: %s, double hash: %s", ErrInputExists, key, firstTxHash, hash)
-				}
-
-				// If given tx has the same num and bigger fee add it to the pool
-				// and remove first tx from the pool.
-				if td.Num() == existTd.Num() && td.Fee() > existTd.Fee() {
-					err := tp.deleteTransactionByHash(firstTxHash)
-					if err != nil {
-						return err
-					}
-
-					log.Infof("Swap tx %s with tx %s in the pool.", firstTxHash, hash)
-
-					return nil
-				}
-			}
-
-			return errors.Errorf("%s Input hash index: %s. Tx hash: %s, double hash: %s", ErrInputExists, key, firstTxHash, hash)
+		if !exists {
+			continue
 		}
+
+		existTd, existsInPool := tp.pool[firstTxHash]
+		if existsInPool {
+			// If tx has the same sender address reject it.
+			if !bytes.Equal(td.GetTx().Inputs[0].Address, existTd.GetTx().Inputs[0].Address) {
+				return errors.Errorf("%s Input hash index: %s. Tx hash: %s, double hash: %s", ErrInputExists, key, firstTxHash, hash)
+			}
+		}
+
+		return errors.Errorf("%s Input hash index: %s. Tx hash: %s, double hash: %s", ErrInputExists, key, firstTxHash, hash)
 	}
 
 	return nil
 }
 
-func (tp *TxPool) GetTxQueue() []*types.TransactionData {
+func (tp *TxPool) GetTxQueue() []*types.Transaction {
 	tp.lock.Lock()
 	defer tp.lock.Unlock()
 
@@ -279,19 +267,18 @@ func (tp *TxPool) ReserveTransaction(tx *prototype.Transaction) error {
 	}
 
 	hash := common.Encode(tx.Hash)
-
 	td, exists := tp.pool[hash]
 	_, reservedExists := tp.reservedPool[hash]
 
-	if !exists {
+	if !exists && !reservedExists {
 		log.Errorf("TxPool.ReserveTransaction: Not found transaction %s.", hash)
 		return ErrTxNotFound
 	}
 
 	// if tx is already reserved block can't use it
 	if reservedExists {
-		log.Errorf("TxPool.ReserveTransaction: Tx %s already reserved.", hash)
-		return ErrAlreadyReserved
+		log.Warnf("TxPool.ReserveTransaction: Tx %s already reserved.", hash)
+		return nil
 	}
 
 	// switch tx to the reserved status
@@ -319,7 +306,7 @@ func (tp *TxPool) FlushReserved(cleanInputs bool) {
 		}
 	}
 
-	tp.reservedPool = map[string]*types.TransactionData{}
+	tp.reservedPool = map[string]*types.Transaction{}
 	tp.lock.Unlock()
 }
 
@@ -328,7 +315,7 @@ func (tp *TxPool) unlockInputs(tx *prototype.Transaction) {
 	var key string
 	hash := common.Encode(tx.Hash)
 	for _, in := range tx.Inputs {
-		key = genKeyFromInput(in)
+		key = serialize.GenKeyFromInput(in)
 		_, exists := tp.lockedInputs[key]
 
 		if !exists {
@@ -514,8 +501,8 @@ func (tp *TxPool) catchForgeError() {
 
 func (tp *TxPool) clearPool() {
 	tp.lock.Lock()
-	tp.pool = map[string]*types.TransactionData{}
-	tp.reservedPool = map[string]*types.TransactionData{}
+	tp.pool = map[string]*types.Transaction{}
+	tp.reservedPool = map[string]*types.Transaction{}
 	tp.lockedInputs = map[string]string{}
 	tp.pricedPool = make(pricedTxPool, 0)
 	tp.lock.Unlock()
@@ -525,16 +512,12 @@ func (tp *TxPool) IsLockedInput(input *prototype.TxInput) bool {
 	tp.lock.Lock()
 	defer tp.lock.Unlock()
 
-	key := genKeyFromInput(input)
+	key := serialize.GenKeyFromInput(input)
 	_, exists := tp.lockedInputs[key]
 	return exists
 }
 
-func genKeyFromInput(in *prototype.TxInput) string {
-	return common.Encode(in.Hash) + "_" + strconv.Itoa(int(in.Index))
-}
-
-type pricedTxPool []*types.TransactionData
+type pricedTxPool []*types.Transaction
 
 func (ptp pricedTxPool) Len() int {
 	return len(ptp)

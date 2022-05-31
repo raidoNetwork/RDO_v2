@@ -24,7 +24,7 @@ var (
 
 	// SQLConfigPath setups path to the MySQL config file.
 	SQLConfigPath = altsrc.NewStringFlag(&cli.StringFlag{
-		Name:  "sql-db-cfg",
+		Name:  "sql-cfg",
 		Usage: "Config file path with MySQL user and password",
 	})
 
@@ -49,6 +49,12 @@ var (
 		Name:  "chain-config-file",
 		Usage: "The path to a YAML file with chain config values",
 	}
+	// VerbosityFlag specifies the logging level
+	VerbosityFlag = altsrc.NewStringFlag(&cli.StringFlag{
+		Name:  "verbosity",
+		Usage: "Logging verbosity (trace, debug, info=default, warn, error, fatal, panic)",
+		Value: "info",
+	})
 )
 
 // LoadFlagsFromConfig sets flags values from config file if ConfigFileFlag is set.

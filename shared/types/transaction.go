@@ -99,8 +99,8 @@ func SignTx(tx *prototype.Transaction, key *ecdsa.PrivateKey) error {
 	return nil
 }
 
-func NewTxData(tx *prototype.Transaction) *TransactionData {
-	td := TransactionData{
+func NewTxData(tx *prototype.Transaction) *Transaction {
+	td := Transaction{
 		tx:        tx,
 		size:      tx.SizeSSZ(),
 		fee:       tx.Fee,
@@ -112,7 +112,7 @@ func NewTxData(tx *prototype.Transaction) *TransactionData {
 	return &td
 }
 
-type TransactionData struct {
+type Transaction struct {
 	tx        *prototype.Transaction
 	size      int
 	fee       uint64
@@ -122,49 +122,49 @@ type TransactionData struct {
 	lock      sync.Mutex
 }
 
-func (td *TransactionData) GetTx() *prototype.Transaction {
+func (td *Transaction) GetTx() *prototype.Transaction {
 	td.lock.Lock()
 	defer td.lock.Unlock()
 
 	return td.tx
 }
 
-func (td *TransactionData) Size() int {
+func (td *Transaction) Size() int {
 	td.lock.Lock()
 	defer td.lock.Unlock()
 
 	return td.size
 }
 
-func (td *TransactionData) Fee() uint64 {
+func (td *Transaction) Fee() uint64 {
 	td.lock.Lock()
 	defer td.lock.Unlock()
 
 	return td.fee
 }
 
-func (td *TransactionData) Num() uint64 {
+func (td *Transaction) Num() uint64 {
 	td.lock.Lock()
 	defer td.lock.Unlock()
 
 	return td.num
 }
 
-func (td *TransactionData) Timestamp() uint64 {
+func (td *Transaction) Timestamp() uint64 {
 	td.lock.Lock()
 	defer td.lock.Unlock()
 
 	return td.timestamp
 }
 
-func (td *TransactionData) AddAlias(hash string) {
+func (td *Transaction) AddAlias(hash string) {
 	td.lock.Lock()
 	defer td.lock.Unlock()
 
 	td.alias = append(td.alias, hash)
 }
 
-func (td *TransactionData) GetAlias() []string {
+func (td *Transaction) GetAlias() []string {
 	td.lock.Lock()
 	defer td.lock.Unlock()
 

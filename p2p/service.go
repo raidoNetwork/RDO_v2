@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/libp2p/go-libp2p"
 	phost "github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -76,6 +77,7 @@ func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
 		pubsub.WithPeerOutboundQueueSize(256),
 		pubsub.WithValidateQueueSize(256),
 		pubsub.WithGossipSubParams(pubsubGossipParam()),
+		pubsub.WithPeerScore(peerScoringParams()),
 		pubsub.WithSubscriptionFilter(srv),
 	}
 
@@ -86,8 +88,8 @@ func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
 
 	srv.pubsub = gs
 
-	async.WithInterval(srv.ctx, 7 * time.Second, func() {
-		log.WithField("prefix", "peerstore").Info(srv.host.Peerstore().PeersWithAddrs())
+	async.WithInterval(srv.ctx, 10 * time.Second, func() {
+		srv.updateMetrics()
 	})
 
 	return srv, nil
@@ -118,6 +120,8 @@ type Service struct {
 func (s *Service) Start() {
 	// print host p2p address
 	s.logID()
+
+	s.addConnectionHandlers()
 
 	// start new peer search
 	err := s.setupDiscovery()
@@ -222,7 +226,10 @@ func (s *Service) listenTopic(topic string){
 	for {
 		msg, err := sub.Next(s.ctx)
 		if err != nil {
-			log.WithError(err).Error("error listening topic " + topic)
+			if err != context.Canceled {
+				log.WithError(err).Error("error listening topic " + topic)
+			}
+
 			sub.Cancel()
 			return
 		}
@@ -286,8 +293,6 @@ func (s *Service) Publish(topicName string, message []byte) error {
 		return errors.Wrap(err, "error Publish message")
 	}
 
-	log.Infof("Publish message to %s", topicName)
-
 	return nil
 }
 
@@ -303,6 +308,7 @@ func (s *Service) receiveMessage(msg *pubsub.Message){
 	n := Notty{
 		Data: msg.Data,
 		Topic: *msg.Topic,
+		From: msg.ReceivedFrom.String(),
 	}
 
 	// send event
@@ -311,4 +317,26 @@ func (s *Service) receiveMessage(msg *pubsub.Message){
 
 func (s *Service) Notifier() *events.Bus {
 	return &s.notifier
+}
+
+func (s *Service) addConnectionHandlers() {
+	s.host.Network().Notify(&network.NotifyBundle{
+		ConnectedF: func(n network.Network, conn network.Conn) {
+			remotePeer := conn.RemotePeer()
+			peerData := s.host.Peerstore().PeerInfo(remotePeer)
+			if len(peerData.Addrs) == 0 {
+				log.Debugf("Connected to the peer %s", remotePeer.String())
+				p2pPeerMap.WithLabelValues("Connected").Inc()
+			} else {
+				log.Debugf("Reconnected to the peer %s", remotePeer.String())
+				p2pPeerMap.WithLabelValues("Reconnected").Inc()
+			}
+		},
+		DisconnectedF: func(n network.Network, conn network.Conn) {
+			remotePeer := conn.RemotePeer()
+			log.Debugf("Disconnected peer %s", remotePeer.String())
+			p2pPeerMap.WithLabelValues("Connected").Dec()
+			p2pPeerMap.WithLabelValues("Disconnected").Inc()
+		},
+	})
 }

@@ -18,13 +18,10 @@ func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage, s
 	cfg := params.RaidoConfig()
 
 	// create blockchain instance
-	bc := NewBlockChain(kv, cliCtx, cfg)
+	bc := NewBlockChain(kv, cfg)
 
 	// output manager
-	outm := NewOutputManager(bc, sql, &OutputManagerConfig{
-		ShowStat:     true,
-		ShowWideStat: false,
-	})
+	outm := NewOutputManager(bc, sql)
 
 	srv := &Service{
 		bc: bc,
@@ -114,7 +111,7 @@ func (s *Service) CheckBalance() error {
 	targetSum := genesisSupply + rewardAmount
 	currentSum := balanceSum + feeAmount
 
-	log.Debugf("Genesis supply: %d Balances: %d Reward: %d Fee: %d", genesisSupply, balanceSum, rewardAmount, feeAmount)
+	updateBalanceMetrics(rewardAmount, feeAmount, balanceSum)
 
 	if targetSum != currentSum {
 		return errors.Errorf("Wrong total supply. Expected: %d. Given: %d.", targetSum, currentSum)
@@ -127,9 +124,6 @@ func (s *Service) CheckBalance() error {
 
 // FindAllUTxO returns all address unspent outputs.
 func (s *Service) FindAllUTxO(addr string) ([]*types.UTxO, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	return s.outm.FindAllUTxO(addr)
 }
 
@@ -199,9 +193,6 @@ func (s *Service) GetTransaction(hash string) (*prototype.Transaction, error) {
 
 // GetStakeDeposits returns all address stake deposits.
 func (s *Service) GetStakeDeposits(addr string) ([]*types.UTxO, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	return s.outm.FindStakeDepositsOfAddress(addr)
 }
 

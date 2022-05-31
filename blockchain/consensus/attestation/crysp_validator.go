@@ -9,6 +9,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/math"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/hash"
+	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	"github.com/sirupsen/logrus"
 	"strconv"
 	"time"
@@ -20,10 +21,10 @@ var (
 
 type CryspValidatorConfig struct {
 	SlotTime               time.Duration // SlotTime defines main generator ticker timeout.
-	RewardBase 			   uint64		 // RewardBase defines reward per validation slot.
+	RewardBase             uint64        // RewardBase defines reward per validation slot.
 	MinFee                 uint64        // MinFee setups minimal transaction fee price.
 	StakeUnit              uint64        // StakeUnit roi amount needed for stake.
-	LogStat                bool          // LogStat enables time statistic log entries.
+	EnableMetrics          bool          // EnableMetrics enables time statistic log entries.
 	ValidatorRegistryLimit int           // ValidatorRegistryLimit defines validator slots count
 }
 
@@ -172,7 +173,7 @@ func (cv *CryspValidator) validateTxInputs(tx *prototype.Transaction) error {
 		return err
 	}
 
-	if cv.cfg.LogStat {
+	if cv.cfg.EnableMetrics {
 		end := time.Since(start)
 		log.Infof("ValidateTransaction: Inputs verification. Count: %d. Time: %s.", inputsSize, common.StatFmt(end))
 	}
@@ -180,16 +181,14 @@ func (cv *CryspValidator) validateTxInputs(tx *prototype.Transaction) error {
 	start = time.Now()
 
 	//Check that all outputs are spent
-	for key, isSpent := range alreadySpent {
-		if isSpent != 1 {
+	for key := range spentOutputsMap {
+		if _, exists := alreadySpent[key]; !exists {
 			return errors.Errorf("Unspent output of user %s with key %s.", from, key)
 		}
 	}
 
 	end := time.Since(start)
 	log.Debugf("ValidateTransaction: Verify all inputs are lock for spent in %s.", common.StatFmt(end))
-
-	log.Warnf("Validated tx %s", common.BytesToHash(tx.Hash))
 
 	return nil
 }
@@ -229,7 +228,7 @@ func (cv *CryspValidator) validateCollapseTx(tx *prototype.Transaction, block *p
 
 	// tx must contain one output for each address
 	// with amount equal to sum of address inputs
-	readedMap := map[string]int8{}
+	readedMap := map[string]struct{}{}
 	for _, out := range tx.Outputs {
 		key := string(out.Address)
 
@@ -242,22 +241,21 @@ func (cv *CryspValidator) validateCollapseTx(tx *prototype.Transaction, block *p
 				return errors.New("Address has to many outputs")
 			}
 
-			readedMap[key] = 1
+			readedMap[key] = struct{}{}
 		} else {
 			return errors.New("The recipient without sender")
 		}
 	}
 
 	// get last addr map
-	lastAddrOutputs := map[string]int8{}
+	lastAddrOutputs := map[string]struct{}{}
 	for _, in := range tx.Inputs {
 		if !bytes.Equal(in.Address, lastAddr) {
 			continue
 		}
 
-		indexStr := strconv.Itoa(int(in.Index))
-		inputKey := common.BytesToHash(in.Hash).Hex() + "_" + indexStr
-		lastAddrOutputs[inputKey] = 1
+		inputKey := serialize.GenKeyFromInput(in)
+		lastAddrOutputs[inputKey] = struct{}{}
 	}
 
 	// get all utxo
@@ -286,10 +284,17 @@ func (cv *CryspValidator) validateCollapseTx(tx *prototype.Transaction, block *p
 	}
 
 	// validate each input
-	_, err = cv.checkInputsData(tx, spentOutputsMap)
+	alreadySpent, err := cv.checkInputsData(tx, spentOutputsMap)
 	if err != nil {
 		log.Errorf("validateCollapseTx: Error checking inputs: %s.", err)
 		return err
+	}
+
+	//Check that all outputs are spent
+	for key := range spentOutputsMap {
+		if _, exists := alreadySpent[key]; !exists {
+			return errors.Errorf("Unspent output of collapse tx with key %s.", key)
+		}
 	}
 
 	return nil
@@ -462,12 +467,9 @@ func (cv *CryspValidator) validateTxStructBase(tx *prototype.Transaction) error 
 	}
 
 	if inputsBalance != outputsBalance {
-		var diff uint64
-		var underflow bool
-		if inputsBalance > outputsBalance {
-			diff, underflow = math.Sub64(inputsBalance, outputsBalance)
-		} else {
-			diff, underflow = math.Sub64(outputsBalance, inputsBalance)
+		diff, underflow := math.Sub64(inputsBalance, outputsBalance)
+		if outputsBalance > inputsBalance{
+			diff, _ = math.Sub64(outputsBalance, inputsBalance)
 		}
 
 		return errors.Errorf("tx balance is inconsistent. Mismatch is %d. Underflow %v", diff, underflow)
@@ -498,7 +500,7 @@ func (cv *CryspValidator) getTxInputsFromDB(tx *prototype.Transaction) ([]*types
 
 	utxoSize := len(utxo)
 
-	if cv.cfg.LogStat {
+	if cv.cfg.EnableMetrics {
 		end := time.Since(start)
 		log.Infof("ValidateTransaction: Read all UTxO of user %s Count: %d Time: %s", from, utxoSize, common.StatFmt(end))
 	}
@@ -507,43 +509,39 @@ func (cv *CryspValidator) getTxInputsFromDB(tx *prototype.Transaction) ([]*types
 }
 
 // checkInputsData check tx inputs with database inputs
-func (cv *CryspValidator) checkInputsData(tx *prototype.Transaction, spentOutputsMap map[string]*prototype.TxInput) (map[string]int, error) {
+func (cv *CryspValidator) checkInputsData(tx *prototype.Transaction, spentOutputsMap map[string]*prototype.TxInput) (map[string]struct{}, error) {
 	// get sender address
 	from := common.Encode(tx.Inputs[0].Address)
 	txHash := common.Encode(tx.Hash)
-	alreadySpent := map[string]int{}
+	alreadySpent := map[string]struct{}{}
 
 	// Inputs verification
 	for _, in := range tx.Inputs {
-		hash := common.Encode(in.Hash)
-		indexStr := strconv.Itoa(int(in.Index))
-		key := hash + "_" + indexStr
+		key := serialize.GenKeyFromInput(in)
 
 		dbInput, exists := spentOutputsMap[key]
 		if !exists {
-			return nil, errors.Errorf("User %s gave undefined output with key: %s.", from, key)
+			return nil, errors.Errorf("User %s gave undefined output with key: %s on tx %s.", from, key, txHash)
 		}
 
-		if alreadySpent[key] == 1 {
-			return nil, errors.Errorf("User %s try to spend output twice with key: %s.", from, key)
+		if _, exists := alreadySpent[key]; exists {
+			return nil, errors.Errorf("User %s try to spend output twice with key: %s on tx %s", from, key, txHash)
 		}
 
 		if !bytes.Equal(dbInput.Hash, in.Hash) {
-			return nil, errors.Errorf("Hash mismatch with key %s. Given %s. Expected %s.", key, hash, common.Encode(dbInput.Hash))
+			return nil, errors.Errorf("Hash mismatch with key %s. Given %s. Expected %s. Tx %s", key, common.Encode(in.Hash), common.Encode(dbInput.Hash), txHash)
 		}
 
 		if in.Index != dbInput.Index {
-			return nil, errors.Errorf("Index mismatch with key %s. Given %d. Expected %d.", key, in.Index, dbInput.Index)
+			return nil, errors.Errorf("Index mismatch with key %s. Given %d. Expected %d. Tx %s", key, in.Index, dbInput.Index, txHash)
 		}
 
 		if in.Amount != dbInput.Amount {
-			return nil, errors.Errorf("Amount mismatch with key: %s. Given %d. Expected %d.", key, in.Amount, dbInput.Amount)
+			return nil, errors.Errorf("Amount mismatch with key: %s. Given %d. Expected %d. Tx %s", key, in.Amount, dbInput.Amount, txHash)
 		}
 
 		// mark output as already spent
-		alreadySpent[key] = 1
-
-		log.Debugf("Validate input %s on tx %s", key, txHash)
+		alreadySpent[key] = struct{}{}
 	}
 
 	return alreadySpent, nil

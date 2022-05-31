@@ -37,7 +37,6 @@ func (s *Service) findPeers(routing *discovery.RoutingDiscovery){
 		s.HandlePeerFound(p)
 	}
 
-	// tests
 	log.Error("Peer search channel closed")
 }
 

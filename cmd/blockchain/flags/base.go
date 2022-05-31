@@ -35,17 +35,7 @@ var (
 		Name: "grpc-gateway-corsdomain",
 		Usage: "Comma separated list of domains from which to accept cross origin requests " +
 			"(browser enforced). This flag has no effect if not used with --grpc-gateway-port.",
-		Value: "http://localhost:4200,http://localhost:5555,http://localhost:7500,http://127.0.0.1:4200,http://127.0.0.1:5555,http://0.0.0.0:4200,http://0.0.0.0:5555",
-	})
-	// SrvStat allows generating timing logs.
-	SrvStat = altsrc.NewBoolFlag(&cli.BoolFlag{
-		Name:  "srv-stat",
-		Usage: "Show statistics of services",
-	})
-	// DebugLogging allows generating all debug logs.
-	DebugLogging = altsrc.NewBoolFlag(&cli.BoolFlag{
-		Name:  "debug-logging",
-		Usage: "Show debug statistics of services.",
+		Value: "http://localhost:4200, http://localhost:5555,http://localhost:7500,http://127.0.0.1:4200,http://127.0.0.1:5555,http://0.0.0.0:4200,http://0.0.0.0:5555",
 	})
 	// P2PPort specifies a p2p port.
 	P2PPort = altsrc.NewIntFlag(&cli.IntFlag{
@@ -57,12 +47,27 @@ var (
 	P2PHost = altsrc.NewStringFlag(&cli.StringFlag{
 		Name:  "p2p-host",
 		Usage: "P2P service host",
-		Value: "",
+		Value: "127.0.0.1",
 	})
 	// P2PBootstrapNodes first nodes to connect
 	P2PBootstrapNodes = altsrc.NewStringSliceFlag(&cli.StringSliceFlag{
 		Name: "p2p-bootstrap-nodes",
 		Usage: "P2P nodes addresses for initial connections",
 		Value: cli.NewStringSlice(),
+	})
+	EnableMetrics = altsrc.NewBoolFlag(&cli.BoolFlag{
+		Name: "enable-metrics",
+		Usage: "Enable Prometheus metric server",
+		Value: false,
+	})
+	MetricsHost = altsrc.NewStringFlag(&cli.StringFlag{
+		Name: "metrics-host",
+		Usage: "The host on which metrics endpoint should listen",
+		Value: "127.0.0.1",
+	})
+	MetricsPort = altsrc.NewIntFlag(&cli.IntFlag{
+		Name:  "metrics-port",
+		Usage: "Metrics endpoint port",
+		Value: 2121,
 	})
 )

@@ -5,12 +5,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/kv"
-	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
 	"sync"
 	"time"
 )
@@ -21,7 +19,7 @@ const (
 
 var log = logrus.WithField("prefix", "blockchain")
 
-func NewBlockChain(db db.BlockStorage, ctx *cli.Context, cfg *params.RDOBlockChainConfig) *BlockChain {
+func NewBlockChain(db db.BlockStorage, cfg *params.RDOBlockChainConfig) *BlockChain {
 	genesisHash := make([]byte, 32)
 
 	bc := BlockChain{
@@ -29,7 +27,6 @@ func NewBlockChain(db db.BlockStorage, ctx *cli.Context, cfg *params.RDOBlockCha
 		prevHash:       genesisHash,
 		headBlockNum:   GenesisBlockNum,
 		futureBlockNum: GenesisBlockNum + 1,          // block num for the future block
-		showTimeStat:   ctx.Bool(flags.SrvStat.Name), // stat flag
 		genesisHash:    genesisHash,
 		cfg:            cfg,
 	}
@@ -40,14 +37,13 @@ func NewBlockChain(db db.BlockStorage, ctx *cli.Context, cfg *params.RDOBlockCha
 type BlockChain struct {
 	db db.BlockStorage
 
-	prevHash     []byte
-	showTimeStat bool
+	prevHash     common.Hash
 
 	futureBlockNum uint64
 	headBlockNum   uint64
 	headBlock      *prototype.Block
 	genesisBlock   *prototype.Block
-	genesisHash    []byte
+	genesisHash    common.Hash
 
 	lock sync.Mutex
 
@@ -111,6 +107,9 @@ func (bc *BlockChain) Init() error {
 	bc.prevHash = block.Hash[:]
 	bc.headBlock = block
 
+	// update metrics
+	setStartupMetrics(bc.genesisBlock, bc.headBlockNum)
+
 	return nil
 }
 
@@ -129,7 +128,6 @@ func (bc *BlockChain) ParentHash() []byte {
 
 // SaveBlock stores given block in the database.
 func (bc *BlockChain) SaveBlock(block *prototype.Block) error {
-	var end time.Duration
 	start := time.Now()
 
 	err := bc.db.WriteBlock(block)
@@ -137,23 +135,15 @@ func (bc *BlockChain) SaveBlock(block *prototype.Block) error {
 		return errors.Wrap(err, "Error saving block to the KV")
 	}
 
-	if bc.showTimeStat {
-		end = time.Since(start)
-		log.Infof("Save block data in %s", common.StatFmt(end))
-	}
+	blockSavingTime.Observe(float64(time.Since(start).Milliseconds()))
 
 	start = time.Now()
-
 	err = bc.saveHeadBlockNum(block.Num)
 	if err != nil {
 		return err
 	}
 
-	if bc.showTimeStat {
-		end = time.Since(start)
-		log.Infof("Save head block number in %s", common.StatFmt(end))
-	}
-
+	blockHeadSavingTime.Observe(float64(time.Since(start).Milliseconds()))
 	start = time.Now()
 
 	var fee, reward uint64 // fee amount for block
@@ -174,10 +164,7 @@ func (bc *BlockChain) SaveBlock(block *prototype.Block) error {
 		return err
 	}
 
-	if bc.showTimeStat {
-		end = time.Since(start)
-		log.Infof("Save supply data in %s", common.StatFmt(end))
-	}
+	supplySavingTime.Observe(float64(time.Since(start).Milliseconds()))
 
 	// update blocks stats
 	bc.lock.Lock()
@@ -186,6 +173,8 @@ func (bc *BlockChain) SaveBlock(block *prototype.Block) error {
 	bc.prevHash = block.Hash
 	bc.headBlock = block
 	bc.lock.Unlock()
+
+	headBlockNum.Inc()
 
 	return nil
 }

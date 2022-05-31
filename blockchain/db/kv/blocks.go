@@ -42,7 +42,7 @@ func (s *Store) WriteBlock(block *prototype.Block) error {
 		}
 
 		end = time.Since(start)
-		log.Infof("WriteBlock: Insert block in %s", common.StatFmt(end))
+		log.Debugf("WriteBlock: Insert block in %s", common.StatFmt(end))
 
 		start = time.Now()
 		if err := s.updateBlockAccountState(tx, block); err != nil {
@@ -51,7 +51,7 @@ func (s *Store) WriteBlock(block *prototype.Block) error {
 		}
 
 		end = time.Since(start)
-		log.Infof("WriteBlock: Update accounts state in %s", common.StatFmt(end))
+		log.Debugf("WriteBlock: Update accounts state in %s", common.StatFmt(end))
 
 		start = time.Now()
 		if err := s.saveBlockNum(tx, block.Num, block.Hash); err != nil {
@@ -60,7 +60,7 @@ func (s *Store) WriteBlock(block *prototype.Block) error {
 		}
 
 		end = time.Since(start)
-		log.Infof("WriteBlock: Save block num in %s", common.StatFmt(end))
+		log.Debugf("WriteBlock: Save block num in %s", common.StatFmt(end))
 
 		start = time.Now()
 		if err := s.saveBlockHash(tx, block.Num, block.Hash); err != nil {
@@ -69,7 +69,7 @@ func (s *Store) WriteBlock(block *prototype.Block) error {
 		}
 
 		end = time.Since(start)
-		log.Infof("WriteBlock: Save block hash in %s", common.StatFmt(end))
+		log.Debugf("WriteBlock: Save block hash in %s", common.StatFmt(end))
 
 		start = time.Now()
 		if err := s.saveTransactions(tx, block); err != nil {
@@ -78,7 +78,7 @@ func (s *Store) WriteBlock(block *prototype.Block) error {
 		}
 
 		end = time.Since(start)
-		log.Infof("WriteBlock: Save transaction in hash map in %s", common.StatFmt(end))
+		log.Debugf("WriteBlock: Save transaction in hash map in %s", common.StatFmt(end))
 
 		return nil
 	})

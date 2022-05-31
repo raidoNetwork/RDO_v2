@@ -54,7 +54,6 @@ func NewStore(ctx context.Context, config *iface.SQLConfig) (*Store, error) {
 		ctx:          ctx,
 		txID:         1,
 		tx:           make(map[int]*sql.Tx),
-		cfg:          config,
 		canCreateTx:  true,
 		schema:       utxoSchema,
 	}
@@ -74,7 +73,6 @@ type Store struct {
 	txID         int
 	canCreateTx  bool
 	lock         sync.RWMutex
-	cfg          *iface.SQLConfig
 
 	schema string
 }

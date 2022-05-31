@@ -77,13 +77,16 @@ type BlockForger interface {
 // TxPool provides and updates transaction queue.
 type TxPool interface {
 	// GetTxQueue returns transaction sort queue.
-	GetTxQueue() []*types.TransactionData
+	GetTxQueue() []*types.Transaction
 
 	// DeleteTransaction removes given transaction from pool.
 	DeleteTransaction(transaction *prototype.Transaction) error
 
-	// ReserveTransaction remove given transaction from the pool
-	ReserveTransaction(*prototype.Transaction) error
+	// ReserveTransaction reserve transaction for block forging
+	ReserveTransaction(transaction *prototype.Transaction) error
+
+	// ReserveTransactions reserve given transaction list for block forging
+	ReserveTransactions([]*prototype.Transaction) error
 
 	// RollbackReserved returns reserved transactions to the pool.
 	RollbackReserved()

@@ -3,6 +3,8 @@ package rpc
 import (
 	"context"
 	"fmt"
+	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/rpc/api"
 	"github.com/raidoNetwork/RDO_v2/rpc/attestation"
@@ -64,11 +66,13 @@ func (s *Service) Start() {
 
 	opts := []grpc.ServerOption{
 		grpc.StatsHandler(&ocgrpc.ServerHandler{}),
-		grpc.UnaryInterceptor(
+		middleware.WithUnaryServerChain(
 			s.healthInterceptor,
+			grpc_prometheus.UnaryServerInterceptor,
 		),
 		grpc.MaxRecvMsgSize(s.cfg.MaxMsgSize),
 	}
+	grpc_prometheus.EnableHandlingTimeHistogram()
 
 	s.connectionMu.Lock()
 	s.grpcServer = grpc.NewServer(opts...)
@@ -116,6 +120,7 @@ func (s *Service) Stop() error {
 
 // Status returns nil or credentialError
 func (s *Service) Status() error {
+	// TODO rework sync status
 	/*if s.cfg.SyncService.Syncing() {
 		return errors.New("syncing")
 	}*/

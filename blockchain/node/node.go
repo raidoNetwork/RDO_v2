@@ -15,6 +15,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/gateway"
 	"github.com/raidoNetwork/RDO_v2/generator"
+	"github.com/raidoNetwork/RDO_v2/metrics"
 	"github.com/raidoNetwork/RDO_v2/p2p"
 	"github.com/raidoNetwork/RDO_v2/rpc"
 	"github.com/raidoNetwork/RDO_v2/shared"
@@ -117,6 +118,14 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 		return nil, err
 	}
 
+	if cliCtx.Bool(flags.EnableMetrics.Name) {
+		if err := rdo.registerMetricsService(); err != nil {
+			log.Error("Error register metrics endpoint.")
+			return nil, err
+		}
+	}
+
+
 	return rdo, nil
 }
 
@@ -213,12 +222,12 @@ func (r *RDONode) registerAttestationService() error {
 		return err
 	}
 
-	enableStats := r.cliCtx.Bool(flags.SrvStat.Name)
+	enableStats := r.cliCtx.Bool(flags.EnableMetrics.Name)
 	cfg := attestation.Config{
-		TxFeed: r.TxFeed(),
-		StateFeed: r.StateFeed(),
-		EnableStats: enableStats,
-		Blockchain: blockchainService,
+		TxFeed:        r.TxFeed(),
+		StateFeed:     r.StateFeed(),
+		EnableMetrics: enableStats,
+		Blockchain:    blockchainService,
 	}
 	srv, err := attestation.NewService(r.ctx, &cfg)
 	if err != nil {
@@ -239,6 +248,16 @@ func (r *RDONode) registerP2P() error {
 	if err != nil {
 		return err
 	}
+
+	return r.services.RegisterService(srv)
+}
+
+func (r *RDONode) registerMetricsService() error {
+	host := r.cliCtx.String(flags.MetricsHost.Name)
+	port := r.cliCtx.Int(flags.MetricsPort.Name)
+	endpoint := fmt.Sprintf("%s:%d", host, port)
+
+	srv := metrics.New(endpoint, r.services)
 
 	return r.services.RegisterService(srv)
 }
@@ -307,7 +326,7 @@ func (r *RDONode) startDB(cliCtx *cli.Context) error {
 	clearDB := cliCtx.Bool(cmd.ClearDB.Name)
 	forceClearDB := cliCtx.Bool(cmd.ForceClearDB.Name)
 
-	log.WithField("database-path", dbPath).Info("Checking DB")
+	log.WithField("database-path", dbPath).Info("Starting databases...")
 
 	// Init key value database
 	kvStore, err := db.NewDB(r.ctx, dbPath)
@@ -317,7 +336,6 @@ func (r *RDONode) startDB(cliCtx *cli.Context) error {
 
 	// Prepare SQL database config
 	SQLCfg := db.SQLConfig{
-		ShowFullStat: cliCtx.Bool(flags.SrvStat.Name),
 		ConfigPath:   cliCtx.String(cmd.SQLConfigPath.Name),
 		DataDir:      dbPath,
 	}

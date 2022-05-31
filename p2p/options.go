@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/libp2p/go-libp2p"
 	phost "github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/routing"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	noise "github.com/libp2p/go-libp2p-noise"
@@ -11,6 +12,7 @@ import (
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-tcp-transport"
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
+	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/version"
 	"time"
 )
@@ -56,4 +58,35 @@ func pubsubGossipParam() pubsub.GossipSubParams {
 	gParams.HistoryGossip = 3
 
 	return gParams
+}
+
+func peerScoringParams() (*pubsub.PeerScoreParams, *pubsub.PeerScoreThresholds) {
+	thresholds := &pubsub.PeerScoreThresholds{
+		GossipThreshold:             -4000,
+		PublishThreshold:            -8000,
+		GraylistThreshold:           -16000,
+		AcceptPXThreshold:           100,
+		OpportunisticGraftThreshold: 5,
+	}
+	scoreParams := &pubsub.PeerScoreParams{
+		Topics:        make(map[string]*pubsub.TopicScoreParams),
+		TopicScoreCap: 32.72,
+		AppSpecificScore: func(p peer.ID) float64 {
+			return 0
+		},
+		AppSpecificWeight:           1,
+		IPColocationFactorWeight:    -35.11,
+		IPColocationFactorThreshold: 10,
+		IPColocationFactorWhitelist: nil,
+		BehaviourPenaltyWeight:      -15.92,
+		BehaviourPenaltyThreshold:   6,
+		BehaviourPenaltyDecay:       0.5,
+		DecayInterval:               slotDuration(),
+		DecayToZero:                 0.01,
+	}
+	return scoreParams, thresholds
+}
+
+func slotDuration() time.Duration {
+	return time.Duration(params.RaidoConfig().SlotTime) * time.Second
 }

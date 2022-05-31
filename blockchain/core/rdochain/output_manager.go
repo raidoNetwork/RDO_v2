@@ -18,16 +18,10 @@ var (
 
 const blocksPerTx = 10
 
-type OutputManagerConfig struct {
-	ShowStat     bool
-	ShowWideStat bool
-}
-
-func NewOutputManager(bc *BlockChain, outDB db.OutputStorage, cfg *OutputManagerConfig) *OutputManager {
+func NewOutputManager(bc *BlockChain, outDB db.OutputStorage) *OutputManager {
 	om := OutputManager{
 		db:          outDB,
 		bc:          bc,
-		cfg:         cfg,
 		minBlockNum: 0,
 		maxBlockNum: 0,
 	}
@@ -40,14 +34,13 @@ type OutputManager struct {
 	db db.OutputStorage
 	bc *BlockChain
 
-	cfg     *OutputManagerConfig
-	syncing bool
-
 	// sync status data
 	minBlockNum uint64
 	maxBlockNum uint64
 
 	mu sync.Mutex
+
+	syncing bool
 }
 
 // FindAllUTxO find all address' unspent outputs
@@ -66,8 +59,7 @@ func (om *OutputManager) ProcessBlock(block *prototype.Block) error {
 	}
 
 	var from common.Address
-	var startTxInner, startInner time.Time
-	var endTxInner, endInner time.Duration
+	var startInner time.Time
 	var arows int64
 
 	var queryPart string // query data of one transaction
@@ -80,13 +72,11 @@ func (om *OutputManager) ProcessBlock(block *prototype.Block) error {
 
 	// update SQL
 	for _, tx := range block.Transactions {
+		// update outputs section
+		startInner = time.Now()
+
 		txHash = common.BytesToHash(tx.Hash)
-
-		startTxInner = time.Now() // whole transaction process time
-		startInner = time.Now()   // tx inputs process time
-
-		// Only legacy tx has inputs
-		if common.IsLegacyTx(tx) || tx.Type == common.CollapseTxType {
+		if common.HasInputs(tx) {
 			from = common.BytesToAddress(tx.Inputs[0].Address)
 
 			// update tx inputs in database
@@ -97,14 +87,6 @@ func (om *OutputManager) ProcessBlock(block *prototype.Block) error {
 			}
 		}
 
-		if om.cfg.ShowWideStat {
-			endInner = time.Since(startInner)
-			log.Infof("OutputManager.processBlock: Update tx %s inputs in %s.", txHash, common.StatFmt(endInner))
-		}
-
-		// update outputs section
-		startInner = time.Now()
-
 		// create tx outputs in the database
 		queryPart, outputsCount = om.prepareOutputsQuery(tx, from, block.Num)
 
@@ -113,38 +95,19 @@ func (om *OutputManager) ProcessBlock(block *prototype.Block) error {
 			queryBuilder.WriteString(", ")
 		}
 
-		// update query
 		queryBuilder.WriteString(queryPart)
-
-		// update outputs counter
 		blockOutputs += outputsCount
-
-		if om.cfg.ShowWideStat {
-			endInner = time.Since(startInner)
-			log.Infof("OutputManager.processBlock: Prepare tx %s outputs query in %s.", txHash, common.StatFmt(endInner))
-		}
-
-		if om.cfg.ShowStat {
-			endTxInner = time.Since(startTxInner)
-			log.Infof("OutputManager.processBlock: Update tx %s data in %s.", txHash, common.StatFmt(endTxInner))
-		}
+		updateTxDataTime.Observe(float64(time.Since(startInner).Milliseconds()))
 	}
 
 	query := queryBuilder.String()
 
 	// add all outputs batch
 	if query != "" {
-		startInner = time.Now()
-
 		arows, err = om.db.AddOutputBatch(blockTx, query)
 		if err != nil || arows != int64(blockOutputs) {
 			log.Error("Error inserting outputs batch.")
 			return om.processUpdateError(arows, int64(blockOutputs), blockTx, err)
-		}
-
-		if om.cfg.ShowStat {
-			end := time.Since(startInner)
-			log.Infof("Update block outputs in %s.", common.StatFmt(end))
 		}
 	}
 
@@ -154,10 +117,7 @@ func (om *OutputManager) ProcessBlock(block *prototype.Block) error {
 		return om.rollbackAndGetError(blockTx, err)
 	}
 
-	if om.cfg.ShowStat {
-		end := time.Since(start)
-		log.Infof("OutputManager.processBlock: Update all block data in %s.", common.StatFmt(end))
-	}
+	storeTransactionsTime.Observe(float64(time.Since(start).Milliseconds()))
 
 	return nil
 }
@@ -213,10 +173,7 @@ func (om *OutputManager) SyncData() error {
 			return errors.Wrap(err, "syncDataInRange error")
 		}
 
-		if om.cfg.ShowStat {
-			end := time.Since(start)
-			log.Infof("Sync SQL with KV in %s.", common.StatFmt(end))
-		}
+		localDbSyncTime.Observe(float64(time.Since(start).Milliseconds()))
 	}
 
 	return nil
@@ -255,10 +212,7 @@ func (om *OutputManager) syncBlock(block *prototype.Block, blockTx int) error {
 			from = nil
 		}
 
-		index = 0 // tx output index
-
-		// get tx hash
-		hash = common.BytesToHash(tx.Hash)
+		index = 0
 		for _, out := range tx.Outputs {
 			// skip all fee outputs
 			if tx.Type == common.FeeTxType && common.BytesToAddress(out.Address).Hex() == common.BlackHoleAddress {
@@ -266,7 +220,6 @@ func (om *OutputManager) syncBlock(block *prototype.Block, blockTx int) error {
 			}
 
 			uo := types.NewUTxO(tx.Hash, from, out.Address, out.Node, index, out.Amount, block.Num, tx.Type, tx.Timestamp)
-
 			err := om.db.AddOutputIfNotExists(blockTx, uo)
 			if err != nil {
 				return om.rollbackAndGetError(blockTx, err)
@@ -276,10 +229,7 @@ func (om *OutputManager) syncBlock(block *prototype.Block, blockTx int) error {
 		}
 	}
 
-	if om.cfg.ShowStat {
-		end := time.Since(start)
-		log.Infof("SyncData: Sync block #%d in %s.", block.Num, common.StatFmt(end))
-	}
+	localDbSyncBlockTime.Observe(float64(time.Since(start).Milliseconds()))
 
 	return nil
 }
@@ -438,27 +388,20 @@ func (om *OutputManager) processUpdateError(arows, targetRows int64, blockTx int
 
 // processBlockInputs updates all transaction inputs in the database with given DB tx
 func (om *OutputManager) processBlockInputs(blockTx int, tx *prototype.Transaction) error {
-	var arows int64
-	var err error
 	var startIn time.Time
-	var endIn time.Duration
-	var hash string
 
 	// update inputs
 	for _, in := range tx.Inputs {
-		hash = common.BytesToHash(in.Hash).Hex()
+		hash := common.BytesToHash(in.Hash).Hex()
 		startIn = time.Now()
 
-		arows, err = om.db.SpendOutput(blockTx, hash, in.Index)
+		arows, err := om.db.SpendOutput(blockTx, hash, in.Index)
 		if err != nil || arows != 1 {
 			log.WithError(err).Errorf("Error deleting input: %s_%d.", hash, in.Index)
 			return om.processUpdateError(arows, 1, blockTx, err)
 		}
 
-		if om.cfg.ShowWideStat {
-			endIn = time.Since(startIn)
-			log.Infof("OutputManager.processBlockInputs: Spent output %s_%d in %s", hash, in.Index, common.StatFmt(endIn))
-		}
+		inputsSavingTime.Observe(float64(time.Since(startIn).Milliseconds()))
 	}
 
 	return nil
