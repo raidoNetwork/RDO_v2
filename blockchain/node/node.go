@@ -11,6 +11,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/kv"
+	rsync "github.com/raidoNetwork/RDO_v2/blockchain/sync"
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
 	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/gateway"
@@ -92,6 +93,12 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 	if err := rdo.registerBlockchainService(); err != nil {
 		log.Error("Error register BlockchainService.")
 		return nil, err
+	}
+
+	// register sync service
+	if err := rdo.registerSyncService(); err != nil {
+		log.Error("Error register sync service.")
+		return nil, errors.Wrap(err, "sync error")
 	}
 
 	// register attestation service
@@ -248,6 +255,31 @@ func (r *RDONode) registerP2P() error {
 	if err != nil {
 		return err
 	}
+
+	return r.services.RegisterService(srv)
+}
+
+func (r *RDONode) registerSyncService() error {
+	var p2pSrv *p2p.Service
+	err := r.services.FetchService(&p2pSrv)
+	if err != nil {
+		return err
+	}
+
+	var blockchainService *rdochain.Service
+	err = r.services.FetchService(&blockchainService)
+	if err != nil {
+		return err
+	}
+
+	cfg := rsync.Config{
+		BlockFeed: r.BlockFeed(),
+		TxFeed: r.TxFeed(),
+		StateFeed: r.StateFeed(),
+		Publisher: p2pSrv,
+		Blockchain: blockchainService,
+	}
+	srv := rsync.NewService(r.ctx, &cfg)
 
 	return r.services.RegisterService(srv)
 }
