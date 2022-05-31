@@ -48,9 +48,11 @@ Config file can take all flags from the list below as params.
 | `p2p-host` | The host on which p2p service should listen. |
 | `p2p-port` | The port on which p2p service runs on. |
 | `p2p-bootstrap-nodes` | List of P2P nodes addresses for initial connections. |
-| `srv-stat` | Show statistics of services.             | 
-| `debug-logging` | Show debug statistics of services.             |
-| `sql-db-cfg` | Config file path with MySQL host, port, user and password. |
+| `enable-metrics` | Enables Prometheus monitoring service. | 
+| `metrics-host` | The host on which metrics endpoint should runs on. |
+| `metrics-port` | The port on which metrics endpoint should runs on. |
+| `verbosity` | Logging verbosity (trace, debug, info=default, warn, error, fatal, panic). |
+| `sql-cfg` | Config file path with MySQL host, port, user and password. |
 | `datadir` | Data directory for the databases and keystore. |
 | `log-file` | Specify log file name, relative or absolute. |
 
