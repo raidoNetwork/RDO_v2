@@ -6,6 +6,7 @@ import (
 	phost "github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/protocol"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
@@ -20,6 +21,8 @@ import (
 
 var log = logrus.WithField("prefix", "p2p")
 var maxDialTimeout = params.RaidoConfig().ResponseTimeout
+
+const messageQueueSize = 256
 
 type Config struct {
 	Host           string
@@ -69,13 +72,14 @@ func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
 
 	srv.host = netHost
 	srv.id = netHost.ID()
+	srv.peerStore = NewPeerStore()
 
 	psOpts := []pubsub.Option{
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		pubsub.WithNoAuthor(),
 		pubsub.WithMessageIdFn(msgId),
-		pubsub.WithPeerOutboundQueueSize(256),
-		pubsub.WithValidateQueueSize(256),
+		pubsub.WithPeerOutboundQueueSize(messageQueueSize),
+		pubsub.WithValidateQueueSize(messageQueueSize),
 		pubsub.WithGossipSubParams(pubsubGossipParam()),
 		pubsub.WithPeerScore(peerScoringParams()),
 		pubsub.WithSubscriptionFilter(srv),
@@ -87,11 +91,6 @@ func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
 	}
 
 	srv.pubsub = gs
-
-	async.WithInterval(srv.ctx, 10 * time.Second, func() {
-		srv.updateMetrics()
-	})
-
 	return srv, nil
 }
 
@@ -115,12 +114,12 @@ type Service struct {
 
 	// discovery
 	dht *dht.IpfsDHT
+
+	peerStore *PeerStore
 }
 
 func (s *Service) Start() {
-	// print host p2p address
 	s.logID()
-
 	s.addConnectionHandlers()
 
 	// start new peer search
@@ -143,6 +142,10 @@ func (s *Service) Start() {
 
 	// list new messages
 	go s.readMessages()
+
+	async.WithInterval(s.ctx, 5 * time.Second, func() {
+		s.updateMetrics()
+	})
 }
 
 func (s *Service) Stop() error {
@@ -323,20 +326,17 @@ func (s *Service) addConnectionHandlers() {
 	s.host.Network().Notify(&network.NotifyBundle{
 		ConnectedF: func(n network.Network, conn network.Conn) {
 			remotePeer := conn.RemotePeer()
-			peerData := s.host.Peerstore().PeerInfo(remotePeer)
-			if len(peerData.Addrs) == 0 {
-				log.Debugf("Connected to the peer %s", remotePeer.String())
-				p2pPeerMap.WithLabelValues("Connected").Inc()
-			} else {
-				log.Debugf("Reconnected to the peer %s", remotePeer.String())
-				p2pPeerMap.WithLabelValues("Reconnected").Inc()
-			}
+			log.Debugf("Connected to the peer %s", remotePeer.String())
+			s.peerStore.Connect(remotePeer)
 		},
 		DisconnectedF: func(n network.Network, conn network.Conn) {
 			remotePeer := conn.RemotePeer()
 			log.Debugf("Disconnected peer %s", remotePeer.String())
-			p2pPeerMap.WithLabelValues("Connected").Dec()
-			p2pPeerMap.WithLabelValues("Disconnected").Inc()
+			s.peerStore.Disconnect(remotePeer)
 		},
 	})
+}
+
+func (s *Service) SetStreamHandler(topic string, handler network.StreamHandler) {
+	s.host.SetStreamHandler(protocol.ID(topic), handler)
 }

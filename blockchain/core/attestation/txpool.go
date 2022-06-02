@@ -98,7 +98,7 @@ func (tp *TxPool) SendRawTx(tx *prototype.Transaction) error {
 	}
 
 	// send transaction to the feed
-	tp.cfg.TxFeed.Send(types.NewTxData(tx))
+	tp.cfg.TxFeed.Send(types.NewTransaction(tx))
 
 	return nil
 }
@@ -476,8 +476,8 @@ func (tp *TxPool) GetFee() uint64 {
 		i--
 	}
 
-	minFee := queue[i].Fee()
-	maxFee := queue[0].Fee()
+	minFee := queue[i].FeePrice()
+	maxFee := queue[0].FeePrice()
 
 	fee := (maxFee + minFee) / 2
 
@@ -526,11 +526,11 @@ func (ptp pricedTxPool) Len() int {
 func (ptp pricedTxPool) Less(i, j int) bool {
 	// if fee price is equal than compare timestamp
 	// bigger timestamp is worse
-	if ptp[i].Fee() == ptp[j].Fee() {
+	if ptp[i].FeePrice() == ptp[j].FeePrice() {
 		return ptp[i].Timestamp() < ptp[j].Timestamp()
 	}
 
-	return ptp[i].Fee() > ptp[j].Fee()
+	return ptp[i].FeePrice() > ptp[j].FeePrice()
 }
 
 func (ptp pricedTxPool) Swap(i, j int) {

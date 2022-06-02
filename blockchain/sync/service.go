@@ -2,10 +2,12 @@ package sync
 
 import (
 	"context"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/raidoNetwork/RDO_v2/blockchain/state"
 	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/p2p"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	"github.com/sirupsen/logrus"
@@ -30,12 +32,18 @@ type BlockchainInfo interface{
 	GetBlockCount() uint64
 }
 
+type P2P interface {
+	SetStreamHandler(string, network.StreamHandler)
+
+	GossipPublisher
+}
+
 type Config struct{
 	BlockFeed *events.Bus
 	TxFeed	  *events.Bus
 	StateFeed *events.Bus
-	Publisher  GossipPublisher
 	Blockchain BlockchainInfo
+	P2P 	   P2P
 }
 
 func NewService(ctx context.Context, cfg *Config) *Service {
@@ -73,7 +81,13 @@ func (s *Service) Start(){
 	// syncBlocks with network
 	s.syncData()
 
- 	// gossip new blocks and transactions
+	// set stream handler for block receiving
+	s.cfg.P2P.SetStreamHandler(p2p.BlockRangeTopic, func (stream network.Stream) {
+		defer stream.Close()
+
+	})
+
+	// gossip new blocks and transactions
 	go s.gossipEvents()
 
 	// listen incoming data
@@ -83,30 +97,30 @@ func (s *Service) Start(){
 func (s *Service) gossipEvents(){
 	for{
 		select{
-			case block := <-s.blockEvent:
-				raw, err := serialize.MarshalBlock(block)
-				if err != nil {
-					log.Errorf("Error marshaling block: %s", err)
-					continue
-				}
+		case block := <-s.blockEvent:
+			raw, err := serialize.MarshalBlock(block)
+			if err != nil {
+				log.Errorf("Error marshaling block: %s", err)
+				continue
+			}
 
-				err = s.cfg.Publisher.Publish(p2p.BlockTopic, raw)
-				if err != nil {
-					log.Errorf("Error sending block: %s", err)
-				}
-			case td := <-s.txEvent:
-				raw, err := serialize.MarshalTx(td.GetTx())
-				if err != nil {
-					log.Errorf("Error marshaling transaction: %s", err)
-					continue
-				}
+			err = s.cfg.P2P.Publish(p2p.BlockTopic, raw)
+			if err != nil {
+				log.Errorf("Error sending block: %s", err)
+			}
+		case td := <-s.txEvent:
+			raw, err := serialize.MarshalTx(td.GetTx())
+			if err != nil {
+				log.Errorf("Error marshaling transaction: %s", err)
+				continue
+			}
 
-				err = s.cfg.Publisher.Publish(p2p.TxTopic, raw)
-				if err != nil {
-					log.Errorf("Error sending transaction: %s", err)
-				}
-			case <-s.ctx.Done():
-				return
+			err = s.cfg.P2P.Publish(p2p.TxTopic, raw)
+			if err != nil {
+				log.Errorf("Error sending transaction: %s", err)
+			}
+		case <-s.ctx.Done():
+			return
 		}
 	}
 }
@@ -148,31 +162,29 @@ func (s *Service) syncData(){
 func (s *Service) listenIncoming() {
 	for{
 		select{
-			case <-s.ctx.Done():
-				return
-			case notty := <-s.notification:
-				switch notty.Topic {
-				case p2p.BlockTopic:
-					block, err := serialize.UnmarshalBlock(notty.Data)
-					if err != nil {
-						log.Errorf("Error unmarshaling block: %s", err)
-						break
-					}
-
-					log.Infof("Block received %d", block.Num)
-
-					//s.cfg.BlockFeed.Send(block)
-				case p2p.TxTopic:
-					tx, err := serialize.UnmarshalTx(notty.Data)
-					if err != nil {
-						log.Errorf("Error unmarshaling transaction: %s", err)
-						break
-					}
-
-					s.cfg.TxFeed.Send(types.NewTxData(tx))
-				default:
-					log.Warnf("Unsupported notification %s", notty.Topic)
+		case <-s.ctx.Done():
+			return
+		case notty := <-s.notification:
+			switch notty.Topic {
+			case p2p.BlockTopic:
+				block, err := serialize.UnmarshalBlock(notty.Data)
+				if err != nil {
+					log.Errorf("Error unmarshaling block: %s", err)
+					break
 				}
+
+				log.Infof("Block received %d", block.Num)
+			case p2p.TxTopic:
+				tx, err := serialize.UnmarshalTx(notty.Data)
+				if err != nil {
+					log.Errorf("Error unmarshaling transaction: %s", err)
+					break
+				}
+
+				log.Infof("Tx received %s", common.Encode(tx.Hash))
+			default:
+				log.Warnf("Unsupported notification %s", notty.Topic)
+			}
 		}
 	}
 }
@@ -182,13 +194,13 @@ func (s *Service) syncBlocks(){
 
 	// todo implement sync logic
 
-    // send ready event
+	// send ready event
 	s.cfg.StateFeed.Send(state.Synced)
 }
 
 // subscribeEvents on updates
 func (s *Service) subscribeEvents(){
-	s.cfg.Publisher.Notifier().Subscribe(s.notification)
+	s.cfg.P2P.Notifier().Subscribe(s.notification)
 	s.cfg.TxFeed.Subscribe(s.txEvent)
 	s.cfg.BlockFeed.Subscribe(s.blockEvent)
 }

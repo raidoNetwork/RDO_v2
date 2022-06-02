@@ -276,7 +276,7 @@ func (r *RDONode) registerSyncService() error {
 		BlockFeed: r.BlockFeed(),
 		TxFeed: r.TxFeed(),
 		StateFeed: r.StateFeed(),
-		Publisher: p2pSrv,
+		P2P: p2pSrv,
 		Blockchain: blockchainService,
 	}
 	srv := rsync.NewService(r.ctx, &cfg)

@@ -1,13 +1,15 @@
 package p2p
 
 const (
-	mainPrefix = "/raido/"
-	blockSuffix = "block-forge"
+	mainPrefix 		  = "/raido/"
+	blockSuffix 	  = "block-forge"
 	txSuffix          = "tx"
-	attestationSuffix = "attestationSuffix"
-	slashingSuffix          = "slashing"
+	attestationSuffix = "attestation-suffix"
+	slashingSuffix    = "slashing"
+	blockRangeSuffix  = "block-range"
 
 	BlockTopic = mainPrefix + blockSuffix
+	BlockRangeTopic = mainPrefix + blockRangeSuffix
 	TxTopic = mainPrefix + txSuffix
 	AttestationTopic = mainPrefix + attestationSuffix
 	SlashTopic = mainPrefix + slashingSuffix

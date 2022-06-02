@@ -99,7 +99,7 @@ func SignTx(tx *prototype.Transaction, key *ecdsa.PrivateKey) error {
 	return nil
 }
 
-func NewTxData(tx *prototype.Transaction) *Transaction {
+func NewTransaction(tx *prototype.Transaction) *Transaction {
 	td := Transaction{
 		tx:        tx,
 		size:      tx.SizeSSZ(),
@@ -136,7 +136,7 @@ func (td *Transaction) Size() int {
 	return td.size
 }
 
-func (td *Transaction) Fee() uint64 {
+func (td *Transaction) FeePrice() uint64 {
 	td.lock.Lock()
 	defer td.lock.Unlock()
 

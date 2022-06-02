@@ -19,6 +19,11 @@ var (
 )
 
 func (s *Service) updateMetrics() {
-	totalPeerCount.Set(float64(len(s.host.Peerstore().Peers()) - 1))
+	peers := s.peerStore.Stats()
+	totalPeerCount.Set(float64(peers["total"]))
+
+	p2pPeerMap.WithLabelValues("Connected").Set(float64(peers["connected"]))
+	p2pPeerMap.WithLabelValues("Reconnected").Set(float64(peers["reconnected"]))
+	p2pPeerMap.WithLabelValues("Disconnected").Set(float64(peers["disconnected"]))
 }
 
