@@ -6,6 +6,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
+	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	"math"
 	"strings"
 	"sync"
@@ -17,6 +18,8 @@ var (
 )
 
 const blocksPerTx = 10
+
+// TODO rework error processing
 
 func NewOutputManager(bc *BlockChain, outDB db.OutputStorage) *OutputManager {
 	om := OutputManager{
@@ -388,12 +391,13 @@ func (om *OutputManager) processUpdateError(arows, targetRows int64, blockTx int
 
 // processBlockInputs updates all transaction inputs in the database with given DB tx
 func (om *OutputManager) processBlockInputs(blockTx int, tx *prototype.Transaction) error {
-	var startIn time.Time
+	var start time.Time
+	txHash := common.Encode(tx.Hash)
 
 	// update inputs
 	for _, in := range tx.Inputs {
+		start = time.Now()
 		hash := common.BytesToHash(in.Hash).Hex()
-		startIn = time.Now()
 
 		arows, err := om.db.SpendOutput(blockTx, hash, in.Index)
 		if err != nil || arows != 1 {
@@ -401,7 +405,8 @@ func (om *OutputManager) processBlockInputs(blockTx int, tx *prototype.Transacti
 			return om.processUpdateError(arows, 1, blockTx, err)
 		}
 
-		inputsSavingTime.Observe(float64(time.Since(startIn).Milliseconds()))
+		log.Debugf("Delete input %s on %s", serialize.GenKeyFromPbInput(in), txHash)
+		inputsSavingTime.Observe(float64(time.Since(start).Milliseconds()))
 	}
 
 	return nil

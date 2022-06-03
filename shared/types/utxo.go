@@ -24,10 +24,17 @@ func (uo *UTxO) ToOutput() *prototype.TxOutput {
 	return NewOutput(uo.To.Bytes(), uo.Amount, uo.Node.Bytes())
 }
 
-func (uo *UTxO) ToInput() *prototype.TxInput {
-	in := NewInput(uo.Hash.Bytes(), uo.Index, uo.ToOutput())
+func (uo *UTxO) ToPbInput() *prototype.TxInput {
+	return NewInput(uo.Hash.Bytes(), uo.Index, uo.ToOutput())
+}
 
-	return in
+func (uo *UTxO) ToInput() *Input {
+	return &Input{
+		hash: uo.Hash,
+		address: uo.To,
+		index: uo.Index,
+		amount: uo.Amount,
+	}
 }
 
 func (uo *UTxO) ToString() string {

@@ -193,6 +193,7 @@ func (s *Service) syncBlocks(){
 	log.Println("Data synced")
 
 	// todo implement sync logic
+	// todo add listeners for updates
 
 	// send ready event
 	s.cfg.StateFeed.Send(state.Synced)

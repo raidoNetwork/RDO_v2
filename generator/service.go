@@ -86,7 +86,7 @@ func (s *Service) GenerateUnstakeTx(fee uint64, hexKey string, amount uint64) (*
 
 	inputsArr := make([]*prototype.TxInput, 0, len(utxo))
 	for _, uo := range utxo {
-		inputsArr = append(inputsArr, uo.ToInput())
+		inputsArr = append(inputsArr, uo.ToPbInput())
 		balance += uo.Amount
 	}
 
@@ -127,7 +127,7 @@ func (s *Service) GenerateUnstakeTx(fee uint64, hexKey string, amount uint64) (*
 
 	opts.Outputs[0].Amount -= realFee
 
-	tx, err := types.NewTx(opts, key)
+	tx, err := types.NewPbTransaction(opts, key)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,7 @@ func (s *Service) getBalance(address string) ([]*prototype.TxInput, uint64, erro
 	var balance uint64
 	for _, uo := range utxo {
 		balance += uo.Amount
-		inputsArr = append(inputsArr, uo.ToInput())
+		inputsArr = append(inputsArr, uo.ToPbInput())
 	}
 
 	return inputsArr, balance, nil
@@ -226,7 +226,7 @@ func (s *Service) createTx(address common.Address, key *ecdsa.PrivateKey, output
 		return nil, err
 	}
 
-	tx, err := types.NewTx(*opts, key)
+	tx, err := types.NewPbTransaction(*opts, key)
 	if err != nil {
 		return nil, err
 	}

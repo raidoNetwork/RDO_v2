@@ -8,16 +8,16 @@ import (
 // TxValidator validates only transactions
 type TxValidator interface {
 	// ValidateTransaction validate transaction and return an error if something is wrong
-	ValidateTransaction(*prototype.Transaction) error
+	ValidateTransaction(*types.Transaction) error
 
 	// ValidateTransactionStruct validates transaction balances, signatures and hash.
-	ValidateTransactionStruct(*prototype.Transaction) error
+	ValidateTransactionStruct(*types.Transaction) error
 }
 
 // BlockValidator checks only blocks
 type BlockValidator interface {
 	// ValidateBlock validate block and return an error if something is wrong
-	ValidateBlock(*prototype.Block) error
+	ValidateBlock(*prototype.Block) (*types.Transaction, error)
 }
 
 // Validator checks if block or transaction is correct according to the engine rules
@@ -76,26 +76,17 @@ type BlockForger interface {
 
 // TxPool provides and updates transaction queue.
 type TxPool interface {
-	// GetTxQueue returns transaction sort queue.
-	GetTxQueue() []*types.Transaction
+	// GetQueue returns transaction sort queue.
+	GetQueue() []*types.Transaction
 
-	// DeleteTransaction removes given transaction from pool.
-	DeleteTransaction(transaction *prototype.Transaction) error
+	// Finalize remove from pool given transactions.
+	Finalize([]*types.Transaction)
 
-	// ReserveTransaction reserve transaction for block forging
-	ReserveTransaction(transaction *prototype.Transaction) error
+	// DeleteTransaction remove given transaction from the pool
+	DeleteTransaction(*types.Transaction) error
 
-	// ReserveTransactions reserve given transaction list for block forging
-	ReserveTransactions([]*prototype.Transaction) error
-
-	// RollbackReserved returns reserved transactions to the pool.
-	RollbackReserved()
-
-	// FlushReserved removes all reserved transactions from pool.
-	FlushReserved(cleanInputs bool)
-
-	// IsLockedInput checks if given input is locked in the pool
-	IsLockedInput(input *prototype.TxInput) bool
+	// InsertCollapseTx insert collapse tx to the pool
+	InsertCollapseTx(*types.Transaction) error
 }
 
 // StakePool regulates stake slots condition.

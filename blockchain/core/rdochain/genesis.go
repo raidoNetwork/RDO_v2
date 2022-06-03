@@ -97,7 +97,7 @@ func (bc *BlockChain) createGenesis() *prototype.Block {
 			Fee:     0,
 			Data:    make([]byte, 0),
 		}
-		tx, err := types.NewTx(opts, nil)
+		tx, err := types.NewPbTransaction(opts, nil)
 		if err != nil {
 			log.Errorf("You have no genesis. Error: %s", err)
 			return nil

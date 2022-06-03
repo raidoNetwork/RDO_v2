@@ -15,6 +15,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
+	"strings"
 	"sync"
 	"time"
 )
@@ -26,12 +27,12 @@ type Config struct{
 	AttestationPool consensus.AttestationPool
 	StateFeed events.Feed
 	BlockFeed events.Feed
+	Context context.Context
 }
 
 // NewService creates new CoreService
 func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 	dataDir := cliCtx.String(cmd.DataDirFlag.Name)
-
 	netCfg := params.RaidoConfig()
 
 	// TODO rework validator address loading
@@ -57,7 +58,7 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 	// new block miner
 	forger := miner.NewMiner(cfg.BlockForger, cfg.AttestationPool, minerCfg)
 
-	ctx, finish := context.WithCancel(context.Background())
+	ctx, finish := context.WithCancel(cfg.Context)
 
 	srv := &Service{
 		cliCtx:     cliCtx,
@@ -67,7 +68,6 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		proposer:   proposer,
 		bc:         cfg.BlockForger,
 
-		stop:       make(chan struct{}),
 		ticker:     slot.Ticker(),
 
 		// events
@@ -88,7 +88,6 @@ type Service struct {
 	ctx          context.Context
 	cancelFunc   context.CancelFunc
 	statusErr    error
-	stop         chan struct{}
 	bc			 consensus.BlockForger
 	proposer 	 *keystore.ValidatorAccount
 
@@ -127,7 +126,7 @@ func (s *Service) mainLoop() {
 
 	for {
 		select {
-		case <-s.stop:
+		case <-s.ctx.Done():
 			return
 		case <-s.ticker.C():
 			updateCoreMetrics()
@@ -153,7 +152,7 @@ func (s *Service) mainLoop() {
 			// push block to events
 			s.blockFeed.Send(block)
 		case block := <-s.blockEvent:
-			// validate, save block and update SQL
+			start := time.Now()
 			err := s.miner.FinalizeBlock(block)
 			if err != nil {
 				log.Errorf("[CoreService] Error finalizing block: %s", err.Error())
@@ -162,23 +161,26 @@ func (s *Service) mainLoop() {
 				s.statusErr = err
 				s.mu.Unlock()
 
-				s.stateFeed.Send(state.ForgeFailed)
-				return
+				if !strings.Contains(err.Error(), "ValidateBlockError") {
+					s.stateFeed.Send(state.ForgeFailed)
+					return
+				} else {
+					continue
+				}
 			}
 
 			blockSize := block.SizeSSZ() / 1024
-			log.Warnf("[CoreService] Block #%d generated. Transactions in block: %d. Size: %d kB", block.Num, len(block.Transactions), blockSize)
+			log.Warnf("[CoreService] Block #%d finalized. Transactions in block: %d. Size: %d kB.", block.Num, len(block.Transactions), blockSize)
+			log.Debugf("Block #%d finalized time %d ms", block.Num, time.Since(start).Milliseconds())
 		}
 	}
 }
 
 // Stop stops tx generator service
 func (s *Service) Stop() error {
-	log.Warn("Stop Core Service.")
-
-	close(s.stop)   // close stop chan
 	s.cancelFunc()  // finish context
 
+	log.Warn("Core service stopped")
 	return nil
 }
 
@@ -192,7 +194,7 @@ func (s *Service) Status() error {
 func (s *Service) waitInitialized() {
 	for {
 		select{
-		case <-s.stop:
+		case <-s.ctx.Done():
 			return
 		case st := <-s.stateEvent:
 			if st == state.Synced {

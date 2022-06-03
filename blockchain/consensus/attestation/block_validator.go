@@ -7,6 +7,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/hash"
+	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	"strconv"
 	"time"
 )
@@ -17,50 +18,24 @@ func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
 	inputExists := map[string]string{}
 
 	var blockInputsBalance, blockOutputsBalance uint64
-	for txIndex, tx := range block.Transactions {
-		txHash := common.BytesToHash(tx.Hash).Hex()
+	for txIndex, txpb := range block.Transactions {
+		txHash := common.BytesToHash(txpb.Hash).Hex()
 
-		// skip collapse tx
-		if tx.Type == common.CollapseTxType {
-			err := cv.validateCollapseTx(tx, block)
-			if err != nil {
-				log.Debugf("Error validating collapse tx %s", txHash)
-				return errors.Wrap(err, "Error validation CollapseTx")
-			}
+		if txpb.Type == common.RewardTxType {
 			continue
-		}
-
-		// validate reward tx and skip it
-		// because reward tx brings inconsistency in block balance
-		if tx.Type == common.RewardTxType {
-			err := cv.validateRewardTx(tx, block)
-			if err != nil {
-				return errors.Wrap(err, "Error validation RewardTx")
-			}
-
-			continue
-		}
-
-		//validate fee tx
-		if tx.Type == common.FeeTxType {
-			err := cv.validateFeeTx(tx, block)
-			if err != nil {
-				return errors.Wrap(err, "Error validation FeeTx")
-			}
 		}
 
 		// check inputs
-		for _, in := range tx.Inputs {
-			inHash := common.BytesToHash(in.Hash)
-			key := inHash.Hex() + "_" + strconv.Itoa(int(in.Index))
+		for _, in := range txpb.Inputs {
+			key := serialize.GenKeyFromPbInput(in)
 			txHashIndex := txHash + "_" + strconv.Itoa(txIndex)
 
 			inputHash, exists := inputExists[key]
 			if exists {
 				curHash := txHashIndex
 
-				log.Errorf("Saved tx: %s", inputHash)
-				log.Errorf("Double spend tx: %s", curHash)
+				log.Errorf("Saved txpb: %s", inputHash)
+				log.Errorf("Double spend txpb: %s", curHash)
 				return errors.Errorf("Block #%d has double input with key %s", block.Num, key)
 			}
 
@@ -69,7 +44,7 @@ func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
 		}
 
 		// check outputs
-		for _, out := range tx.Outputs {
+		for _, out := range txpb.Outputs {
 			blockOutputsBalance += out.Amount
 		}
 	}
@@ -82,14 +57,14 @@ func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
 }
 
 // ValidateBlock validate block and return an error if something is wrong
-func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
+func (cv *CryspValidator) ValidateBlock(block *prototype.Block) (*types.Transaction, error) {
 	start := time.Now()
 
 	// check that block has total balance equal to zero
 	// check that inputs of block don't repeat
 	err := cv.checkBlockBalance(block)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if cv.cfg.EnableMetrics {
@@ -100,17 +75,17 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 	// check block tx root
 	txRoot := hash.GenTxRoot(block.Transactions)
 	if !bytes.Equal(txRoot, block.Txroot) {
-		return errors.Errorf("Block tx root mismatch. Given: %s. Expected: %s.", common.Encode(block.Txroot), common.Encode(txRoot))
+		return nil, errors.Errorf("Block tx root mismatch. Given: %s. Expected: %s.", common.Encode(block.Txroot), common.Encode(txRoot))
 	}
 
 	tstamp := time.Now().UnixNano() + int64(cv.cfg.SlotTime)
 	if tstamp < int64(block.Timestamp) {
-		return errors.Errorf("Wrong block timestamp: %d. Timestamp with slot time: %d.", block.Timestamp, tstamp)
+		return nil, errors.Errorf("Wrong block timestamp: %d. Timestamp with slot time: %d.", block.Timestamp, tstamp)
 	}
 
 	err = cv.verifyBlockSign(block, block.Proposer)
 	if err != nil {
-		return errors.New("Wrong block proposer signature")
+		return nil, errors.New("Wrong block proposer signature")
 	}
 
 	start = time.Now()
@@ -118,7 +93,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 	// check if block is already exists in the database
 	b, err := cv.bc.GetBlockByHash(block.Hash)
 	if err != nil {
-		return errors.New("Error reading block from database.")
+		return nil, errors.New("Error reading block from database.")
 	}
 
 	if cv.cfg.EnableMetrics {
@@ -127,7 +102,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 	}
 
 	if b != nil {
-		return errors.Errorf("ValidateBlock: Block #%d is already exists in blockchain!", block.Num)
+		return nil, errors.Errorf("ValidateBlock: Block #%d is already exists in blockchain!", block.Num)
 	}
 
 	start = time.Now()
@@ -135,7 +110,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 	// find prevBlock
 	prevBlock, err := cv.bc.GetBlockByHash(block.Parent)
 	if err != nil {
-		return errors.Errorf("ValidateBlock: Error reading previous block from database. Hash: %s.", common.BytesToHash(block.Parent))
+		return nil, errors.Errorf("ValidateBlock: Error reading previous block from database. Hash: %s.", common.BytesToHash(block.Parent))
 	}
 
 	if cv.cfg.EnableMetrics {
@@ -144,11 +119,11 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 	}
 
 	if prevBlock == nil {
-		return errors.Errorf("ValidateBlock: Previous Block #%d for given block #%d is not exists.", block.Num-1, block.Num)
+		return nil, errors.Errorf("ValidateBlock: Previous Block #%d for given block #%d is not exists.", block.Num-1, block.Num)
 	}
 
 	if prevBlock.Timestamp >= block.Timestamp {
-		return errors.Errorf("ValidateBlock: Timestamp is too small. Previous: %d. Current: %d.", prevBlock.Timestamp, block.Timestamp)
+		return nil, errors.Errorf("ValidateBlock: Timestamp is too small. Previous: %d. Current: %d.", prevBlock.Timestamp, block.Timestamp)
 	}
 
 	approversCount := cv.countValidSigns(block, block.Approvers)
@@ -156,10 +131,57 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) error {
 
 	log.Infof("Approvers %d, slashers %d", approversCount, slashersCount)
 
-	// TODO check block approvers and slashers
+	failedTx, err := cv.verifyTransactions(block)
+	if err != nil {
+		return failedTx, errors.Wrap(err, "Error verify transactions")
+	}
 
-	return nil
+	return nil, nil
 
+}
+
+func (cv *CryspValidator) verifyTransactions(block *prototype.Block) (*types.Transaction, error) {
+	for _, txpb := range block.Transactions {
+		tx := types.NewTransaction(txpb)
+
+		if common.IsSystemTx(txpb) {
+			var txType string
+			var err error
+			switch tx.Type() {
+			case common.CollapseTxType:
+				err = cv.validateCollapseTx(tx, block)
+				txType = "CollapseTx"
+			case common.FeeTxType:
+				err = cv.validateFeeTx(tx, block)
+				txType = "FeeTx"
+			case common.RewardTxType:
+				err = cv.validateRewardTx(tx, block)
+				txType = "RewardTx"
+			}
+
+			if err != nil {
+				return nil, errors.Wrap(err, "Error validation " + txType)
+			}
+
+			continue
+		}
+
+		err := cv.commitTx(tx)
+		if err != nil {
+			return tx, err
+		}
+	}
+
+	return nil, nil
+}
+
+func (cv *CryspValidator) commitTx(tx *types.Transaction) error {
+	err := cv.ValidateTransactionStruct(tx)
+	if err != nil {
+		return err
+	}
+
+	return cv.ValidateTransaction(tx)
 }
 
 func (cv *CryspValidator) verifyBlockSign(block *prototype.Block, sign *prototype.Sign) error {
