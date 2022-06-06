@@ -19,12 +19,12 @@ func (s *Service) CanSubscribe(topic string) bool {
 		return false
 	}
 
-	 _, exists := topicMap[topic]
+	_, exists := topicMap[topic]
 	return exists
 }
 
 func(s *Service) FilterIncomingSubscriptions(id peer.ID, subs []*pb.RPC_SubOpts) ([]*pb.RPC_SubOpts, error){
-	log.Infof("%v", subs)
+	log.Infof("Got new subscriber %v", id)
 
 	if len(subs) > subscriptionsLimit {
 		return nil, pubsub.ErrTooManySubscriptions

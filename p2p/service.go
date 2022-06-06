@@ -204,6 +204,7 @@ func (s *Service) connectPeer(info peer.AddrInfo) error {
 	}
 
 	log.Infof("Connect to the %s", info.String())
+	s.peerStore.Connect(info.ID)
 
 	return nil
 }
