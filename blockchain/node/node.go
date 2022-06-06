@@ -154,6 +154,7 @@ func (r *RDONode) registerCoreService() error {
 		AttestationPool: attestationService,
 		BlockFeed: r.BlockFeed(),
 		StateFeed: r.StateFeed(),
+		Context:   r.ctx,
 	}
 	srv, err := core.NewService(r.cliCtx, &cfg)
 	if err != nil {
@@ -288,7 +289,6 @@ func (r *RDONode) registerMetricsService() error {
 	host := r.cliCtx.String(flags.MetricsHost.Name)
 	port := r.cliCtx.Int(flags.MetricsPort.Name)
 	endpoint := fmt.Sprintf("%s:%d", host, port)
-
 	srv := metrics.New(endpoint, r.services)
 
 	return r.services.RegisterService(srv)
@@ -337,6 +337,7 @@ func (r *RDONode) Close() {
 	log.Info("Slot ticker stopped.")
 
 	r.services.StopAll()
+	r.cancel()
 
 	if err := r.kvStore.Close(); err != nil {
 		log.Errorf("Failed to close KV database: %v", err)
@@ -346,7 +347,6 @@ func (r *RDONode) Close() {
 		log.Errorf("Failed to close UTxO database: %v", err)
 	}
 
-	r.cancel()
 	close(r.stop)
 }
 
