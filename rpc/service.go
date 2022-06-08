@@ -39,6 +39,7 @@ type Service struct {
 	grpcServer          *grpc.Server
 	connectionMu        sync.RWMutex
 	connectedRPCClients map[net.Addr]bool
+	startFailure 		error
 }
 
 func NewService(ctx context.Context, cfg *Config) *Service {
@@ -60,6 +61,8 @@ func (s *Service) Start() {
 	lis, err := net.Listen("tcp", address)
 	if err != nil {
 		log.Errorf("Could not listen to port in Start() %s: %v", address, err)
+		s.startFailure = err
+		return
 	}
 	s.listener = lis
 	log.WithField("address", address).Infof("gRPC server listening on %s", address)
@@ -101,6 +104,7 @@ func (s *Service) Start() {
 		if s.listener != nil {
 			if err := s.grpcServer.Serve(s.listener); err != nil {
 				log.Errorf("Could not serve gRPC: %v", err)
+				s.startFailure = err
 			}
 		}
 	}()
@@ -120,10 +124,9 @@ func (s *Service) Stop() error {
 
 // Status returns nil or credentialError
 func (s *Service) Status() error {
-	// TODO rework sync status
-	/*if s.cfg.SyncService.Syncing() {
-		return errors.New("syncing")
-	}*/
+	if s.startFailure != nil {
+		return s.startFailure
+	}
 
 	return nil
 }
