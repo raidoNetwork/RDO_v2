@@ -17,7 +17,7 @@ type TxValidator interface {
 // BlockValidator checks only blocks
 type BlockValidator interface {
 	// ValidateBlock validate block and return an error if something is wrong
-	ValidateBlock(*prototype.Block) (*types.Transaction, error)
+	ValidateBlock(*prototype.Block, TxJournal) ([]*types.Transaction, error)
 }
 
 // Validator checks if block or transaction is correct according to the engine rules
@@ -49,8 +49,8 @@ type BlockchainReader interface{
 
 // BlockForger interface for any struct that can create and save block to the database
 type BlockForger interface {
-	// SaveBlock store block to the blockchain.
-	SaveBlock(*prototype.Block) error
+	// FinalizeBlock store block to the blockchain.
+	FinalizeBlock(*prototype.Block) error
 
 	// GetGenesis returns Genesis block
 	GetGenesis() *prototype.Block
@@ -63,9 +63,6 @@ type BlockForger interface {
 
 	// ParentHash return parent block hash for current block
 	ParentHash() []byte
-
-	// ProcessBlock update all given block inputs and outputs state in the SQL database.
-	ProcessBlock(*prototype.Block) error
 
 	// SyncData syncs data in the KV with data in the SQL.
 	SyncData() error
@@ -87,30 +84,33 @@ type TxPool interface {
 
 	// InsertCollapseTx insert collapse tx to the pool
 	InsertCollapseTx(*types.Transaction) error
+
+	TxJournal
+}
+
+type TxJournal interface {
+	IsKnown(*types.Transaction) bool
 }
 
 // StakePool regulates stake slots condition.
 type StakePool interface {
 	// CanStake shows stake slots is filled or not.
-	CanStake() bool
+	CanStake(bool) bool
 
 	// ReserveSlots mark validator slots as filled until block will be forged.
 	ReserveSlots(uint64) error
 
-	// FlushReservedSlots flush all reserved slots
-	FlushReservedSlots()
-
-	// GetStakeSlots returns array of stake slots
-	GetStakeSlots() []string
-
-	// GetRewardPerSlot return reward amount for each stake slot
-	GetRewardPerSlot(uint64) uint64
-
-	// UpdateStakeSlots update stake slots state according to the given block
-	UpdateStakeSlots(block *prototype.Block) error
+	// GetRewardOutputs return array of reward outputs
+	GetRewardOutputs() []*prototype.TxOutput
 
 	// LoadData load initial pool data
 	LoadData() error
+
+	// FinalizeStaking complete all staking pool updates
+	FinalizeStaking([]*types.Transaction) error
+
+	// GetRewardPerSlot return reward per slot
+	GetRewardPerSlot(uint64) uint64
 }
 
 // AttestationPool control block and transaction validation and staking

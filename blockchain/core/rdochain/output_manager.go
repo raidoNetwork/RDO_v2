@@ -19,8 +19,6 @@ var (
 
 const blocksPerTx = 10
 
-// TODO rework error processing
-
 func NewOutputManager(bc *BlockChain, outDB db.OutputStorage) *OutputManager {
 	om := OutputManager{
 		db:          outDB,
@@ -296,7 +294,6 @@ func (om *OutputManager) syncDataInRange(min, max uint64, clear bool) error {
 		if counter%blocksPerTx == 0 {
 			// commit tx
 			if blockNum != min {
-				txIsOpen = false
 				err = om.db.CommitTx(tx)
 				if err != nil {
 					return err

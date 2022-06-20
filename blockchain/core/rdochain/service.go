@@ -10,11 +10,13 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
-	"github.com/urfave/cli/v2"
+	"github.com/sirupsen/logrus"
 	"sync"
 )
 
-func NewService(cliCtx *cli.Context, kv db.BlockStorage, sql db.OutputStorage, stateFeed events.Feed) (*Service, error){
+var log = logrus.WithField("prefix", "blockchain")
+
+func NewService(kv db.BlockStorage, sql db.OutputStorage, stateFeed events.Feed) (*Service, error){
 	cfg := params.RaidoConfig()
 
 	// create blockchain instance
@@ -112,6 +114,7 @@ func (s *Service) CheckBalance() error {
 	currentSum := balanceSum + feeAmount
 
 	updateBalanceMetrics(rewardAmount, feeAmount, balanceSum)
+	log.Debugf("Genesis: %d Rewards: %d Balances: %d Fees: %d", genesisSupply, rewardAmount, balanceSum, feeAmount)
 
 	if targetSum != currentSum {
 		return errors.Errorf("Wrong total supply. Expected: %d. Given: %d.", targetSum, currentSum)
@@ -227,18 +230,27 @@ func (s *Service) ParentHash() []byte{
 	return s.bc.ParentHash()
 }
 
-func (s *Service) SaveBlock(block *prototype.Block) error {
-	return s.bc.SaveBlock(block)
-}
-
-func (s *Service) ProcessBlock(block *prototype.Block) error {
-	return s.outm.ProcessBlock(block)
-}
-
 func (s *Service) SyncData() error {
 	return s.outm.SyncData()
 }
 
 func (s *Service) GetGenesis() *prototype.Block {
 	return s.bc.GetGenesis()
+}
+
+// FinalizeBlock save block to the local databases
+func (s *Service) FinalizeBlock(block *prototype.Block) error {
+	// save block
+	err := s.bc.SaveBlock(block)
+	if err != nil {
+		return errors.Wrap(err, "KV error")
+	}
+
+	// update SQL
+	err = s.outm.ProcessBlock(block)
+	if err != nil {
+		return errors.Wrap(err, "SQL error")
+	}
+
+	return nil
 }

@@ -3,6 +3,7 @@ package attestation
 import (
 	"bytes"
 	"github.com/pkg/errors"
+	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
@@ -57,7 +58,7 @@ func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
 }
 
 // ValidateBlock validate block and return an error if something is wrong
-func (cv *CryspValidator) ValidateBlock(block *prototype.Block) (*types.Transaction, error) {
+func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensus.TxJournal) ([]*types.Transaction, error) {
 	start := time.Now()
 
 	// check that block has total balance equal to zero
@@ -131,7 +132,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) (*types.Transact
 
 	log.Infof("Approvers %d, slashers %d", approversCount, slashersCount)
 
-	failedTx, err := cv.verifyTransactions(block)
+	failedTx, err := cv.verifyTransactions(block, journal)
 	if err != nil {
 		return failedTx, errors.Wrap(err, "Error verify transactions")
 	}
@@ -140,7 +141,8 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block) (*types.Transact
 
 }
 
-func (cv *CryspValidator) verifyTransactions(block *prototype.Block) (*types.Transaction, error) {
+func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal consensus.TxJournal) ([]*types.Transaction, error) {
+	failedTx := make([]*types.Transaction, 0)
 	for _, txpb := range block.Transactions {
 		tx := types.NewTransaction(txpb)
 
@@ -166,10 +168,19 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block) (*types.Tra
 			continue
 		}
 
+		if journal.IsKnown(tx) {
+			continue
+		}
+
 		err := cv.commitTx(tx)
 		if err != nil {
-			return tx, err
+			log.Error(err)
+			failedTx = append(failedTx, tx)
 		}
+	}
+
+	if len(failedTx) > 0 {
+		return failedTx, errors.New("Failed tx validation")
 	}
 
 	return nil, nil
@@ -191,8 +202,9 @@ func (cv *CryspValidator) verifyBlockSign(block *prototype.Block, sign *prototyp
 
 func (cv *CryspValidator) countValidSigns(block *prototype.Block, signatures []*prototype.Sign) int {
 	validCount := 0
+	header := types.NewHeader(block)
 	for _, sign := range signatures {
-		err := cv.verifyBlockSign(block, sign)
+		err := types.GetBlockSigner().Verify(header, sign)
 		if err != nil {
 			continue
 		}

@@ -6,7 +6,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/keystore"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
-	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	utypes "github.com/raidoNetwork/RDO_v2/utils/types"
 	"github.com/sirupsen/logrus"
@@ -15,11 +14,12 @@ import (
 
 var log = logrus.WithField("prefix", "Miner")
 
-var ErrZeroFeeAmount = errors.New("Block has no transactions with fee.")
+var (
+	ErrZeroFeeAmount = errors.New("Block has no transactions with fee.")
+)
 
 const txBatchLimit = 1000
 
-// Config miner options
 type Config struct {
 	EnableMetrics bool
 	BlockSize     int
@@ -28,7 +28,7 @@ type Config struct {
 
 func NewMiner(bc consensus.BlockForger, att consensus.AttestationPool, cfg *Config) *Miner {
 	m := Miner{
-		bc:       bc,
+		bf:       bc,
 		att:      att,
 		cfg:      cfg,
 		skipAddr: map[string]struct{}{},
@@ -38,46 +38,10 @@ func NewMiner(bc consensus.BlockForger, att consensus.AttestationPool, cfg *Conf
 }
 
 type Miner struct {
-	bc   consensus.BlockForger
-	att  consensus.AttestationPool
+	bf  consensus.BlockForger
+	att consensus.AttestationPool
 	cfg      *Config
 	skipAddr map[string]struct{}
-}
-
-func (m *Miner) addRewardTxToBatch(txBatch []*prototype.Transaction, collapseBatch []*prototype.Transaction, totalSize int, bn int64) ([]*prototype.Transaction, []*prototype.Transaction, int, error) {
-	rewardTx, err := m.createRewardTx(m.bc.GetBlockCount())
-	if err != nil {
-		if errors.Is(err, consensus.ErrNoStakers) {
-			log.Warn("No stakers on current block.")
-		} else {
-			return nil, nil, 0, err
-		}
-	} else {
-		txBatch = append(txBatch, rewardTx)
-		totalSize += rewardTx.SizeSSZ()
-
-		log.Debugf("Add RewardTx %s to the block", common.Encode(rewardTx.Hash))
-
-		collapseTx, err := m.createCollapseTx(types.NewTransaction(rewardTx), m.bc.GetBlockCount())
-		if err != nil {
-			log.Errorf("Can't collapse reward tx %s outputs", common.Encode(rewardTx.Hash))
-			return nil, nil, 0, errors.Wrap(err, "Error collapsing tx outputs")
-		}
-
-		if collapseTx != nil {
-			err := m.att.TxPool().InsertCollapseTx(collapseTx)
-			if err != nil {
-				return txBatch, collapseBatch, totalSize, nil
-			}
-
-			collapseBatch = append(collapseBatch, collapseTx.GetTx())
-			totalSize += collapseTx.Size()
-
-			log.Debugf("Add CollapseTx %s to the block %d", collapseTx.Hash().Hex(), bn)
-		}
-	}
-
-	return txBatch, collapseBatch, totalSize, nil
 }
 
 // ForgeBlock create block from tx pool data
@@ -153,7 +117,7 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 		txBatch = append(txBatch, tx.GetTx())
 		log.Debugf("Add StandardTx %s to the block %d", hash, bn)
 
-		collapseTx, err := m.createCollapseTx(tx, m.bc.GetBlockCount())
+		collapseTx, err := m.createCollapseTx(tx, m.bf.GetBlockCount())
 		if err != nil {
 			log.Errorf("Can't collapse tx %s outputs", hash)
 			return nil, errors.Wrap(err, "Error collapsing tx outputs")
@@ -198,7 +162,7 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 	m.skipAddr = map[string]struct{}{}
 
 	// get block instance
-	block := types.NewBlock(m.bc.GetBlockCount(), m.bc.ParentHash(), txBatch, m.cfg.Proposer)
+	block := types.NewBlock(m.bf.GetBlockCount(), m.bf.ParentHash(), txBatch, m.cfg.Proposer)
 
 	end := time.Since(start)
 	log.Warnf("Generate block with transactions count: %d. TxPool transactions count: %d. Size: %d kB. Time: %s", len(txBatch), txQueueLen, totalSize/1024, common.StatFmt(end))
@@ -209,48 +173,78 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 
 // FinalizeBlock validate given block and save it to the blockchain
 func (m *Miner) FinalizeBlock(block *prototype.Block) error {
-	finalizeStart := time.Now()
+	start := time.Now()
 
 	// validate block
-	failedTx, err := m.att.Validator().ValidateBlock(block)
+	failedTx, err := m.att.Validator().ValidateBlock(block, m.att.TxPool())
 	if err != nil {
 		if failedTx != nil {
-			m.att.TxPool().Finalize([]*types.Transaction{failedTx})
+			m.att.TxPool().Finalize(failedTx)
 		}
 		return errors.Wrap(err, "ValidateBlockError")
 	}
 
 	// save block
-	err = m.bc.SaveBlock(block)
+	err = m.bf.FinalizeBlock(block)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "FinalizeBlockError")
 	}
 
-	// update SQL
-	err = m.bc.ProcessBlock(block)
-	if err != nil {
-		return errors.Wrap(err, "Error process block")
-	}
+	typedBatch := utypes.PbTxBatchToTyped(block.Transactions)
 
 	// clear pool
-	m.att.TxPool().Finalize(utypes.PbTxBatchToTyped(block.Transactions))
+	m.att.TxPool().Finalize(typedBatch)
 
-	err = m.att.StakePool().UpdateStakeSlots(block)
+	// update stake pool data
+	err = m.att.StakePool().FinalizeStaking(typedBatch)
 	if err != nil {
 		return errors.Wrap(err, "StakePool error")
 	}
 
-	// Reset reserved validator slots
-	m.att.StakePool().FlushReservedSlots()
-
-	err = m.bc.CheckBalance()
+	err = m.bf.CheckBalance()
 	if err != nil {
 		return errors.Wrap(err, "Balances inconsistency")
 	}
 
-	finalizeBlockTime.Observe(float64(time.Since(finalizeStart).Milliseconds()))
+	finalizeBlockTime.Observe(float64(time.Since(start).Milliseconds()))
 
 	return nil
+}
+
+func (m *Miner) addRewardTxToBatch(txBatch []*prototype.Transaction, collapseBatch []*prototype.Transaction, totalSize int, bn int64) ([]*prototype.Transaction, []*prototype.Transaction, int, error) {
+	rewardTx, err := m.createRewardTx(m.bf.GetBlockCount())
+	if err != nil {
+		if errors.Is(err, consensus.ErrNoStakers) {
+			log.Warn(err)
+		} else {
+			return nil, nil, 0, err
+		}
+	} else {
+		txBatch = append(txBatch, rewardTx)
+		totalSize += rewardTx.SizeSSZ()
+
+		log.Debugf("Add RewardTx %s to the block", common.Encode(rewardTx.Hash))
+
+		collapseTx, err := m.createCollapseTx(types.NewTransaction(rewardTx), m.bf.GetBlockCount())
+		if err != nil {
+			log.Errorf("Can't collapse reward tx %s outputs", common.Encode(rewardTx.Hash))
+			return nil, nil, 0, errors.Wrap(err, "Error collapsing tx outputs")
+		}
+
+		if collapseTx != nil {
+			err := m.att.TxPool().InsertCollapseTx(collapseTx)
+			if err != nil {
+				return txBatch, collapseBatch, totalSize, nil
+			}
+
+			collapseBatch = append(collapseBatch, collapseTx.GetTx())
+			totalSize += collapseTx.Size()
+
+			log.Debugf("Add CollapseTx %s to the block %d", collapseTx.Hash().Hex(), bn)
+		}
+	}
+
+	return txBatch, collapseBatch, totalSize, nil
 }
 
 func (m *Miner) createFeeTx(txarr []*prototype.Transaction) (*prototype.Transaction, error) {
@@ -270,7 +264,7 @@ func (m *Miner) createFeeTx(txarr []*prototype.Transaction) (*prototype.Transact
 		},
 		Type: common.FeeTxType,
 		Fee:  0,
-		Num:  m.bc.GetBlockCount(),
+		Num:  m.bf.GetBlockCount(),
 	}
 
 	ntx, err := types.NewPbTransaction(opts, nil)
@@ -282,9 +276,7 @@ func (m *Miner) createFeeTx(txarr []*prototype.Transaction) (*prototype.Transact
 }
 
 func (m *Miner) createRewardTx(blockNum uint64) (*prototype.Transaction, error) {
-	slots := m.att.StakePool().GetStakeSlots()
-	outs := m.createRewardOutputs(slots)
-
+	outs := m.att.StakePool().GetRewardOutputs()
 	if len(outs) == 0 {
 		return nil, consensus.ErrNoStakers
 	}
@@ -331,7 +323,7 @@ func (m *Miner) createCollapseTx(tx *types.Transaction, blockNum uint64) (*types
 			continue
 		}
 
-		utxo, err := m.bc.FindAllUTxO(addr)
+		utxo, err := m.bf.FindAllUTxO(addr)
 		if err != nil {
 			return nil, err
 		}
@@ -384,40 +376,4 @@ func (m *Miner) createCollapseTx(tx *types.Transaction, blockNum uint64) (*types
 	}
 
 	return types.NewTransaction(collapseTx), nil
-}
-
-func (m *Miner) createRewardOutputs(slots []string) []*prototype.TxOutput {
-	size := len(slots)
-
-	data := make([]*prototype.TxOutput, 0, size)
-	if size == 0 {
-		return data
-	}
-
-	// divide reward among all validator slots
-	reward := m.getRewardAmount(size)
-
-	rewardMap := map[string]uint64{}
-	for _, addrHex := range slots {
-		if _, exists := rewardMap[addrHex]; exists {
-			rewardMap[addrHex] += reward
-		} else {
-			rewardMap[addrHex] = reward
-		}
-	}
-
-	for addr, amount := range rewardMap {
-		addr := common.HexToAddress(addr)
-		data = append(data, types.NewOutput(addr.Bytes(), amount, nil))
-	}
-
-	return data
-}
-
-func (m *Miner) getRewardAmount(size int) uint64 {
-	if size == 0 {
-		return 0
-	}
-
-	return params.RaidoConfig().RewardBase / uint64(size)
 }

@@ -31,6 +31,8 @@ func Ticker() *SlotTicker {
 type SlotTicker struct{
 	slot uint64
 	epoch uint64
+	startEpochSlot uint64
+	lastEpochSlot uint64
 
 	slotDuration time.Duration
 	slotSec int64
@@ -65,11 +67,17 @@ func (st *SlotTicker) Start(genesisTime time.Time) error {
 		nextTickTime = genesisTime.Add(nextTick)
 	}
 
+	slotsPerEpoch := params.RaidoConfig().SlotsPerEpoch
+
 	// count current slot
 	st.slot = st.currentSlot(genesisTime)
 
 	// count current epoch
 	st.epoch = st.currentEpoch()
+
+	// slots data
+	st.startEpochSlot = st.epoch * slotsPerEpoch
+	st.lastEpochSlot = st.startEpochSlot + slotsPerEpoch
 
 	go func() {
 		for {
@@ -81,8 +89,11 @@ func (st *SlotTicker) Start(genesisTime time.Time) error {
 
 				st.mu.Lock()
 				st.slot++
-				if st.slot % params.RaidoConfig().SlotsPerEpoch == 0 && st.slot > 0 {
+
+				if st.slot % slotsPerEpoch == 0 && st.slot > 0 {
 					st.epoch++
+					st.startEpochSlot = st.slot
+					st.lastEpochSlot = st.slot + slotsPerEpoch
 				}
 				st.mu.Unlock()
 
@@ -124,4 +135,11 @@ func (st *SlotTicker) currentSlot(genesisTime time.Time) uint64 {
 
 func (st *SlotTicker) currentEpoch() uint64 {
 	return st.slot / params.RaidoConfig().SlotsPerEpoch
+}
+
+func (st *SlotTicker) IsLastEpochSlot() bool {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	return st.slot == st.lastEpochSlot
 }

@@ -7,7 +7,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	utypes "github.com/raidoNetwork/RDO_v2/utils/types"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"sort"
 	"sync"
 )
@@ -16,6 +16,8 @@ const (
 	maxTxCount = 1000
 	minFee = 1
 )
+
+var log = logrus.WithField("prefix", "attestation")
 
 type PoolSettings struct {
 	Validator consensus.TxValidator
@@ -38,7 +40,7 @@ type Pool struct {
 	pending Transactions
 	cfg *PoolSettings
 
-	lock      sync.Mutex
+	mu        sync.Mutex
 	queueLock sync.Mutex
 }
 
@@ -64,12 +66,11 @@ func (p *Pool) Insert(tx *types.Transaction) error {
 	}
 
 	p.finalizeInsert(tx)
+	log.Debugf("Insert tx %s", tx.Hash().Hex())
 
 	if len(p.txHashMap) + 1 == maxTxCount {
 		p.cleanWorst()
 	}
-
-	log.Debugf("Insert tx %s", tx.Hash().Hex())
 
 	return nil
 }
@@ -111,11 +112,11 @@ func (p *Pool) swap(oldTx, newTx *types.Transaction) error {
 	}
 	p.queueLock.Unlock()
 
-	p.lock.Lock()
+	p.mu.Lock()
 	delete(p.txHashMap, oldTx.Hash().Hex())
 	p.txHashMap[newTx.Hash().Hex()] = newTx
 	p.txSenderMap[newTx.From().Hex()] = newTx
-	p.lock.Unlock()
+	p.mu.Unlock()
 
 	log.Debugf("Swap %s with %s", oldTx.Hash().Hex(), newTx.Hash().Hex())
 
@@ -123,10 +124,10 @@ func (p *Pool) swap(oldTx, newTx *types.Transaction) error {
 }
 
 func (p *Pool) finalizeInsert(tx *types.Transaction) {
-	p.lock.Lock()
+	p.mu.Lock()
 	p.txSenderMap[tx.From().Hex()] = tx
 	p.txHashMap[tx.Hash().Hex()] = tx
-	p.lock.Unlock()
+	p.mu.Unlock()
 
 	p.queueLock.Lock()
 	p.pending = append(p.pending, tx)
@@ -138,10 +139,10 @@ func (p *Pool) cleanWorst() {
 	lastIndex := len(queue) - 1
 	worst := queue[lastIndex]
 
-	p.lock.Lock()
+	p.mu.Lock()
 	delete(p.txHashMap, worst.Hash().Hex())
 	delete(p.txSenderMap, worst.From().Hex())
-	p.lock.Unlock()
+	p.mu.Unlock()
 
 	p.queueLock.Lock()
 	p.pending = p.pending[:lastIndex]
@@ -156,8 +157,6 @@ func (p *Pool) validateTx(tx *types.Transaction) error {
 		return err
 	}
 
-	// todo check locked inputs here
-
 	return p.cfg.Validator.ValidateTransaction(tx)
 }
 
@@ -166,8 +165,8 @@ func (p *Pool) InsertCollapseTx(tx *types.Transaction) error {
 		return errors.New("Wrong tx type given")
 	}
 
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	senders := map[string]struct{}{}
 	for _, in := range tx.Inputs() {
@@ -215,7 +214,7 @@ func (p *Pool) GetFeePrice() uint64 {
 }
 
 func (p *Pool) Finalize(txarr []*types.Transaction) {
-	p.lock.Lock()
+	p.mu.Lock()
 
 	for _, tx := range txarr {
 		if utypes.IsSystemTx(tx) && tx.Type() != common.CollapseTxType {
@@ -235,7 +234,7 @@ func (p *Pool) Finalize(txarr []*types.Transaction) {
 		p.cleanTransactionMap(rtx)
 	}
 
-	p.lock.Unlock()
+	p.mu.Unlock()
 }
 
 func (p *Pool) findPoolTransaction(tx *types.Transaction) (*types.Transaction, int, error) {
@@ -297,13 +296,29 @@ func (p *Pool) DeleteTransaction(tx *types.Transaction) error {
 		return errors.Errorf("Not found tx %s", tx.Hash().Hex())
 	}
 
-	p.lock.Lock()
+	p.mu.Lock()
 	p.cleanTransactionMap(tx)
-	p.lock.Unlock()
+	p.mu.Unlock()
 
 	log.Debugf("Delete transaction %s", tx.Hash().Hex())
 
 	return nil
+}
+
+func (p *Pool) IsKnown(tx *types.Transaction) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	oldTx, exists := p.txSenderMap[tx.From().Hex()]
+	if !exists {
+		return false
+	}
+
+	if bytes.Equal(oldTx.Hash(), tx.Hash()) {
+		return true
+	}
+
+	return oldTx.HasDouble(tx.Hash())
 }
 
 type Transactions []*types.Transaction

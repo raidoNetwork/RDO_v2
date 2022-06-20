@@ -215,7 +215,7 @@ func (r *RDONode) registerGatewayService() error {
 }
 
 func (r *RDONode) registerBlockchainService() error {
-	srv, err := rdochain.NewService(r.cliCtx, r.kvStore, r.outDB, r.StateFeed())
+	srv, err := rdochain.NewService(r.kvStore, r.outDB, r.StateFeed())
 	if err != nil {
 		return err
 	}

@@ -52,7 +52,7 @@ func (cv *CryspValidator) ValidateTransaction(tx *types.Transaction) error {
 	case common.UnstakeTxType:
 		return cv.validateUnstakeTx(tx)
 	case common.StakeTxType:
-		if !cv.stakeValidator.CanStake() {
+		if !cv.stakeValidator.CanStake(false) {
 			return consensus.ErrStakeLimit
 		}
 
@@ -68,7 +68,7 @@ func (cv *CryspValidator) ValidateTransaction(tx *types.Transaction) error {
 func (cv *CryspValidator) ValidateTransactionStruct(tx *types.Transaction) error {
 	// if tx has type different from normal return error
 	if !utypes.IsStandardTx(tx) {
-		return errors.Errorf("Transaction has wrong type: %d.", tx.Type)
+		return errors.Errorf("Transaction has wrong type: %d.", tx.Type())
 	}
 
 	// check minimal fee value
@@ -132,7 +132,7 @@ func (cv *CryspValidator) validateTxInputs(tx *types.Transaction) error {
 	inputsSize := len(tx.Inputs())
 
 	if utxoSize != inputsSize {
-		return errors.Errorf("ValidateTransaction: Inputs size mismatch: real - %d given - %d. Address: %s", utxoSize, inputsSize, from)
+		return errors.Errorf("ValidateTransaction: Inputs size mismatch: real - %d given - %d. Address: %s. Tx: %s", utxoSize, inputsSize, from, tx.Hash().Hex())
 	}
 
 	if utxoSize == 0 {
@@ -286,7 +286,7 @@ func (cv *CryspValidator) validateCollapseTx(tx *types.Transaction, block *proto
 func (cv *CryspValidator) validateFeeTx(tx *types.Transaction, block *prototype.Block) error {
 	// if tx has type different from fee return error
 	if tx.Type() != common.FeeTxType {
-		return errors.Errorf("Transaction has wrong type: %d.", tx.Type)
+		return errors.Errorf("Transaction has wrong type: %d.", tx.Type())
 	}
 
 	if len(tx.Outputs()) != 1 {
@@ -315,12 +315,12 @@ func (cv *CryspValidator) validateFeeTx(tx *types.Transaction, block *prototype.
 func (cv *CryspValidator) validateRewardTx(tx *types.Transaction, block *prototype.Block) error {
 	// if tx has type different from fee return error
 	if tx.Type() != common.RewardTxType {
-		return errors.Errorf("Transaction has wrong type: %d.", tx.Type)
+		return errors.Errorf("Transaction has wrong type: %d.", tx.Type())
 	}
 
 	rewardSize := len(tx.Outputs())
 	if rewardSize == 0 || rewardSize > cv.cfg.ValidatorRegistryLimit {
-		return errors.Errorf("Wrong outputs size. Given: %d. Expected: <= %d.", rewardSize, cv.cfg.ValidatorRegistryLimit)
+		return errors.Errorf("Wrong outputs size. Given: %d. Expected: 0 < x <= %d.", rewardSize, cv.cfg.ValidatorRegistryLimit)
 	}
 
 	// reward tx num should be equal to the block num
@@ -340,15 +340,8 @@ func (cv *CryspValidator) validateRewardTx(tx *types.Transaction, block *prototy
 	receivers := map[string]uint64{}
 	for _, uo := range stakeDeposits {
 		to = uo.To.Hex()
-
 		userSlots = uo.Amount / cv.cfg.StakeUnit
-
-		if _, exists := receivers[to]; exists {
-			receivers[to] += userSlots
-		} else {
-			receivers[to] = userSlots
-		}
-
+		receivers[to] += userSlots
 		slots += userSlots
 	}
 

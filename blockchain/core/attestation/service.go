@@ -12,7 +12,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/status"
 	"time"
 )
@@ -44,6 +43,7 @@ func NewService(parentCtx context.Context, cfg *Config) (*Service, error) {
 	// new block and tx validator
 	validator := attestation.NewCryspValidator(cfg.Blockchain, stakePool, &validatorCfg)
 
+	// new tx pool
 	txPool := NewPool(&PoolSettings{
 		Validator: validator,
 		MinimalFee: chainConfig.MinimalFee,
@@ -82,11 +82,10 @@ type Service struct{
 }
 
 func (s *Service) Start(){
-	// lock for sync
+	// wait for sync
 	err := s.waitSyncing()
 	if err != nil {
-		log.WithError(err).Error("Stake pool error")
-		return
+		panic(errors.Wrap(err, "Stake pool error"))
 	}
 
 	// start tx pool work
@@ -105,6 +104,7 @@ func (s *Service) txListener() {
 				log.Error(errors.Wrap(err , "Transaction listener error"))
 			}
 		case <-s.ctx.Done():
+			log.Debugf("Stop Transaction listener loop")
 			return
 		}
 	}
@@ -120,7 +120,6 @@ func (s *Service) Stop() error {
 	log.Info("Stop Attestation service")
 	return nil
 }
-
 
 // SendRawTx implements PoolAPI for gRPC gateway
 func (s *Service) SendRawTx(tx *prototype.Transaction) error {
@@ -143,11 +142,9 @@ func (s *Service) GetFee() uint64 {
 func (s *Service) GetPendingTransactions() ([]*prototype.Transaction, error) {
 	queue := s.txPool.GetQueue()
 	res := make([]*prototype.Transaction, 0, len(queue))
-
 	for _, tx := range queue {
 		res = append(res, tx.GetTx())
 	}
-
 	return res, nil
 }
 
@@ -175,8 +172,6 @@ func (s *Service) waitSyncing() error {
 		if st == state.Synced {
 			return s.stakePool.LoadData()
 		}
-
-		time.Sleep(500 * time.Millisecond)
 	}
 
 	return nil

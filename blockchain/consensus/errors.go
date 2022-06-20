@@ -10,7 +10,5 @@ var (
 	ErrStakeLimit     = errors.New("All stake slots are filled.")
 	ErrBadNonce       = errors.New("Wrong transaction nonce.")
 	ErrBadTxType      = errors.New("Undefined tx type.")
-	ErrEmptyInputs    = errors.New("No inputs.")
-	ErrEmptyOutputs   = errors.New("No outputs.")
 	ErrBadInputOwner  = errors.New("Bad input owner")
 )

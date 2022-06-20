@@ -15,7 +15,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
-	"strings"
 	"sync"
 	"time"
 )
@@ -136,6 +135,8 @@ func (s *Service) mainLoop() {
 				continue
 			}
 
+			start := time.Now()
+
 			// generate block with block miner
 			block, err := s.miner.ForgeBlock()
 			if err != nil {
@@ -151,8 +152,11 @@ func (s *Service) mainLoop() {
 
 			// push block to events
 			s.blockFeed.Send(block)
+
+			log.Debugf("Block #%d forged in %d ms", block.Num, time.Since(start).Milliseconds())
 		case block := <-s.blockEvent:
 			start := time.Now()
+
 			err := s.miner.FinalizeBlock(block)
 			if err != nil {
 				log.Errorf("[CoreService] Error finalizing block: %s", err.Error())
@@ -161,12 +165,7 @@ func (s *Service) mainLoop() {
 				s.statusErr = err
 				s.mu.Unlock()
 
-				if !strings.Contains(err.Error(), "ValidateBlockError") {
-					s.stateFeed.Send(state.ForgeFailed)
-					return
-				} else {
-					continue
-				}
+				return
 			}
 
 			blockSize := block.SizeSSZ() / 1024

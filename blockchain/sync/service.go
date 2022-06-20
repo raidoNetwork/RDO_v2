@@ -7,7 +7,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/p2p"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
-	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	"github.com/sirupsen/logrus"
@@ -80,12 +79,6 @@ type Service struct{
 func (s *Service) Start(){
 	// syncBlocks with network
 	s.syncData()
-
-	// set stream handler for block receiving
-	s.cfg.P2P.SetStreamHandler(p2p.BlockRangeTopic, func (stream network.Stream) {
-		defer stream.Close()
-
-	})
 
 	// gossip new blocks and transactions
 	go s.gossipEvents()
@@ -174,6 +167,8 @@ func (s *Service) listenIncoming() {
 				}
 
 				log.Infof("Block received %d", block.Num)
+
+				//s.cfg.BlockFeed.Send(block)
 			case p2p.TxTopic:
 				tx, err := serialize.UnmarshalTx(notty.Data)
 				if err != nil {
@@ -181,7 +176,7 @@ func (s *Service) listenIncoming() {
 					break
 				}
 
-				log.Infof("Tx received %s", common.Encode(tx.Hash))
+				s.cfg.TxFeed.Send(types.NewTransaction(tx))
 			default:
 				log.Warnf("Unsupported notification %s", notty.Topic)
 			}
@@ -193,7 +188,6 @@ func (s *Service) syncBlocks(){
 	log.Println("Data synced")
 
 	// todo implement sync logic
-	// todo add listeners for updates
 
 	// send ready event
 	s.cfg.StateFeed.Send(state.Synced)

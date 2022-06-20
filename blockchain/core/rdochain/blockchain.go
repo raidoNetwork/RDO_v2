@@ -8,7 +8,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
-	"github.com/sirupsen/logrus"
 	"sync"
 	"time"
 )
@@ -16,8 +15,6 @@ import (
 const (
 	GenesisBlockNum = 0
 )
-
-var log = logrus.WithField("prefix", "blockchain")
 
 func NewBlockChain(db db.BlockStorage, cfg *params.RDOBlockChainConfig) *BlockChain {
 	genesisHash := make([]byte, 32)
