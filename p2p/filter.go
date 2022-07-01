@@ -19,7 +19,7 @@ func (s *Service) CanSubscribe(topic string) bool {
 		return false
 	}
 
-	_, exists := topicMap[topic]
+	 _, exists := topicMap[topic]
 	return exists
 }
 

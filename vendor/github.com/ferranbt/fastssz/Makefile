@@ -1,11 +1,13 @@
 
 .PHONY:
 build-spec-tests:
-	go run sszgen/*.go --path ./spectests/structs.go --include ./spectests/external,./spectests/external2
-
-build-spec-tests-tree:
-	go run sszgen/*.go --path ./spectests/structs.go --objs AttestationData --experimental
+	go run github.com/ferranbt/fastssz/sszgen --path ./spectests/structs.go --include ./spectests/external,./spectests/external2 --exclude-objs Hash
+	go run github.com/ferranbt/fastssz/sszgen --path ./tests/codetrie.go
 
 .PHONY:
 get-spec-tests:
-	./scripts/download-spec-tests.sh v1.1.0-alpha.4-pre2
+	./scripts/download-spec-tests.sh v1.1.10
+
+.PHONY:
+generate-testcases:
+	go generate ./...

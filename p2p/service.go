@@ -2,6 +2,8 @@ package p2p
 
 import (
 	"context"
+	"fmt"
+	ssz "github.com/ferranbt/fastssz"
 	"github.com/libp2p/go-libp2p"
 	phost "github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
@@ -10,25 +12,35 @@ import (
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
+	"github.com/raidoNetwork/RDO_v2/blockchain/state"
 	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/utils/async"
 	"github.com/sirupsen/logrus"
+	"io"
 	"net"
 	"sync"
 	"time"
 )
 
 var log = logrus.WithField("prefix", "p2p")
-var maxDialTimeout = params.RaidoConfig().ResponseTimeout
+var maxDialTimeout = time.Duration(params.RaidoConfig().ResponseTimeout) * time.Second
 
-const messageQueueSize = 256
+const (
+	messageQueueSize = 256
+	MaxChunkSize = 1 << 20
+)
+
+type ConnectionHandler func(context.Context, peer.ID) error
+
+// todo update peerdata
 
 type Config struct {
 	Host           string
 	Port           int
 	BootstrapNodes []string
 	DataDir        string
+	StateFeed	   events.Feed
 }
 
 func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
@@ -58,6 +70,7 @@ func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
 		cfg:     cfg,
 		topics:  map[string]*pubsub.Topic{},
 		subs:	 map[string]*pubsub.Subscription{},
+		stateEvent: make(chan state.State, 1),
 	}
 
 	opts, err := srv.optionsList(nodePrivKey, p2pHostAddr, cfg)
@@ -101,6 +114,7 @@ type Service struct {
 	pubsub  *pubsub.PubSub
 	topics map[string]*pubsub.Topic
 	subs   map[string]*pubsub.Subscription
+	stateEvent chan state.State
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -119,8 +133,10 @@ type Service struct {
 }
 
 func (s *Service) Start() {
+	// wait local db syncing
+	s.waitLocalSync()
+
 	s.logID()
-	s.addConnectionHandlers()
 
 	// start new peer search
 	err := s.setupDiscovery()
@@ -149,6 +165,18 @@ func (s *Service) Start() {
 }
 
 func (s *Service) Stop() error {
+	// cancel stream handlers
+	for _, p := range s.host.Mux().Protocols() {
+		s.host.RemoveStreamHandler(protocol.ID(p))
+	}
+
+	// cancel topic subscribes
+	for _, t := range s.pubsub.GetTopics() {
+		if sub, exists := s.subs[t]; exists {
+			sub.Cancel()
+		}
+	}
+
 	if err := s.host.Close(); err != nil {
 		return err
 	}
@@ -323,21 +351,142 @@ func (s *Service) Notifier() *events.Bus {
 	return &s.notifier
 }
 
-func (s *Service) addConnectionHandlers() {
+func (s *Service) AddConnectionHandlers(connectHandler, disconnectHandler ConnectionHandler) {
 	s.host.Network().Notify(&network.NotifyBundle{
 		ConnectedF: func(n network.Network, conn network.Conn) {
 			remotePeer := conn.RemotePeer()
-			log.Debugf("Connected to the peer %s", remotePeer.String())
-			s.peerStore.Connect(remotePeer)
+
+			// it should be non-blocking
+			go func() {
+				log.Debugf("Connected to the peer %s", remotePeer.String())
+				s.peerStore.Connect(remotePeer)
+
+				if err := connectHandler(s.ctx, remotePeer); err != nil {
+					log.Errorf("Can't exec connect handler with %s: %s", remotePeer, err)
+				}
+			} ()
+
 		},
 		DisconnectedF: func(n network.Network, conn network.Conn) {
 			remotePeer := conn.RemotePeer()
-			log.Debugf("Disconnected peer %s", remotePeer.String())
-			s.peerStore.Disconnect(remotePeer)
+
+			go func() {
+				log.Debugf("Disconnected peer %s", remotePeer.String())
+				s.peerStore.Disconnect(remotePeer)
+				if err := disconnectHandler(s.ctx, remotePeer); err != nil {
+					log.Errorf("Can't exec disconnect handler with %s: %s", remotePeer, err)
+				}
+			} ()
 		},
 	})
 }
 
 func (s *Service) SetStreamHandler(topic string, handler network.StreamHandler) {
 	s.host.SetStreamHandler(protocol.ID(topic), handler)
+}
+
+func (s *Service) DecodeStream(r io.Reader, to ssz.Unmarshaler) error {
+	msgLen, err := readVarint(r)
+	if err != nil {
+		return err
+	}
+	if msgLen > MaxChunkSize {
+		return fmt.Errorf(
+			"remaining bytes %d goes over the provided max limit of %d",
+			msgLen,
+			MaxChunkSize,
+		)
+	}
+	msgMax, err := maxLength(msgLen)
+	if err != nil {
+		return err
+	}
+	limitedRdr := io.LimitReader(r, int64(msgMax))
+	r = newBufferedReader(limitedRdr)
+	defer bufReaderPool.Put(r)
+
+	buf := make([]byte, msgLen)
+	// Returns an error if less than msgLen bytes
+	// are read. This ensures we read exactly the
+	// required amount.
+	_, err = io.ReadFull(r, buf)
+	if err != nil {
+		return err
+	}
+	return to.UnmarshalSSZ(buf)
+}
+
+func (s *Service) EncodeStream(w io.Writer, msg ssz.Marshaler) (int, error) {
+	if msg == nil {
+		return 0, nil
+	}
+	b, err := msg.MarshalSSZ()
+	if err != nil {
+		return 0, err
+	}
+	if uint64(len(b)) > MaxChunkSize {
+		return 0, fmt.Errorf(
+			"size of encoded message is %d which is larger than the provided max limit of %d",
+			len(b),
+			MaxChunkSize,
+		)
+	}
+	// write varint first
+	_, err = w.Write(writeVarint(len(b)))
+	if err != nil {
+		return 0, err
+	}
+	return writeSnappyBuffer(w, b)
+}
+
+func (s *Service) PeerStore() *PeerStore {
+	return s.peerStore
+}
+
+func (s *Service) CreateStream(ctx context.Context, msg ssz.Marshaler, topic string, pid peer.ID) (network.Stream, error) {
+	// Apply max dial timeout when opening a new stream.
+	ctx, cancel := context.WithTimeout(ctx, maxDialTimeout)
+	defer cancel()
+
+	stream, err := s.host.NewStream(ctx, pid, protocol.ID(topic))
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := s.EncodeStream(stream, msg); err != nil {
+		_err := stream.Reset()
+		_ = _err
+		return nil, err
+	}
+
+	// Close stream for writing.
+	if err := stream.CloseWrite(); err != nil {
+		_err := stream.Reset()
+		_ = _err
+		return nil, err
+	}
+
+	return stream, nil
+}
+
+func (s *Service) waitLocalSync(){
+	sub := s.cfg.StateFeed.Subscribe(s.stateEvent)
+	defer sub.Unsubscribe()
+
+	for {
+		select{
+		case <-s.ctx.Done():
+			return
+		case st := <-s.stateEvent:
+			switch st {
+			case state.LocalSynced:
+				fallthrough
+			case state.Synced:
+				return
+			default:
+				log.Infof("Unknown state event %d", st)
+				return
+			}
+		}
+	}
 }

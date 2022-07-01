@@ -49,7 +49,7 @@ type RDONode struct {
 	stop     chan struct{} // Channel to wait for termination notifications.
 	kvStore  db.Database
 	outDB    db.OutputDatabase
-	stateFeed events.Bus
+    stateFeed events.Bus
 	blockFeed events.Bus
 	txFeed	  events.Bus
 }
@@ -95,12 +95,6 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 		return nil, err
 	}
 
-	// register sync service
-	if err := rdo.registerSyncService(); err != nil {
-		log.Error("Error register sync service.")
-		return nil, errors.Wrap(err, "sync error")
-	}
-
 	// register attestation service
 	if err := rdo.registerAttestationService(); err != nil {
 		log.Error("Error register BlockchainService.")
@@ -111,6 +105,12 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 	if err := rdo.registerCoreService(); err != nil {
 		log.Error("Error register ChainService.")
 		return nil, err
+	}
+
+	// register sync service
+	if err := rdo.registerSyncService(); err != nil {
+		log.Error("Error register sync service.")
+		return nil, errors.Wrap(err, "sync error")
 	}
 
 	// register RPC service
@@ -251,6 +251,7 @@ func (r *RDONode) registerP2P() error {
 		Port: r.cliCtx.Int(flags.P2PPort.Name),
 		BootstrapNodes: r.cliCtx.StringSlice(flags.P2PBootstrapNodes.Name),
 		DataDir: r.cliCtx.String(cmd.DataDirFlag.Name),
+		StateFeed: r.StateFeed(),
 	}
 	srv, err := p2p.NewService(r.ctx, &cfg)
 	if err != nil {
@@ -273,11 +274,18 @@ func (r *RDONode) registerSyncService() error {
 		return err
 	}
 
+	var coreService *core.Service
+	err = r.services.FetchService(&coreService)
+	if err != nil {
+		return err
+	}
+
 	cfg := rsync.Config{
 		BlockFeed: r.BlockFeed(),
 		TxFeed: r.TxFeed(),
 		StateFeed: r.StateFeed(),
 		P2P: p2pSrv,
+		Storage: coreService,
 		Blockchain: blockchainService,
 	}
 	srv := rsync.NewService(r.ctx, &cfg)

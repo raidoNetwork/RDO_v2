@@ -69,6 +69,8 @@ func (st *SlotTicker) Start(genesisTime time.Time) error {
 
 	slotsPerEpoch := params.RaidoConfig().SlotsPerEpoch
 
+	st.mu.Lock()
+
 	// count current slot
 	st.slot = st.currentSlot(genesisTime)
 
@@ -79,27 +81,29 @@ func (st *SlotTicker) Start(genesisTime time.Time) error {
 	st.startEpochSlot = st.epoch * slotsPerEpoch
 	st.lastEpochSlot = st.startEpochSlot + slotsPerEpoch
 
+	st.mu.Unlock()
+
 	go func() {
 		for {
 			waitTime := time.Until(nextTickTime)
 
 			select {
-			case <-time.After(waitTime):
-				st.c <- st.slot
+				case <-time.After(waitTime):
+					st.c <- st.slot
 
-				st.mu.Lock()
-				st.slot++
+					st.mu.Lock()
+					st.slot++
 
-				if st.slot % slotsPerEpoch == 0 && st.slot > 0 {
-					st.epoch++
-					st.startEpochSlot = st.slot
-					st.lastEpochSlot = st.slot + slotsPerEpoch
-				}
-				st.mu.Unlock()
+					if st.slot % slotsPerEpoch == 0 && st.slot > 0 {
+						st.epoch++
+						st.startEpochSlot = st.slot
+						st.lastEpochSlot = st.slot + slotsPerEpoch
+					}
+					st.mu.Unlock()
 
-				nextTickTime = nextTickTime.Add(st.slotDuration)
-			case <-st.done:
-				return
+					nextTickTime = nextTickTime.Add(st.slotDuration)
+				case <-st.done:
+					return
 			}
 		}
 	}()

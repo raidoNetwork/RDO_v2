@@ -24,6 +24,7 @@ type BlockReader interface {
 	GetBlock(num uint64, hash []byte) (*prototype.Block, error)
 	GetBlockByNum(num uint64) (*prototype.Block, error)
 	GetBlockByHash(hash []byte) (*prototype.Block, error)
+	GetBlockBySlot(slot uint64) (*prototype.Block, error)
 }
 
 type HeadAccessStorage interface {

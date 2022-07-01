@@ -15,10 +15,11 @@ const (
 var log = logrus.WithField("prefix", "Hasher")
 
 // BlockHash count block hash
-// hash = Keccak256(num + version + parentHash + txRoot + timestamp)
-func BlockHash(num uint64, version, parent, txroot []byte, tstamp uint64) []byte {
+// hash = Keccak256(num + slot + version + parentHash + txRoot + timestamp)
+func BlockHash(num, slot uint64, version, parent, txroot []byte, tstamp uint64) []byte {
 	res := make([]byte, 0, 8)
 	res = ssz.MarshalUint64(res, num)
+	res = ssz.MarshalUint64(res, slot)
 
 	res = append(res, version...)
 	res = append(res, parent...)

@@ -58,6 +58,8 @@ func (m *Block) validate(all bool) error {
 
 	// no validation rules for Num
 
+	// no validation rules for Slot
+
 	// no validation rules for Version
 
 	// no validation rules for Hash
@@ -891,3 +893,220 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = TxOutputValidationError{}
+
+// Validate checks the field values on Metadata with the rules defined in the
+// proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *Metadata) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on Metadata with the rules defined in
+// the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in MetadataMultiError, or nil
+// if none found.
+func (m *Metadata) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *Metadata) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for HeadSlot
+
+	// no validation rules for HeadBlockNum
+
+	if len(m.GetHeadBlockHash()) != 32 {
+		err := MetadataValidationError{
+			field:  "HeadBlockHash",
+			reason: "value length must be 32 bytes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		return MetadataMultiError(errors)
+	}
+	return nil
+}
+
+// MetadataMultiError is an error wrapping multiple validation errors returned
+// by Metadata.ValidateAll() if the designated constraints aren't met.
+type MetadataMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m MetadataMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m MetadataMultiError) AllErrors() []error { return m }
+
+// MetadataValidationError is the validation error returned by
+// Metadata.Validate if the designated constraints aren't met.
+type MetadataValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e MetadataValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e MetadataValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e MetadataValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e MetadataValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e MetadataValidationError) ErrorName() string { return "MetadataValidationError" }
+
+// Error satisfies the builtin error interface
+func (e MetadataValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sMetadata.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = MetadataValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = MetadataValidationError{}
+
+// Validate checks the field values on BlockRequest with the rules defined in
+// the proto definition for this message. If any rules are violated, the first
+// error encountered is returned, or nil if there are no violations.
+func (m *BlockRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on BlockRequest with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// result is a list of violation errors wrapped in BlockRequestMultiError, or
+// nil if none found.
+func (m *BlockRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *BlockRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for StartSlot
+
+	// no validation rules for Count
+
+	// no validation rules for Step
+
+	if len(errors) > 0 {
+		return BlockRequestMultiError(errors)
+	}
+	return nil
+}
+
+// BlockRequestMultiError is an error wrapping multiple validation errors
+// returned by BlockRequest.ValidateAll() if the designated constraints aren't met.
+type BlockRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m BlockRequestMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m BlockRequestMultiError) AllErrors() []error { return m }
+
+// BlockRequestValidationError is the validation error returned by
+// BlockRequest.Validate if the designated constraints aren't met.
+type BlockRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e BlockRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e BlockRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e BlockRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e BlockRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e BlockRequestValidationError) ErrorName() string { return "BlockRequestValidationError" }
+
+// Error satisfies the builtin error interface
+func (e BlockRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sBlockRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = BlockRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = BlockRequestValidationError{}

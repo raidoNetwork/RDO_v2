@@ -10,15 +10,16 @@ import "validate/validate.proto";
 
 message Block{
   uint64 num = 1;
-  bytes version = 2 [(rdo.ext.opts.ssz_size) = "3"];
-  bytes hash = 3 [(rdo.ext.opts.ssz_size) = "32"];
-  bytes parent = 4 [(rdo.ext.opts.ssz_size) = "32"];
-  uint64 timestamp = 5;
-  bytes txroot = 6 [(rdo.ext.opts.ssz_size) = "32"];
-  Sign proposer = 7;
-  repeated Sign approvers = 8 [(rdo.ext.opts.ssz_max) = "128"];
-  repeated Sign slashers = 9 [(rdo.ext.opts.ssz_max) = "128"];
-  repeated Transaction transactions = 10 [(rdo.ext.opts.ssz_max) = "1000"];
+  uint64 slot = 2;
+  bytes version = 3 [(rdo.ext.opts.ssz_size) = "3"];
+  bytes hash = 4 [(rdo.ext.opts.ssz_size) = "32"];
+  bytes parent = 5 [(rdo.ext.opts.ssz_size) = "32"];
+  uint64 timestamp = 6;
+  bytes txroot = 7 [(rdo.ext.opts.ssz_size) = "32"];
+  Sign proposer = 8;
+  repeated Sign approvers = 9 [(rdo.ext.opts.ssz_max) = "128"];
+  repeated Sign slashers = 10 [(rdo.ext.opts.ssz_max) = "128"];
+  repeated Transaction transactions = 11 [(rdo.ext.opts.ssz_max) = "1500"];
 }
 
 message Sign{
@@ -51,4 +52,14 @@ message TxOutput{
   bytes node = 3 [(rdo.ext.opts.ssz_max) = "20", (validate.rules).bytes.len = 20, (validate.rules).bytes.ignore_empty=true];
 }
 
+message Metadata {
+  uint64 headSlot = 1;
+  uint64 headBlockNum = 2;
+  bytes headBlockHash = 3 [(rdo.ext.opts.ssz_max) = "32", (validate.rules).bytes.len = 32];
+}
 
+message BlockRequest {
+  uint64 startSlot = 1;
+  uint64 count = 2;
+  uint64 step = 3;
+}

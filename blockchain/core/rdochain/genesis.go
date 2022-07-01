@@ -110,6 +110,7 @@ func (bc *BlockChain) createGenesis() *prototype.Block {
 	txRoot := hash.GenTxRoot(txArr)
 	block := &prototype.Block{
 		Num:          GenesisBlockNum,
+		Slot:		  0,
 		Version:      []byte{1, 0, 0},
 		Hash:         bc.genesisHash,
 		Parent:       crypto.Keccak256([]byte{}),

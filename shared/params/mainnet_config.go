@@ -1,7 +1,5 @@
 package params
 
-import "time"
-
 // MainnetConfig returns the configuration to be used in the main network.
 func MainnetConfig() *RDOBlockChainConfig {
 	return mainnetRDOConfig
@@ -20,6 +18,6 @@ var mainnetRDOConfig = &RDOBlockChainConfig{
 	RoiPerRdo:     1e8,
 	GenesisPath:   "",
 	BlockSize:     300 * 1024, // 300 kB
-	ResponseTimeout: 7 * time.Second,
+	ResponseTimeout: 15,
 	SlotsPerEpoch: 200,
 }

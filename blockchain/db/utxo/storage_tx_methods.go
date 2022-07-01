@@ -32,18 +32,18 @@ func (s *Store) AddOutputIfNotExists(txID int, uo *types.UTxO) (err error) {
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE tx_type = ?`
 
 	_, err = tx.Exec(
-		query,
-		uo.TxType,
-		uo.Hash.Hex(),
-		uo.Index,
-		uo.From.Hex(),
-		uo.To.Hex(),
-		uo.Amount,
-		uo.Timestamp,
-		uo.BlockNum,
-		uo.Node.Hex(),
-		uo.TxType,
-	)
+			query,
+			uo.TxType,
+			uo.Hash.Hex(),
+			uo.Index,
+			uo.From.Hex(),
+			uo.To.Hex(),
+			uo.Amount,
+			uo.Timestamp,
+			uo.BlockNum,
+			uo.Node.Hex(),
+			uo.TxType,
+		)
 
 	return
 }

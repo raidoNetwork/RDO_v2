@@ -80,7 +80,7 @@ func (bc *BlockChain) Init() error {
 	bc.futureBlockNum = bc.headBlockNum + 1 // future block num
 
 	var block *prototype.Block
-	if head != 0 {
+	if head != GenesisBlockNum {
 		// get last block
 		block, err = bc.GetBlockByNum(bc.headBlockNum)
 	} else {
@@ -183,8 +183,7 @@ func (bc *BlockChain) GetBlockByNum(num uint64) (*prototype.Block, error) {
 	}
 
 	if num > bc.GetHeadBlockNum() {
-		log.Debugf("Bad block number %d", num)
-		return nil, errors.New("Given block number is not forged yet.")
+		return nil, ErrNotForgedBlock
 	}
 
 	return bc.db.GetBlockByNum(num)
@@ -272,4 +271,9 @@ func (bc *BlockChain) GetAmountStats() (uint64, uint64, uint64) {
 	}
 
 	return reward, fee, genesisAmount
+}
+
+// GetBlockBySlot returns block associated with given slot
+func (bc *BlockChain) GetBlockBySlot(slot uint64) (*prototype.Block, error) {
+	return bc.db.GetBlockBySlot(slot)
 }

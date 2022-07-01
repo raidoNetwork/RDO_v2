@@ -4,6 +4,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
+	"github.com/raidoNetwork/RDO_v2/shared/common"
 )
 
 var (
@@ -14,6 +15,11 @@ var (
 	headEpoch = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "head_epoch",
 		Help: "Current epoch of the network",
+	})
+	finalizeBlockTime = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "finalize_block_time",
+		Help: "Finalize block time",
+		Buckets: common.MillisecondsBuckets,
 	})
 )
 

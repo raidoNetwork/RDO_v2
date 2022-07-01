@@ -137,11 +137,12 @@ type Transaction struct {
 	feePrice uint64
 	fee 	 uint64
 	num      uint64
-	doubles   []*Transaction
 	timestamp uint64
+	doubles   []*Transaction
 	inputs    []*Input
 	outputs   []*Output
 	lock      sync.Mutex
+	droped	  bool
 }
 
 func (tx *Transaction) GetTx() *prototype.Transaction {
@@ -244,6 +245,20 @@ func (tx *Transaction) AllSenders() []common.Address {
 		res = append(res, in.Address())
 	}
 	return res
+}
+
+func (tx *Transaction) Drop() {
+	tx.lock.Lock()
+	defer tx.lock.Unlock()
+
+	tx.droped = true
+}
+
+func (tx *Transaction) IsDropped() bool {
+	tx.lock.Lock()
+	defer tx.lock.Unlock()
+
+	return tx.droped
 }
 
 type Input struct {

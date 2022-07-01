@@ -8,13 +8,14 @@ import "validate/validate.proto";
 
 message BlockValue {
   uint64 num = 1;
-  string hash = 2;
-  string parent = 3;
-  uint64 timestamp = 4;
-  string proposer = 5;
-  repeated string approvers = 6;
-  repeated string slashers = 7;
-  repeated TxValue transactions = 8;
+  uint64 slot = 2;
+  string hash = 3;
+  string parent = 4;
+  uint64 timestamp = 5;
+  string proposer = 6;
+  repeated string approvers = 7;
+  repeated string slashers = 8;
+  repeated TxValue transactions = 9;
 }
 
 message TxValue{

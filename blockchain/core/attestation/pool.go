@@ -148,6 +148,7 @@ func (p *Pool) cleanWorst() {
 	p.pending = p.pending[:lastIndex]
 	p.queueLock.Unlock()
 
+	worst.Drop()
 	log.Debugf("Delete worst %s", worst.Hash().Hex())
 }
 
@@ -156,6 +157,8 @@ func (p *Pool) validateTx(tx *types.Transaction) error {
 	if err != nil {
 		return err
 	}
+
+	// todo check locked inputs here
 
 	return p.cfg.Validator.ValidateTransaction(tx)
 }

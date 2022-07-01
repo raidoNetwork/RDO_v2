@@ -18,12 +18,20 @@ type TxValidator interface {
 type BlockValidator interface {
 	// ValidateBlock validate block and return an error if something is wrong
 	ValidateBlock(*prototype.Block, TxJournal) ([]*types.Transaction, error)
+
+	// ValidateGenesis compare given Genesis with local
+	ValidateGenesis(*prototype.Block) error
 }
 
 // Validator checks if block or transaction is correct according to the engine rules
 type Validator interface {
 	BlockValidator
 	TxValidator
+}
+
+type GenesisReader interface {
+	// GetGenesis returns Genesis block
+	GetGenesis() *prototype.Block
 }
 
 type BlockchainReader interface{
@@ -45,15 +53,14 @@ type BlockchainReader interface{
 
 	// GetTransactionsCount returns address nonce
 	GetTransactionsCount([]byte) (uint64, error)
+
+	GenesisReader
 }
 
 // BlockForger interface for any struct that can create and save block to the database
 type BlockForger interface {
 	// FinalizeBlock store block to the blockchain.
 	FinalizeBlock(*prototype.Block) error
-
-	// GetGenesis returns Genesis block
-	GetGenesis() *prototype.Block
 
 	// GetBlockCount return block count in the blockchain
 	GetBlockCount() uint64
@@ -69,6 +76,8 @@ type BlockForger interface {
 
 	// CheckBalance check if system balance is correct
 	CheckBalance() error
+
+	GenesisReader
 }
 
 // TxPool provides and updates transaction queue.

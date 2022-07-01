@@ -168,7 +168,7 @@ func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*ty
 					timestamp, 
 					block_id, 
 					tx_type FROM ` + dbshared.UtxoTable + ` `
-
+	
 	rows, err := s.db.Query(prefix + query, params...)
 	if err != nil {
 		return nil, err

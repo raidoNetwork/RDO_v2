@@ -60,6 +60,7 @@ func (kbs *KeccakBlockSigner) getBlockDomain(header *BlockHeader) []byte {
 
 	// Put Num
 	buf = ssz.MarshalUint64(buf, header.Num)
+	buf = ssz.MarshalUint64(buf, header.Slot)
 
 	buf = append(buf, header.Parent...)
 	buf = append(buf, header.Version...)

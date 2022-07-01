@@ -72,6 +72,7 @@ func NewKVStore(ctx context.Context, dirPath string) (*Store, error) {
 			blocksBucket,
 			blocksHashBucket,
 			blocksNumBucket,
+			blocksSlotBucket,
 			transactionBucket,
 			addressBucket,
 		)

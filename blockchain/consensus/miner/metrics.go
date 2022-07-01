@@ -11,7 +11,7 @@ var (
 	pendingTxCounter = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "pending_tx_pool_count",
 		Help: "Transactions waiting in the pool",
-	})
+	}) // todo remove to pool metrics
 	forgedBlocksCounter = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "forge_block_count",
 		Help: "Forged blocks count",
@@ -19,11 +19,6 @@ var (
 	forgeBlockTime = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name: "forge_block_time",
 		Help: "Forge new block time",
-		Buckets: common.MillisecondsBuckets,
-	})
-	finalizeBlockTime = promauto.NewHistogram(prometheus.HistogramOpts{
-		Name: "finalize_block_time",
-		Help: "Finalize block time",
 		Buckets: common.MillisecondsBuckets,
 	})
 )

@@ -289,7 +289,6 @@ func (om *OutputManager) syncDataInRange(min, max uint64, clear bool) error {
 	var err error
 
 	counter := 0
-	txIsOpen := false
 	for blockNum := min; blockNum <= max; blockNum++ {
 		if counter%blocksPerTx == 0 {
 			// commit tx
@@ -301,14 +300,11 @@ func (om *OutputManager) syncDataInRange(min, max uint64, clear bool) error {
 			}
 
 			// create new tx
-			txIsOpen = true
 			tx, err = om.db.CreateTx(false)
 			if err != nil {
 				return err
 			}
 		}
-
-		log.Debugf("Counter: %d BlockNum: %d DB tx: %d opened: %v", counter, blockNum, tx, txIsOpen)
 
 		if clear && blockNum != min {
 			err = om.db.DeleteOutputs(tx, blockNum)
@@ -339,6 +335,7 @@ func (om *OutputManager) syncDataInRange(min, max uint64, clear bool) error {
 		}
 		om.mu.Unlock()
 
+		log.Debugf("Sync block %d / %d", blockNum, max)
 		counter++
 	}
 

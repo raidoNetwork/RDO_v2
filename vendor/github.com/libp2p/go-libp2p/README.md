@@ -8,7 +8,7 @@
 <p align="center">
   <a href="http://protocol.ai"><img src="https://img.shields.io/badge/made%20by-Protocol%20Labs-blue.svg?style=flat-square" /></a>
   <a href="http://libp2p.io/"><img src="https://img.shields.io/badge/project-libp2p-yellow.svg?style=flat-square" /></a>
-  <a href="https://pkg.go.dev/github.com/libp2p/go-libp2p"><img src="https://pkg.go.dev/github.com/libp2p/go-libp2p?status.svg" /></a>
+  <a href="https://pkg.go.dev/github.com/libp2p/go-libp2p"><img src="https://pkg.go.dev/badge/github.com/libp2p/go-libp2p.svg" alt="Go Reference"></a>
   <a href="https://discuss.libp2p.io"><img src="https://img.shields.io/discourse/https/discuss.libp2p.io/posts.svg"/></a>
 </p>
 
@@ -19,10 +19,10 @@
   - [Examples](#examples)
 - [Development](#development)
   - [Using the go-libp2p Workspace](#using-the-go-libp2p-workspace)
-  - [About gx](#about-gx)
   - [Tests](#tests)
   - [Packages](#packages)
 - [Contribute](#contribute)
+- [Supported Go Versions](#supported-go-versions)
 
 ## Background
 
@@ -64,18 +64,6 @@ Using the tooling in the workspace repository, you can checkout all of go-libp2p
 Once you've committed your changes, you can switch back to "remote mode", which removes the replace directives and pulls imports from the main go module cache.
 
 See the [workspace repo](https://github.com/libp2p/workspace-go-libp2p) for more information.
-
-### About gx
-
-Before adopting gomod, libp2p used [gx](https://github.com/whyrusleeping/gx) to manage dependencies using [IPFS](https://ipfs.io).
-
-Due to the difficulties in keeping both dependency management solutions up-to-date, gx support was ended in April 2019.
-
-Ending gx support does not mean that existing gx builds will break. Because gx references dependencies by their immutable IPFS hash, any currently working gx builds will continue to work for as long as the dependencies are resolvable in IPFS.
-
-However, new changes to go-libp2p will not be published via gx, and users are encouraged to adopt gomod to stay up-to-date.
-
-If you experience any issues migrating from gx to gomod, please [join the discussion at the libp2p forums](https://discuss.libp2p.io/t/gomod-and-go-libp2p/44).
 
 ### Tests
 
@@ -165,6 +153,7 @@ There's a few things you can do right now to help out:
  - **Perform code reviews**.
  - **Add tests**. There can never be enough tests.
 
----
+## Supported Go Versions
 
-The last gx published version of this module was: 6.0.41: QmTRN7hRxvGkxKxDdeudty7sRet4L7ZKZCqKsXHa79wmAc
+We test against and support the two most recent major releases of Go. This is
+informed by Go's own [security policy](https://go.dev/security).

@@ -98,14 +98,14 @@ func (s *Service) txListener() {
 
 	for {
 		select {
-		case tx := <-s.txEvent:
-			err := s.txPool.Insert(tx)
-			if err != nil {
-				log.Error(errors.Wrap(err , "Transaction listener error"))
-			}
-		case <-s.ctx.Done():
-			log.Debugf("Stop Transaction listener loop")
-			return
+			case tx := <-s.txEvent:
+				err := s.txPool.Insert(tx)
+				if err != nil {
+					log.Error(errors.Wrap(err , "Transaction listener error"))
+				}
+			case <-s.ctx.Done():
+				log.Debugf("Stop Transaction listener loop")
+				return
 		}
 	}
 }

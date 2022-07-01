@@ -59,6 +59,8 @@ func (m *BlockValue) validate(all bool) error {
 
 	// no validation rules for Num
 
+	// no validation rules for Slot
+
 	// no validation rules for Hash
 
 	// no validation rules for Parent

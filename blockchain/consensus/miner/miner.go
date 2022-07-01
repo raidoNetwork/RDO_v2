@@ -3,11 +3,11 @@ package miner
 import (
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
+	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/keystore"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
-	utypes "github.com/raidoNetwork/RDO_v2/utils/types"
 	"github.com/sirupsen/logrus"
 	"time"
 )
@@ -76,6 +76,10 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 	for _, tx := range txQueue {
 		if len(txBatch) + len(collapseBatch) == txCountPerBlock {
 			break
+		}
+
+		if tx.IsDropped() {
+			continue
 		}
 
 		size = tx.Size()
@@ -162,7 +166,7 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 	m.skipAddr = map[string]struct{}{}
 
 	// get block instance
-	block := types.NewBlock(m.bf.GetBlockCount(), m.bf.ParentHash(), txBatch, m.cfg.Proposer)
+	block := types.NewBlock(m.bf.GetBlockCount(), slot.Ticker().Slot(), m.bf.ParentHash(), txBatch, m.cfg.Proposer)
 
 	end := time.Since(start)
 	log.Warnf("Generate block with transactions count: %d. TxPool transactions count: %d. Size: %d kB. Time: %s", len(txBatch), txQueueLen, totalSize/1024, common.StatFmt(end))
@@ -171,51 +175,11 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 	return block, nil
 }
 
-// FinalizeBlock validate given block and save it to the blockchain
-func (m *Miner) FinalizeBlock(block *prototype.Block) error {
-	start := time.Now()
-
-	// validate block
-	failedTx, err := m.att.Validator().ValidateBlock(block, m.att.TxPool())
-	if err != nil {
-		if failedTx != nil {
-			m.att.TxPool().Finalize(failedTx)
-		}
-		return errors.Wrap(err, "ValidateBlockError")
-	}
-
-	// save block
-	err = m.bf.FinalizeBlock(block)
-	if err != nil {
-		return errors.Wrap(err, "FinalizeBlockError")
-	}
-
-	typedBatch := utypes.PbTxBatchToTyped(block.Transactions)
-
-	// clear pool
-	m.att.TxPool().Finalize(typedBatch)
-
-	// update stake pool data
-	err = m.att.StakePool().FinalizeStaking(typedBatch)
-	if err != nil {
-		return errors.Wrap(err, "StakePool error")
-	}
-
-	err = m.bf.CheckBalance()
-	if err != nil {
-		return errors.Wrap(err, "Balances inconsistency")
-	}
-
-	finalizeBlockTime.Observe(float64(time.Since(start).Milliseconds()))
-
-	return nil
-}
-
 func (m *Miner) addRewardTxToBatch(txBatch []*prototype.Transaction, collapseBatch []*prototype.Transaction, totalSize int, bn int64) ([]*prototype.Transaction, []*prototype.Transaction, int, error) {
 	rewardTx, err := m.createRewardTx(m.bf.GetBlockCount())
 	if err != nil {
 		if errors.Is(err, consensus.ErrNoStakers) {
-			log.Warn(err)
+			log.Debug(err)
 		} else {
 			return nil, nil, 0, err
 		}

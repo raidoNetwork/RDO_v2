@@ -26,6 +26,7 @@ func BlockValue(block *prototype.Block) *prototype.BlockValue {
 	bv := new(prototype.BlockValue)
 
 	bv.Num = block.Num
+	bv.Slot = block.Slot
 	bv.Hash = HashString(block.Hash)
 	bv.Parent = HashString(block.Parent)
 	bv.Timestamp = block.Timestamp

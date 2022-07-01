@@ -24,6 +24,7 @@ type BlockHeader struct {
 	Version []byte
 	TxRoot	[]byte
 	Hash []byte
+	Slot uint64
 }
 
 type BlockSheet struct {
@@ -38,15 +39,17 @@ func NewHeader(block *prototype.Block) *BlockHeader {
 		Parent: block.Parent,
 		Version: block.Version,
 		TxRoot: block.Txroot,
+		Slot: block.Slot,
 	}
 }
 
-func NewBlock(blockNum uint64, parent []byte, txBatch []*prototype.Transaction, validator *keystore.ValidatorAccount) *prototype.Block {
+func NewBlock(blockNum, slot uint64, parent []byte, txBatch []*prototype.Transaction, validator *keystore.ValidatorAccount) *prototype.Block {
 	header := BlockHeader{
 		Num:     blockNum,
 		Parent:  parent,
 		Version: []byte{1, 0, 0},
 		TxRoot:  hash.GenTxRoot(txBatch),
+		Slot: slot,
 	}
 
 	// sign block
@@ -55,10 +58,11 @@ func NewBlock(blockNum uint64, parent []byte, txBatch []*prototype.Transaction, 
 	}
 
 	tstamp := uint64(time.Now().UnixNano())
-	header.Hash = hash.BlockHash(header.Num, header.Version, header.Parent, header.TxRoot, tstamp)
+	header.Hash = hash.BlockHash(header.Num, header.Slot, header.Version, header.Parent, header.TxRoot, tstamp)
 
 	block := &prototype.Block{
 		Num:          header.Num,
+		Slot:         header.Slot,
 		Version:      header.Version,
 		Hash:         header.Hash,
 		Parent:       header.Parent,

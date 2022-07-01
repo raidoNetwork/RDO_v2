@@ -63,6 +63,15 @@ func (s *Store) WriteBlock(block *prototype.Block) error {
 		log.Debugf("WriteBlock: Save block num in %s", common.StatFmt(end))
 
 		start = time.Now()
+		if err := s.saveBlockSlot(tx, block.Slot, block.Num); err != nil {
+			log.Error("Error saving block slot into db.")
+			return err
+		}
+
+		end = time.Since(start)
+		log.Debugf("WriteBlock: Save block slot in %s", common.StatFmt(end))
+
+		start = time.Now()
 		if err := s.saveBlockHash(tx, block.Num, block.Hash); err != nil {
 			log.Error("Error saving block hash into db.")
 			return err
@@ -86,7 +95,6 @@ func (s *Store) WriteBlock(block *prototype.Block) error {
 
 // GetBlock returns block from database by key if found otherwise returns error.
 func (s *Store) GetBlock(num uint64, hash []byte) (*prototype.Block, error) {
-	// generate key
 	key := genBlockKey(num, hash)
 
 	var blk *prototype.Block
@@ -109,7 +117,7 @@ func (s *Store) GetBlock(num uint64, hash []byte) (*prototype.Block, error) {
 		}
 
 		// save stat for reading db
-		log.Debugf("Read block end in %s.", common.StatFmt(time.Since(start)))
+		log.Debugf("Read and unmarshal end in %s.", common.StatFmt(time.Since(start)))
 
 		return nil
 	})
@@ -128,8 +136,6 @@ func (s *Store) GetBlockByNum(num uint64) (*prototype.Block, error) {
 		return nil, errors.Errorf("Not found hash mapped to given number %d.", num)
 	}
 
-	log.Debugf("Got hash %s", hex.EncodeToString(hash))
-
 	return s.GetBlock(num, hash)
 }
 
@@ -145,6 +151,27 @@ func (s *Store) GetBlockByHash(hash []byte) (*prototype.Block, error) {
 	}
 
 	return s.GetBlock(num, hash)
+}
+
+func (s *Store) GetBlockBySlot(slot uint64) (*prototype.Block, error) {
+	var num uint64
+	err := s.db.View(func(tx *bolt.Tx) error {
+		bkt := tx.Bucket(blocksSlotBucket)
+		val := bkt.Get(genSlotKey(slot))
+
+		if len(val) != 8 {
+			return errors.Errorf("Not found block num connected to given slot %d.", slot)
+		}
+
+		num = ssz.UnmarshallUint64(val)
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return s.GetBlockByNum(num)
 }
 
 // CountBlocks iterates the whole database and count number of rows in it.
@@ -201,6 +228,22 @@ func (s *Store) saveBlockHash(tx *bolt.Tx, num uint64, hash []byte) error {
 	return tx.Bucket(blocksHashBucket).Put(key, hash)
 }
 
+// saveBlockSlot saves block slot with num key
+func (s *Store) saveBlockSlot(tx *bolt.Tx, slot, num uint64) error {
+	key := genSlotKey(slot)
+	buf := make([]byte, 0)
+	buf = ssz.MarshalUint64(buf, num)
+	return tx.Bucket(blocksSlotBucket).Put(key, buf)
+}
+
+// saveBlockNum store block num with hash key
+func (s *Store) saveBlockNum(tx *bolt.Tx, num uint64, hash []byte) error {
+	key := genNumKey(hash)
+	buf := make([]byte, 0)
+	buf = ssz.MarshalUint64(buf, num)
+	return tx.Bucket(blocksNumBucket).Put(key, buf)
+}
+
 // GetBlockHash returns block hash by block num
 func (s *Store) GetBlockHash(num uint64) ([]byte, error) {
 	hash := make([]byte, 0)
@@ -211,15 +254,6 @@ func (s *Store) GetBlockHash(num uint64) ([]byte, error) {
 	})
 
 	return hash, err
-}
-
-// saveBlockNum store block num with hash key
-func (s *Store) saveBlockNum(tx *bolt.Tx, num uint64, hash []byte) error {
-	key := genNumKey(hash)
-	buf := make([]byte, 0)
-	buf = ssz.MarshalUint64(buf, num)
-
-	return tx.Bucket(blocksNumBucket).Put(key, buf)
 }
 
 // GetBlockNum returns block num by block hash
@@ -344,6 +378,7 @@ func (s *Store) GetAmountStats() (uint64, uint64) {
 	return reward, fee
 }
 
+// todo use sync pool instead
 var statsBuf = make([]byte, 0, 16)
 
 func marshalStats(counter uint64, fee uint64) []byte {
@@ -361,21 +396,18 @@ func marshalStats(counter uint64, fee uint64) []byte {
 func unmarshalStats(raw []byte) (uint64, uint64) {
 	counter := ssz.UnmarshallUint64(raw[:8])
 	fee := ssz.UnmarshallUint64(raw[8:])
-
 	return counter, fee
 }
 
 func genHashKey(num uint64) []byte {
 	key := blockHashPrefix
 	key = ssz.MarshalUint64(key, num)
-
 	return key
 }
 
 func genNumKey(hash []byte) []byte {
 	key := blockNumPrefix
 	key = append(key, hash...)
-
 	return key
 }
 
@@ -383,6 +415,11 @@ func genBlockKey(num uint64, hash []byte) []byte {
 	nbyte := blockPrefix
 	nbyte = ssz.MarshalUint64(nbyte, num)
 	nbyte = append(nbyte, hash...)
-
 	return nbyte
+}
+
+func genSlotKey(slot uint64) []byte {
+	key := blockSlotPrefix
+	key = ssz.MarshalUint64(key, slot)
+	return key
 }

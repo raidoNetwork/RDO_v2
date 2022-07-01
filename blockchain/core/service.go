@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/miner"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
@@ -13,6 +14,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/cmd"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
+	utypes "github.com/raidoNetwork/RDO_v2/utils/types"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"sync"
@@ -66,6 +68,7 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		miner:      forger,
 		proposer:   proposer,
 		bc:         cfg.BlockForger,
+		att:	    cfg.AttestationPool,
 
 		ticker:     slot.Ticker(),
 
@@ -88,6 +91,7 @@ type Service struct {
 	cancelFunc   context.CancelFunc
 	statusErr    error
 	bc			 consensus.BlockForger
+	att			 consensus.AttestationPool
 	proposer 	 *keystore.ValidatorAccount
 
 	miner *miner.Miner            // block miner
@@ -107,13 +111,6 @@ type Service struct {
 func (s *Service) Start() {
 	s.subscribeOnEvents()
 	s.waitInitialized()
-
-	// start slot ticker
-	genesisTime := time.Unix(0, int64(s.bc.GetGenesis().Timestamp))
-	err := slot.Ticker().Start(genesisTime)
-	if err != nil {
-		panic("Zero Genesis time")
-	}
 
 	// start block generator main loop
 	go s.mainLoop()
@@ -146,7 +143,7 @@ func (s *Service) mainLoop() {
 				s.statusErr = err
 				s.mu.Unlock()
 
-				s.stateFeed.Send(state.ForgeFailed)
+				//s.stateFeed.Send(state.ForgeFailed)
 				return
 			}
 
@@ -157,7 +154,7 @@ func (s *Service) mainLoop() {
 		case block := <-s.blockEvent:
 			start := time.Now()
 
-			err := s.miner.FinalizeBlock(block)
+			err := s.FinalizeBlock(block)
 			if err != nil {
 				log.Errorf("[CoreService] Error finalizing block: %s", err.Error())
 
@@ -191,20 +188,70 @@ func (s *Service) Status() error {
 }
 
 func (s *Service) waitInitialized() {
-	for {
-		select{
-		case <-s.ctx.Done():
-			return
-		case st := <-s.stateEvent:
-			if st == state.Synced {
+   for {
+   		select{
+			case <-s.ctx.Done():
 				return
-			}
+			case st := <-s.stateEvent:
+				switch st {
+				case state.LocalSynced:
+					// start slot ticker
+					genesisTime := time.Unix(0, int64(s.bc.GetGenesis().Timestamp))
+					err := slot.Ticker().Start(genesisTime)
+					if err != nil {
+						panic("Zero Genesis time")
+					}
+				case state.Synced:
+					return
+				}
 		}
-	}
+   }
 }
 
 func (s *Service) subscribeOnEvents() {
 	s.stateFeed.Subscribe(s.stateEvent)
 	s.blockFeed.Subscribe(s.blockEvent)
+}
+
+func (s *Service) FinalizeBlock(block *prototype.Block) error {
+	start := time.Now()
+
+	if block.Num == 0 {
+		return s.att.Validator().ValidateGenesis(block)
+	}
+
+	// validate block
+	failedTx, err := s.att.Validator().ValidateBlock(block, s.att.TxPool())
+	if err != nil {
+		if failedTx != nil {
+			s.att.TxPool().Finalize(failedTx)
+		}
+		return errors.Wrap(err, "ValidateBlockError")
+	}
+
+	// save block
+	err = s.bc.FinalizeBlock(block)
+	if err != nil {
+		return errors.Wrap(err, "FinalizeBlockError")
+	}
+
+	typedBatch := utypes.PbTxBatchToTyped(block.Transactions)
+
+	// clear pool
+	s.att.TxPool().Finalize(typedBatch)
+
+	// update stake pool data
+	err = s.att.StakePool().FinalizeStaking(typedBatch)
+	if err != nil {
+		return errors.Wrap(err, "StakePool error")
+	}
+
+	err = s.bc.CheckBalance()
+	if err != nil {
+		return errors.Wrap(err, "Balances inconsistency")
+	}
+
+	finalizeBlockTime.Observe(float64(time.Since(start).Milliseconds()))
+	return nil
 }
 

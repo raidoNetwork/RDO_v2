@@ -2,8 +2,9 @@ package p2p
 
 import (
 	"github.com/libp2p/go-libp2p-core/peer"
-	discovery "github.com/libp2p/go-libp2p-discovery"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	discovery "github.com/libp2p/go-libp2p/p2p/discovery/routing"
+	discoveryUtil "github.com/libp2p/go-libp2p/p2p/discovery/util"
 )
 
 const (
@@ -18,7 +19,7 @@ func (s *Service) setupDiscovery() error {
 
 	// annonce node in the network
 	routing := discovery.NewRoutingDiscovery(s.dht)
-	discovery.Advertise(s.ctx, routing, discoveryTag)
+	discoveryUtil.Advertise(s.ctx, routing, discoveryTag)
 
 	// start peer search loop
 	go s.findPeers(routing)

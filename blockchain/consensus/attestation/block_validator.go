@@ -57,6 +57,30 @@ func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
 	return nil
 }
 
+func (cv *CryspValidator) ValidateGenesis(block *prototype.Block) error {
+	ghash := common.BytesToHash(cv.bc.GetGenesis().Hash)
+	if !bytes.Equal(block.Hash, ghash.Bytes()) {
+		return errors.Errorf("Genesis hash mismatch. Expected: %s. Given: %s", ghash.Hex(), common.Encode(block.Hash))
+	}
+
+	return cv.validateBlockHeader(block)
+}
+
+func (cv *CryspValidator) validateBlockHeader(block *prototype.Block) error {
+	// check block tx root
+	txRoot := hash.GenTxRoot(block.Transactions)
+	if !bytes.Equal(txRoot, block.Txroot) {
+		return errors.Errorf("Block tx root mismatch. Given: %s. Expected: %s.", common.Encode(block.Txroot), common.Encode(txRoot))
+	}
+
+	tstamp := time.Now().UnixNano() + int64(cv.cfg.SlotTime)
+	if tstamp < int64(block.Timestamp) {
+		return errors.Errorf("Wrong block timestamp: %d. Timestamp with slot time: %d.", block.Timestamp, tstamp)
+	}
+
+	return nil
+}
+
 // ValidateBlock validate block and return an error if something is wrong
 func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensus.TxJournal) ([]*types.Transaction, error) {
 	start := time.Now()
@@ -70,18 +94,18 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensu
 
 	if cv.cfg.EnableMetrics {
 		end := time.Since(start)
-		log.Infof("ValidateBlock: Count block balance in %s", common.StatFmt(end))
+		log.Debugf("ValidateBlock: Count block balance in %s", common.StatFmt(end))
 	}
 
-	// check block tx root
-	txRoot := hash.GenTxRoot(block.Transactions)
-	if !bytes.Equal(txRoot, block.Txroot) {
-		return nil, errors.Errorf("Block tx root mismatch. Given: %s. Expected: %s.", common.Encode(block.Txroot), common.Encode(txRoot))
+	// validate block base fields
+	err = cv.validateBlockHeader(block)
+	if err != nil {
+		return nil, err
 	}
 
-	tstamp := time.Now().UnixNano() + int64(cv.cfg.SlotTime)
-	if tstamp < int64(block.Timestamp) {
-		return nil, errors.Errorf("Wrong block timestamp: %d. Timestamp with slot time: %d.", block.Timestamp, tstamp)
+	blockHash := hash.BlockHash(block.Num, block.Slot, block.Version, block.Parent, block.Txroot, block.Timestamp)
+	if !bytes.Equal(blockHash, block.Hash) {
+		return nil, errors.Errorf("Bad block hash given. Expected: %s. Given: %s", common.Encode(blockHash), common.Encode(block.Hash))
 	}
 
 	err = cv.verifyBlockSign(block, block.Proposer)
@@ -99,7 +123,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensu
 
 	if cv.cfg.EnableMetrics {
 		end := time.Since(start)
-		log.Infof("ValidateBlock: Get block by hash in %s", common.StatFmt(end))
+		log.Debugf("ValidateBlock: Get block by hash in %s", common.StatFmt(end))
 	}
 
 	if b != nil {
@@ -116,7 +140,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensu
 
 	if cv.cfg.EnableMetrics {
 		end := time.Since(start)
-		log.Infof("ValidateBlock: Get prev block in %s", common.StatFmt(end))
+		log.Debugf("ValidateBlock: Get prev block in %s", common.StatFmt(end))
 	}
 
 	if prevBlock == nil {
