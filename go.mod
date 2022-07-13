@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/antonfisher/nested-logrus-formatter v1.3.1
 	github.com/envoyproxy/protoc-gen-validate v0.6.2
-	github.com/ferranbt/fastssz v0.0.0-20220628161016-227cfe743c03
+	github.com/ferranbt/fastssz v0.1.1
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/snappy v0.0.4
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4

@@ -49,7 +49,7 @@ type RDONode struct {
 	stop     chan struct{} // Channel to wait for termination notifications.
 	kvStore  db.Database
 	outDB    db.OutputDatabase
-    stateFeed events.Bus
+	stateFeed events.Bus
 	blockFeed events.Bus
 	txFeed	  events.Bus
 }
@@ -252,6 +252,7 @@ func (r *RDONode) registerP2P() error {
 		BootstrapNodes: r.cliCtx.StringSlice(flags.P2PBootstrapNodes.Name),
 		DataDir: r.cliCtx.String(cmd.DataDirFlag.Name),
 		StateFeed: r.StateFeed(),
+		EnableNAT: r.cliCtx.Bool(flags.P2PEnableNat.Name),
 	}
 	srv, err := p2p.NewService(r.ctx, &cfg)
 	if err != nil {

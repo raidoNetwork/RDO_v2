@@ -33,6 +33,7 @@ type TxOptions struct {
 	Data    []byte
 	Num     uint64
 	Type    uint32
+	Timestamp uint64
 }
 
 // NewPbTransaction creates new transaction with given options
@@ -41,11 +42,16 @@ func NewPbTransaction(opts TxOptions, key *ecdsa.PrivateKey) (*prototype.Transac
 
 	tx.Num = opts.Num
 	tx.Type = opts.Type
-	tx.Timestamp = uint64(time.Now().UnixNano())
 	tx.Fee = opts.Fee
 	tx.Data = opts.Data
 	tx.Inputs = opts.Inputs
 	tx.Outputs = opts.Outputs
+
+	if opts.Timestamp > 0 {
+		tx.Timestamp = opts.Timestamp
+	} else {
+		tx.Timestamp = uint64(time.Now().UnixNano())
+	}
 
 	hash, err := hash.TxHash(tx)
 	if err != nil {

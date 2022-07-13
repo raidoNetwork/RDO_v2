@@ -264,6 +264,10 @@ func (s *Service) GetHeadBlock() (*prototype.Block, error) {
 	return s.bc.GetHeadBlock()
 }
 
+func (s *Service) GetHeadBlockNum() uint64 {
+	return s.bc.GetHeadBlockNum()
+}
+
 func (s *Service) GenesisHash() common.Hash {
 	return s.bc.genesisHash
 }
@@ -280,7 +284,6 @@ func (s *Service) GetBlocksRange(ctx context.Context, start uint64, end uint64) 
 
 	go func() {
 		for num := start; num < end; num++ {
-			// todo get block by slot in future
 			block, err := s.bc.GetBlockByNum(num)
 			if err != nil {
 				errCh <- err
@@ -291,24 +294,22 @@ func (s *Service) GetBlocksRange(ctx context.Context, start uint64, end uint64) 
 		}
 	} ()
 
-	LOOP: for {
-		select {
-			case err := <-errCh:
-				if errors.Is(err, ErrNotForgedBlock) {
-					break LOOP
-				}
+LOOP: for {
+	select {
+	case err := <-errCh:
+		if errors.Is(err, ErrNotForgedBlock) {
+			break LOOP
+		}
 
-				return nil, errors.Wrap(err, "Error reading block")
-			//case <-ctx.Done(): // todo decide what to do with context
-			//	return nil, errors.New("Context deadline exceeded")
-			case b := <-blockCh:
-				blocks = append(blocks, b)
+		return nil, errors.Wrap(err, "Error reading block")
+	case b := <-blockCh:
+		blocks = append(blocks, b)
 
-				if len(blocks) == count {
-					break LOOP
-				}
+		if len(blocks) == count {
+			break LOOP
 		}
 	}
+}
 
 	return blocks, nil
 }

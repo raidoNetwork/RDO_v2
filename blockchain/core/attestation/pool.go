@@ -226,7 +226,7 @@ func (p *Pool) Finalize(txarr []*types.Transaction) {
 
 		rtx, index, err := p.findPoolTransaction(tx)
 		if err != nil {
-			log.Warn(err)
+			log.Debug(err)
 			continue
 		}
 
@@ -244,7 +244,7 @@ func (p *Pool) findPoolTransaction(tx *types.Transaction) (*types.Transaction, i
 	_, exists := p.txHashMap[tx.Hash().Hex()]
 	senderTx, senderExists := p.txSenderMap[tx.From().Hex()]
 
-	log.Debugf("Delete Tx %s HashMap %v SenderMap %v Sender %s", tx.Hash().Hex(), exists, senderExists, tx.From().Hex())
+	log.Debugf("Looking for Tx %s HashMap %v SenderMap %v Sender %s", tx.Hash().Hex(), exists, senderExists, tx.From().Hex())
 
 	if !exists && !senderExists {
 		return nil, -1, errors.New("Unknown transaction")

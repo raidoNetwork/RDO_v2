@@ -8,11 +8,7 @@ import (
 
 func IsStandardTx(tx *types.Transaction) bool {
 	switch tx.Type() {
-	case common.NormalTxType:
-		fallthrough
-	case common.StakeTxType:
-		fallthrough
-	case common.UnstakeTxType:
+	case common.NormalTxType, common.StakeTxType, common.UnstakeTxType:
 		return true
 	default:
 		return false
@@ -22,11 +18,7 @@ func IsStandardTx(tx *types.Transaction) bool {
 // IsSystemTx check transaction is created by blockchain self
 func IsSystemTx(tx *types.Transaction) bool {
 	switch tx.Type() {
-	case common.FeeTxType:
-		fallthrough
-	case common.RewardTxType:
-		fallthrough
-	case common.CollapseTxType:
+	case common.FeeTxType, common.RewardTxType, common.CollapseTxType:
 		return true
 	default:
 		return false

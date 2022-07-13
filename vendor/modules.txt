@@ -57,7 +57,7 @@ github.com/elastic/gosigar/sys/windows
 # github.com/envoyproxy/protoc-gen-validate v0.6.2
 ## explicit; go 1.12
 github.com/envoyproxy/protoc-gen-validate/validate
-# github.com/ferranbt/fastssz v0.0.0-20220628161016-227cfe743c03
+# github.com/ferranbt/fastssz v0.1.1
 ## explicit; go 1.18
 github.com/ferranbt/fastssz
 # github.com/flynn/noise v1.0.0

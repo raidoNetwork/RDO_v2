@@ -96,6 +96,7 @@ func (bc *BlockChain) createGenesis() *prototype.Block {
 			Outputs: genesisOutputs[start:end],
 			Fee:     0,
 			Data:    make([]byte, 0),
+			Timestamp: genesisData.Timestamp,
 		}
 		tx, err := types.NewPbTransaction(opts, nil)
 		if err != nil {

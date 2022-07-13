@@ -33,7 +33,7 @@ func (s *Service) blockRangeHandler(ctx context.Context, msg interface{}, stream
 
 	peer := stream.Conn().RemotePeer()
 	if err := s.validateBlockRangeHandler(blockRange); err != nil {
-		log.Errorf("Peer %s is bad", peer) // todo mark as bad
+		s.cfg.P2P.PeerStore().BadResponse(peer)
 		writeCodeToStream(stream, codeValidationError)
 		return errors.Wrap(err, "Error process block message")
 	}
@@ -92,8 +92,6 @@ func (s *Service) writeBlockRangeToStream(ctx context.Context, startSlot, endSlo
 		return err
 	}
 
-	log.Debugf("%d blocks found in the database", len(blocks))
-
 	for _, b := range blocks {
 		if err := s.writeBlockToStream(b, stream); err != nil {
 			return errors.Wrap(err, "Error writing block")
@@ -119,6 +117,8 @@ func (s *Service) sendBlockRangeRequest(ctx context.Context, req *prototype.Bloc
 		return nil, errors.Wrap(err, "Create stream error")
 	}
 	defer closeStream(stream)
+
+	log.Debugf("Open %s stream with %s", p2p.BlockRangeProtocol, pid.String())
 
 	if req.Step == 0 {
 		return nil, errors.New("Wrong request step given")
@@ -157,8 +157,9 @@ func (s *Service) sendBlockRangeRequest(ctx context.Context, req *prototype.Bloc
 
 		prevNum = block.Num
 		blocks = append(blocks, block)
-		log.Debugf("Receive block %d", block.Num)
 	}
+
+	log.Debugf("Receive blocks from %d to %d", req.StartSlot, endSlot)
 
 	return blocks, nil
 }
@@ -180,8 +181,6 @@ func (s *Service) receiveBlock(stream network.Stream) (*prototype.Block, error) 
 	if err != nil  {
 		return nil, err
 	}
-
-	log.Debugf("Parse block %d from stream", block.Num)
 
 	return block, nil
 }

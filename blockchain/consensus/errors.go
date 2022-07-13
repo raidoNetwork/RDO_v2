@@ -11,4 +11,6 @@ var (
 	ErrBadNonce       = errors.New("Wrong transaction nonce.")
 	ErrBadTxType      = errors.New("Undefined tx type.")
 	ErrBadInputOwner  = errors.New("Bad input owner")
+
+	ErrKnownBlock     = errors.New("Block already exists in the database")
 )

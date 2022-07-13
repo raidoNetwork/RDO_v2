@@ -127,7 +127,8 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensu
 	}
 
 	if b != nil {
-		return nil, errors.Errorf("ValidateBlock: Block #%d is already exists in blockchain!", block.Num)
+		log.Debugf("ValidateBlock: Block #%d is already exists in blockchain!", block.Num)
+		return nil, consensus.ErrKnownBlock
 	}
 
 	start = time.Now()

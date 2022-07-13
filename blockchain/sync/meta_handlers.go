@@ -24,7 +24,7 @@ func (s *Service) metaHandler(ctx context.Context, msg interface{}, stream netwo
 
 	peer := stream.Conn().RemotePeer()
 	if err := s.validateMetaHandler(metadata); err != nil {
-		// todo mark peer as bad
+		s.cfg.P2P.PeerStore().BadResponse(peer)
 		writeCodeToStream(stream, codeValidationError)
 		return errors.Wrap(err, "Error process metadata message")
 	}
@@ -106,7 +106,7 @@ func (s *Service) metaRequest(ctx context.Context, id peer.ID) error {
 
 	stream, err := s.cfg.P2P.CreateStream(ctx, meta, p2p.MetaProtocol, id)
 	if err != nil {
-	return errors.Wrap(err, "Create stream error")
+		return errors.Wrap(err, "Create stream error")
 	}
 	defer closeStream(stream)
 

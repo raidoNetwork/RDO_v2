@@ -18,7 +18,9 @@ const (
 	Reconnected
 )
 
-var PeerMetaUpdateInterval = time.Duration(12 * params.RaidoConfig().SlotTime) * time.Second
+const badThreshold = 1
+
+var PeerMetaUpdateInterval = time.Duration(4 * params.RaidoConfig().SlotTime) * time.Second
 
 type scorers struct {
 	PeerHeadSlot *score.Scorer
@@ -26,7 +28,7 @@ type scorers struct {
 }
 
 type PeerStore struct {
-	data map[string]*PeerData
+	data map[peer.ID]*PeerData
 	lock sync.Mutex
 	scorers
 }
@@ -37,16 +39,22 @@ type MetaData struct {
 	HeadBlockHash common.Hash
 }
 
+type PeerScorers struct {
+	BlockRequest int64
+	BadResponse int64
+}
+
 type PeerData struct {
 	Id peer.ID
 	Status PeerStatus
 	LastUpdate time.Time
+	Scorers PeerScorers
 	MetaData
 }
 
 func NewPeerStore() *PeerStore {
 	return &PeerStore{
-		data: map[string]*PeerData{},
+		data: map[peer.ID]*PeerData{},
 		scorers: scorers{
 			PeerHeadSlot: score.MaxScorer(),
 			PeerHeadBlock: score.MaxScorer(),
@@ -58,12 +66,12 @@ func (ps *PeerStore) Connect(id peer.ID) {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
-	if pdata, exists := ps.data[id.String()]; exists {
+	if pdata, exists := ps.data[id]; exists {
 		pdata.Status = Reconnected
 		return
 	}
 
-	ps.data[id.String()] = &PeerData{
+	ps.data[id] = &PeerData{
 		Id: id,
 	}
 }
@@ -73,7 +81,7 @@ func (ps *PeerStore) Disconnect(id peer.ID) {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
-	pdata, exists := ps.data[id.String()]
+	pdata, exists := ps.data[id]
 	if !exists {
 		return
 	}
@@ -81,11 +89,10 @@ func (ps *PeerStore) Disconnect(id peer.ID) {
 	pdata.Status = Disconnected
 }
 
-func (ps *PeerStore) AddMeta(id peer.ID, meta *prototype.Metadata) {
+func (ps *PeerStore) AddMeta(pid peer.ID, meta *prototype.Metadata) {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
-	pid := id.String()
 	ps.data[pid].LastUpdate = time.Now()
 	ps.data[pid].MetaData = MetaData{
 		HeadSlot: meta.HeadSlot,
@@ -138,4 +145,37 @@ func (ps *PeerStore) Connected() []PeerData {
 
 func (ps *PeerStore) Scorers() scorers {
 	return ps.scorers
+}
+
+func (ps *PeerStore) BlockRequestCounter(pid peer.ID) int64 {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	return ps.data[pid].Scorers.BlockRequest
+}
+
+func (ps *PeerStore) AddBlockParse(pid peer.ID) {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	ps.data[pid].Scorers.BlockRequest += 1
+}
+
+func (ps *PeerStore) BadResponse(pid peer.ID) {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	ps.data[pid].Scorers.BadResponse += 1
+}
+
+func (ps *PeerStore) IsBad(pid peer.ID) bool {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	if _, exists := ps.data[pid]; !exists {
+		return false
+	}
+
+
+	return ps.data[pid].Scorers.BadResponse >= badThreshold
 }

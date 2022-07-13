@@ -11,6 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/protocol"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/p2p/protocol/identify"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/state"
 	"github.com/raidoNetwork/RDO_v2/events"
@@ -33,14 +34,13 @@ const (
 
 type ConnectionHandler func(context.Context, peer.ID) error
 
-// todo update peerdata
-
 type Config struct {
 	Host           string
 	Port           int
 	BootstrapNodes []string
 	DataDir        string
 	StateFeed	   events.Feed
+	EnableNAT	   bool
 }
 
 func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
@@ -84,6 +84,8 @@ func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
 	}
 
 	srv.host = netHost
+	srv.host.RemoveStreamHandler(identify.IDDelta)
+
 	srv.id = netHost.ID()
 	srv.peerStore = NewPeerStore()
 
@@ -226,8 +228,12 @@ func (s *Service) connectPeer(info peer.AddrInfo) error {
 	ctx, cancel := context.WithTimeout(s.ctx, maxDialTimeout)
 	defer cancel()
 
+	if s.peerStore.IsBad(info.ID) {
+		return errors.New("refuse connection to the bad peer")
+	}
+
 	if err := s.host.Connect(ctx, info); err != nil {
-		log.Errorf("Error connection to the peer %v: %s", info.Addrs, err)
+		log.Errorf("Error connection to the peer %v: %s", info.String(), err)
 		return err
 	}
 

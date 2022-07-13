@@ -55,6 +55,11 @@ var (
 		Usage: "P2P nodes addresses for initial connections",
 		Value: cli.NewStringSlice(),
 	})
+	P2PEnableNat = altsrc.NewBoolFlag(&cli.BoolFlag{
+		Name: "p2p-nat",
+		Usage: "Enable NAT support for P2P",
+		Value: false,
+	})
 	EnableMetrics = altsrc.NewBoolFlag(&cli.BoolFlag{
 		Name: "enable-metrics",
 		Usage: "Enable Prometheus metric server",

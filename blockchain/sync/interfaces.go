@@ -19,6 +19,7 @@ type GossipPublisher interface{
 
 type BlockchainInfo interface{
 	GetBlockCount() uint64
+	GetHeadBlockNum() uint64
 	GetHeadBlock() (*prototype.Block, error)
 	GenesisHash() common.Hash
 	GetGenesis() *prototype.Block
