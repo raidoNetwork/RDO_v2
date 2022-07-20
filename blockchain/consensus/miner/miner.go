@@ -67,18 +67,23 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 	}
 
 	// limit tx count in block according to marshaller settings
-	txCountPerBlock := txBatchLimit - len(txBatch) - len(collapseBatch) - 1
-	if txQueueLen < txCountPerBlock {
-		txCountPerBlock = txQueueLen
+	feeTxCount := 1
+	var txCountPerBlock int
+	if txQueueLen < txBatchLimit {
+		txCountPerBlock = txQueueLen + len(txBatch) + len(collapseBatch) + feeTxCount
+	} else {
+		txCountPerBlock = txBatchLimit - len(txBatch) - len(collapseBatch) - feeTxCount
 	}
 
 	var size int
+	txType := "StandardTx"
 	for _, tx := range txQueue {
 		if len(txBatch) + len(collapseBatch) == txCountPerBlock {
 			break
 		}
 
 		if tx.IsDropped() {
+			log.Debugf("Skip dropped tx %s", tx.Hash().Hex())
 			continue
 		}
 
@@ -115,11 +120,12 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 				continue
 			}
 
-			log.Debugf("Add StakeTx %s to the block %d.", hash, bn)
+			txType = "StakeTx"
 		}
 
 		txBatch = append(txBatch, tx.GetTx())
-		log.Debugf("Add StandardTx %s to the block %d", hash, bn)
+		log.Debugf("Add %s %s to the block %d", txType, hash, bn)
+		txType = "StandardTx"
 
 		collapseTx, err := m.createCollapseTx(tx, m.bf.GetBlockCount())
 		if err != nil {
@@ -152,11 +158,14 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 	// generate fee tx for block
 	if len(txBatch) > 0 {
 		txFee, err := m.createFeeTx(txBatch)
-		if err != nil && !errors.Is(err, ErrZeroFeeAmount) {
-			return nil, err
-		} else if err != nil {
+
+		if err != nil {
+			if !errors.Is(err, ErrZeroFeeAmount) {
+				return nil, err
+			}
+
 			log.Debug(err)
-		}else {
+		} else {
 			txBatch = append(txBatch, txFee)
 			log.Debugf("Add FeeTx %s to the block", common.Encode(txFee.Hash))
 		}

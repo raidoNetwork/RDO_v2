@@ -1,6 +1,9 @@
 package score
 
-import "math"
+import (
+	"math"
+	"sync"
+)
 
 const (
 	maxStrategy = iota
@@ -10,6 +13,8 @@ const (
 type Scorer struct {
 	val uint64
 	strategy int8
+
+	sync.Mutex
 }
 
 func MinScorer() *Scorer {
@@ -27,6 +32,9 @@ func MaxScorer() *Scorer {
 }
 
 func (s *Scorer) Set(val uint64) {
+	s.Lock()
+	defer s.Unlock()
+
 	switch s.strategy {
 	case maxStrategy:
 		if val > s.val {
@@ -40,5 +48,8 @@ func (s *Scorer) Set(val uint64) {
 }
 
 func (s *Scorer) Get() uint64 {
+	s.Lock()
+	defer s.Unlock()
+
 	return s.val
 }

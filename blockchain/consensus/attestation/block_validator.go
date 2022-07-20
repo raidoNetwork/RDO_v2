@@ -83,6 +83,8 @@ func (cv *CryspValidator) validateBlockHeader(block *prototype.Block) error {
 
 // ValidateBlock validate block and return an error if something is wrong
 func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensus.TxJournal) ([]*types.Transaction, error) {
+	log.Debugf("Validate block #%d", block.Num)
+
 	start := time.Now()
 
 	// check that block has total balance equal to zero

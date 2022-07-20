@@ -45,9 +45,12 @@ type Pool struct {
 }
 
 func (p *Pool) Insert(tx *types.Transaction) error {
+	p.mu.Lock()
+
 	hash := tx.Hash().Hex()
 
 	if _, exists := p.txHashMap[hash]; exists {
+		p.mu.Unlock()
 		return errors.New("Already exists")
 	}
 
@@ -57,8 +60,11 @@ func (p *Pool) Insert(tx *types.Transaction) error {
 	}
 
 	if oldTx, exists := p.txSenderMap[sender]; exists {
+		p.mu.Unlock()
 		return p.processDoubleSpend(oldTx, tx)
 	}
+
+	p.mu.Unlock()
 
 	err := p.validateTx(tx)
 	if err != nil {
