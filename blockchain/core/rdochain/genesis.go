@@ -9,6 +9,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/hash"
 	"io/ioutil"
+	"sort"
 )
 
 var ErrMissedGenesis = errors.New("Unset Genesis JSON path.")
@@ -57,6 +58,10 @@ func (bc *BlockChain) castGenesisOutputs(data *types.GenesisBlock) []*prototype.
 		address = common.HexToAddress(addr)
 		outs = append(outs, types.NewOutput(address.Bytes(), amount, nil))
 	}
+
+	sort.Slice(outs, func (i, j int) bool {
+		return common.Encode(outs[i].Address) < common.Encode(outs[j].Address)
+	})
 
 	return outs
 }
@@ -152,8 +157,8 @@ func (bc *BlockChain) loadGenesisData() (*types.GenesisBlock, error) {
 
 // GetGenesis returns Genesis block stored in memory
 func (bc *BlockChain) GetGenesis() *prototype.Block {
-	bc.lock.Lock()
-	defer bc.lock.Unlock()
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
 
 	return bc.genesisBlock
 }

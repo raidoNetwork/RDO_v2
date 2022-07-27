@@ -232,7 +232,6 @@ func (p *Pool) Finalize(txarr []*types.Transaction) {
 
 		rtx, index, err := p.findPoolTransaction(tx)
 		if err != nil {
-			log.Debug(err)
 			continue
 		}
 
@@ -253,7 +252,7 @@ func (p *Pool) findPoolTransaction(tx *types.Transaction) (*types.Transaction, i
 	log.Debugf("Looking for Tx %s HashMap %v SenderMap %v Sender %s", tx.Hash().Hex(), exists, senderExists, tx.From().Hex())
 
 	if !exists && !senderExists {
-		return nil, -1, errors.New("Unknown transaction")
+		return nil, -1, errors.New("Undefined sender and transaction")
 	}
 
 	isDouble := senderTx.HasDouble(tx.Hash())

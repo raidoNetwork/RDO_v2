@@ -78,30 +78,15 @@ type Service struct{
 func (s *Service) Start(){
 	go s.listenNodeState()
 
+	// set stream handler for block receiving
+	s.addStreamHandler(p2p.MetaProtocol, s.metaHandler)
+	s.addStreamHandler(p2p.BlockRangeProtocol, s.blockRangeHandler)
+
 	s.cfg.P2P.AddConnectionHandlers(func(ctx context.Context, id peer.ID) error {
 		return s.metaRequest(ctx, id)
 	}, func(_ context.Context, _ peer.ID) error {
 		return nil
 	})
-
-	// set stream handler for block receiving
-	s.addStreamHandler(p2p.MetaProtocol, s.metaHandler)
-	s.addStreamHandler(p2p.BlockRangeProtocol, s.blockRangeHandler)
-
-	// wait for local database syncing
-	<-s.initialized
-
-	// sync state with network
-	err := s.syncWithNetwork()
-	if err != nil {
-		panic(err)
-	}
-
- 	// gossip new blocks and transactions
-	go s.gossipEvents()
-
-	// listen incoming data
-	go s.listenIncoming()
 
 	async.WithInterval(s.ctx, p2p.PeerMetaUpdateInterval, func() {
 		peers := s.cfg.P2P.PeerStore().Connected()
@@ -115,35 +100,51 @@ func (s *Service) Start(){
 			}
 		}
 	})
+
+	// wait for local database syncing
+	<-s.initialized
+
+	// sync state with network
+	err := s.syncWithNetwork()
+	if err != nil {
+		panic(err)
+	}
+	s.pushSyncedState()
+
+	// gossip new blocks and transactions
+	go s.gossipEvents()
+
+	// listen incoming data
+	go s.listenIncoming()
 }
 
 func (s *Service) gossipEvents(){
 	for{
 		select{
-			case block := <-s.blockEvent:
-				raw, err := serialize.MarshalBlock(block)
-				if err != nil {
-					log.Errorf("Error marshaling block: %s", err)
-					continue
-				}
+		case block := <-s.blockEvent:
+			raw, err := serialize.MarshalBlock(block)
+			if err != nil {
+				log.Errorf("Error marshaling block: %s", err)
+				continue
+			}
 
-				err = s.cfg.P2P.Publish(p2p.BlockTopic, raw)
-				if err != nil {
-					log.Errorf("Error sending block: %s", err)
-				}
-			case td := <-s.txEvent:
-				raw, err := serialize.MarshalTx(td.GetTx())
-				if err != nil {
-					log.Errorf("Error marshaling transaction: %s", err)
-					continue
-				}
+			err = s.cfg.P2P.Publish(p2p.BlockTopic, raw)
+			if err != nil {
+				log.Errorf("Error sending block: %s", err)
+			}
+		case td := <-s.txEvent:
+			raw, err := serialize.MarshalTx(td.GetTx())
+			if err != nil {
+				log.Errorf("Error marshaling transaction: %s", err)
+				continue
+			}
 
-				err = s.cfg.P2P.Publish(p2p.TxTopic, raw)
-				if err != nil {
-					log.Errorf("Error sending transaction: %s", err)
-				}
-			case <-s.ctx.Done():
-				return
+			err = s.cfg.P2P.Publish(p2p.TxTopic, raw)
+			if err != nil {
+				log.Errorf("Error sending transaction: %s", err)
+			}
+		case <-s.ctx.Done():
+			return
 		}
 	}
 }
@@ -177,12 +178,6 @@ func (s *Service) listenNodeState(){
 			case state.Synced:
 				atomic.StoreInt32(&s.synced, 1)
 				return
-			case state.Syncing:
-				err := s.syncWithNetwork()
-				if err != nil {
-					log.Errorf("Can't sync with network")
-					return
-				}
 			default:
 				log.Infof("Unknown state event %d", st)
 				return
@@ -194,37 +189,37 @@ func (s *Service) listenNodeState(){
 func (s *Service) listenIncoming() {
 	for{
 		select{
-			case <-s.ctx.Done():
-				return
-			case notty := <-s.notification:
-				// skip messages till full sync
-				if atomic.LoadInt32(&s.synced) != 1 {
-					time.Sleep(1 * time.Second)
-					continue
+		case <-s.ctx.Done():
+			return
+		case notty := <-s.notification:
+			// skip messages till full sync
+			if atomic.LoadInt32(&s.synced) != 1 {
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			switch notty.Topic {
+			case p2p.BlockTopic:
+				block, err := serialize.UnmarshalBlock(notty.Data)
+				if err != nil {
+					log.Errorf("Error unmarshaling block: %s", err)
+					break
 				}
 
-				switch notty.Topic {
-				case p2p.BlockTopic:
-					block, err := serialize.UnmarshalBlock(notty.Data)
-					if err != nil {
-						log.Errorf("Error unmarshaling block: %s", err)
-						break
-					}
-
-					s.cfg.BlockFeed.Send(block)
-					receivedMessages.WithLabelValues(p2p.BlockTopic).Inc()
-				case p2p.TxTopic:
-					tx, err := serialize.UnmarshalTx(notty.Data)
-					if err != nil {
-						log.Errorf("Error unmarshaling transaction: %s", err)
-						break
-					}
-
-					s.cfg.TxFeed.Send(types.NewTransaction(tx))
-					receivedMessages.WithLabelValues(p2p.TxTopic).Inc()
-				default:
-					log.Warnf("Unsupported notification %s", notty.Topic)
+				s.cfg.BlockFeed.Send(block)
+				receivedMessages.WithLabelValues(p2p.BlockTopic).Inc()
+			case p2p.TxTopic:
+				tx, err := serialize.UnmarshalTx(notty.Data)
+				if err != nil {
+					log.Errorf("Error unmarshaling transaction: %s", err)
+					break
 				}
+
+				s.cfg.TxFeed.Send(types.NewTransaction(tx))
+				receivedMessages.WithLabelValues(p2p.TxTopic).Inc()
+			default:
+				log.Warnf("Unsupported notification %s", notty.Topic)
+			}
 		}
 	}
 }
@@ -259,11 +254,6 @@ func (s *Service) addStreamHandler(topic string, handle streamHandler) {
 		ctx, cancel := context.WithTimeout(s.ctx, ttfbTimeout)
 		defer cancel()
 
-		// Resetting after closing is a no-op so defer a reset in case something goes wrong.
-		// It's up to the handler to Close the stream (send an EOF) if
-		// it successfully writes a response. We don't blindly call
-		// Close here because we may have only written a partial
-		// response.
 		defer func() {
 			_ = stream.Reset()
 		}()

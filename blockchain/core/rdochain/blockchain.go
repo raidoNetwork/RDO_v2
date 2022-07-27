@@ -42,7 +42,7 @@ type BlockChain struct {
 	genesisBlock   *prototype.Block
 	genesisHash    common.Hash
 
-	lock sync.Mutex
+	mu sync.Mutex
 
 	cfg *params.RDOBlockChainConfig
 }
@@ -76,8 +76,10 @@ func (bc *BlockChain) Init() error {
 	}
 
 	// update counter according to the database
+	bc.mu.Lock()
 	bc.headBlockNum = head                  // head block number
 	bc.futureBlockNum = bc.headBlockNum + 1 // future block num
+	bc.mu.Unlock()
 
 	var block *prototype.Block
 	if head != GenesisBlockNum {
@@ -101,8 +103,10 @@ func (bc *BlockChain) Init() error {
 
 	log.Infof("Database has %d blocks. Future block num %d.", bc.headBlockNum, bc.futureBlockNum)
 
+	bc.mu.Lock()
 	bc.prevHash = block.Hash[:]
 	bc.headBlock = block
+	bc.mu.Unlock()
 
 	// update metrics
 	setStartupMetrics(bc.genesisBlock, bc.headBlockNum)
@@ -117,8 +121,8 @@ func (bc *BlockChain) saveHeadBlockNum(n uint64) error {
 
 // ParentHash return parent hash for current block
 func (bc *BlockChain) ParentHash() []byte {
-	bc.lock.Lock()
-	defer bc.lock.Unlock()
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
 
 	return bc.prevHash
 }
@@ -164,12 +168,12 @@ func (bc *BlockChain) SaveBlock(block *prototype.Block) error {
 	supplySavingTime.Observe(float64(time.Since(start).Milliseconds()))
 
 	// update blocks stats
-	bc.lock.Lock()
+	bc.mu.Lock()
 	bc.headBlockNum++
 	bc.futureBlockNum++
 	bc.prevHash = block.Hash
 	bc.headBlock = block
-	bc.lock.Unlock()
+	bc.mu.Unlock()
 
 	headBlockNum.Inc()
 
@@ -200,16 +204,16 @@ func (bc *BlockChain) GetBlockByHash(hash []byte) (*prototype.Block, error) {
 
 // GetBlockCount return block count
 func (bc *BlockChain) GetBlockCount() uint64 {
-	bc.lock.Lock()
-	defer bc.lock.Unlock()
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
 
 	return bc.futureBlockNum
 }
 
 // GetHeadBlock get last block
 func (bc *BlockChain) GetHeadBlock() (*prototype.Block, error) {
-	bc.lock.Lock()
-	defer bc.lock.Unlock()
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
 
 	if bc.headBlock == nil {
 		blk, err := bc.GetBlockByNum(bc.headBlockNum)
@@ -230,8 +234,8 @@ func (bc *BlockChain) GetHeadBlock() (*prototype.Block, error) {
 
 // GetHeadBlockNum get number of last block in the chain
 func (bc *BlockChain) GetHeadBlockNum() uint64 {
-	bc.lock.Lock()
-	defer bc.lock.Unlock()
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
 
 	return bc.headBlockNum
 }
@@ -253,9 +257,9 @@ func (bc *BlockChain) GetTransactionsCount(addr []byte) (uint64, error) {
 
 // GetAmountStats returns total reward and fee amount
 func (bc *BlockChain) GetAmountStats() (uint64, uint64, uint64) {
-	bc.lock.Lock()
+	bc.mu.Lock()
 	genesis := bc.genesisBlock
-	bc.lock.Unlock()
+	bc.mu.Unlock()
 
 	if genesis == nil {
 		return 0, 0, 0

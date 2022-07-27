@@ -58,12 +58,24 @@ func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
 }
 
 func (cv *CryspValidator) ValidateGenesis(block *prototype.Block) error {
-	ghash := common.BytesToHash(cv.bc.GetGenesis().Hash)
+	genesis := cv.bc.GetGenesis()
+	ghash := common.BytesToHash(genesis.Hash)
 	if !bytes.Equal(block.Hash, ghash.Bytes()) {
 		return errors.Errorf("Genesis hash mismatch. Expected: %s. Given: %s", ghash.Hex(), common.Encode(block.Hash))
 	}
 
-	return cv.validateBlockHeader(block)
+	err := cv.validateBlockHeader(block)
+	if err != nil {
+		return err
+	}
+
+	for i, tx := range block.Transactions {
+		if !bytes.Equal(tx.Hash, genesis.Transactions[i].Hash) {
+			panic("Bad Genesis")
+		}
+	}
+
+	return nil
 }
 
 func (cv *CryspValidator) validateBlockHeader(block *prototype.Block) error {

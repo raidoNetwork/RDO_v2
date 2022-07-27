@@ -127,6 +127,11 @@ func (s *Service) sendBlockRangeRequest(ctx context.Context, req *prototype.Bloc
 	blocks := make([]*prototype.Block, 0)
 
 	totalCount := req.Count * req.Step
+
+	if req.StartSlot == 0 {
+		totalCount++
+	}
+
 	endSlot := req.StartSlot + totalCount
 	var prevNum uint64
 	for i := uint64(0); ; i++ {

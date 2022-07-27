@@ -73,7 +73,7 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		ticker:     slot.Ticker(),
 
 		// events
-		blockEvent: make(chan *prototype.Block, 1),
+		blockEvent: make(chan *prototype.Block, 5),
 		stateEvent: make(chan state.State, 1),
 
 		// feeds
@@ -188,24 +188,24 @@ func (s *Service) Status() error {
 }
 
 func (s *Service) waitInitialized() {
-   for {
-   		select{
-			case <-s.ctx.Done():
-				return
-			case st := <-s.stateEvent:
-				switch st {
-				case state.LocalSynced:
-					// start slot ticker
-					genesisTime := time.Unix(0, int64(s.bc.GetGenesis().Timestamp))
-					err := slot.Ticker().Start(genesisTime)
-					if err != nil {
-						panic("Zero Genesis time")
-					}
-				case state.Synced:
-					return
+	for {
+		select{
+		case <-s.ctx.Done():
+			return
+		case st := <-s.stateEvent:
+			switch st {
+			case state.LocalSynced:
+				// start slot ticker
+				genesisTime := time.Unix(0, int64(s.bc.GetGenesis().Timestamp))
+				err := slot.Ticker().Start(genesisTime)
+				if err != nil {
+					panic("Zero Genesis time")
 				}
+			case state.Synced:
+				return
+			}
 		}
-   }
+	}
 }
 
 func (s *Service) subscribeOnEvents() {

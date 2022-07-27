@@ -37,16 +37,12 @@ func (s *Service) findPeers(routing *discovery.RoutingDiscovery){
 	for p := range peers {
 		s.HandlePeerFound(p)
 	}
-
-	log.Error("Peer search channel closed")
 }
 
 func (s *Service) HandlePeerFound(p peer.AddrInfo){
 	if p.ID == s.host.ID() {
 		return
 	}
-
-	log.Infof("Found new node %s/p2p/%s", p.Addrs[0].String(), p.ID.Pretty())
 
 	err := s.connectPeer(p)
 	if err != nil {
