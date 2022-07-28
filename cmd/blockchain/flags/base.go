@@ -75,4 +75,16 @@ var (
 		Usage: "Metrics endpoint port",
 		Value: 2121,
 	})
+	// DisableSync enable syncing with network
+	DisableSync = altsrc.NewBoolFlag(&cli.BoolFlag{
+		Name: "disable-sync",
+		Usage: "Disable syncing with network",
+		Value: false,
+	})
+	// MinSyncPeers specifies sync peers minimum
+	MinSyncPeers = altsrc.NewIntFlag(&cli.IntFlag{
+		Name:  "min-sync-peers",
+		Usage: "Minimal count of peers for syncing",
+		Value: 1,
+	})
 )

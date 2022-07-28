@@ -38,7 +38,9 @@ type Config struct{
 	StateFeed events.Feed
 	Blockchain BlockchainInfo
 	Storage    BlockStorage
-	P2P 	   P2P
+	P2P          P2P
+	DisableSync  bool
+	MinSyncPeers int
 }
 
 func NewService(ctx context.Context, cfg *Config) *Service {
@@ -105,10 +107,13 @@ func (s *Service) Start(){
 	<-s.initialized
 
 	// sync state with network
-	err := s.syncWithNetwork()
-	if err != nil {
-		panic(err)
+	if !s.cfg.DisableSync {
+		err := s.syncWithNetwork()
+		if err != nil {
+			panic(err)
+		}
 	}
+
 	s.pushSyncedState()
 
 	// gossip new blocks and transactions

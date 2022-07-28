@@ -34,6 +34,10 @@ func (s *Service) optionsList(nodePrivKey *nodeKey, ip string, cfg *Config) ([]l
 		}),
 	}
 
+	if cfg.EnableNAT {
+		opts = append(opts, libp2p.NATPortMap())
+	}
+
 	return opts, nil
 }
 
@@ -83,7 +87,6 @@ func peerScoringParams() (*pubsub.PeerScoreParams, *pubsub.PeerScoreThresholds) 
 		BehaviourPenaltyDecay:       0.5,
 		DecayInterval:               slotDuration(),
 		DecayToZero:                 0.01,
-		//RetainScore:                 oneHundredEpochs,
 	}
 	return scoreParams, thresholds
 }

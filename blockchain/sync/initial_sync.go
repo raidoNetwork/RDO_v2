@@ -10,31 +10,25 @@ import (
 )
 
 func (s *Service) waitMinimumPeersForSync(findWithMaxBlock bool) {
-	var peers []peer.ID
-	var targetBlockNum uint64
 	for {
 		select {
 		case <-s.ctx.Done():
 			return
 		default:
-			localBlockNum := s.cfg.Blockchain.GetHeadBlockNum()
-			if findWithMaxBlock {
-				peers, targetBlockNum = s.findPeersForSyncWithMaxBlock()
-			} else {
-				peers, targetBlockNum = s.findPeersForSync(localBlockNum)
-			}
+			peers, _ := s.findPeers(findWithMaxBlock)
 
-			if len(peers) >= minPeers || targetBlockNum <= localBlockNum {
+			if len(peers) >= s.cfg.MinSyncPeers {
 				return
 			}
 
-			log.Debugf("Waiting for peers. Need: %d. Now: %d", minPeers, len(peers))
+			log.Infof("Waiting for enough peers. Need: %d. Now: %d.", s.cfg.MinSyncPeers, len(peers))
 			time.Sleep(5 * time.Second)
 		}
 	}
 }
 
 func (s *Service) syncWithNetwork() error {
+	// sync to most known block
 	err := s.syncToBestKnownBlock()
 	if err != nil {
 		return err
@@ -45,6 +39,7 @@ func (s *Service) syncWithNetwork() error {
 		return nil
 	}
 
+	// sync to max known block
 	return s.syncToMaxBlock()
 }
 
@@ -64,7 +59,8 @@ func (s *Service) requestBlocks(request *prototype.BlockRequest, peers []peer.ID
 			s.cfg.P2P.PeerStore().AddBlockParse(peer)
 			return blocks, nil
 		} else {
-			log.Error(errors.Wrap(err, "Error block request"))
+			log.Error(errors.Wrap(err, "Block request error"))
+			log.Errorf("Peers len %d", len(peers))
 		}
 	}
 
@@ -112,7 +108,6 @@ func (s *Service) findPeersForSync(localHeadBlockNum uint64) ([]peer.ID, uint64)
 	return peers, targetBlockNum
 }
 
-
 func (s *Service) findPeersForSyncWithMaxBlock() ([]peer.ID, uint64) {
 	connected := s.cfg.P2P.PeerStore().Connected()
 	maxBlock := s.cfg.P2P.PeerStore().Scorers().PeerHeadBlock.Get()
@@ -144,25 +139,7 @@ func (s *Service) syncToBestKnownBlock() error {
 		return nil
 	}
 
-	if len(peers) < minPeers {
-		return errors.New("Not enough peers to sync")
-	}
-
-	f := NewFetcher(s.ctx, startBlockNum, targetBlockNum, s, peers)
-
-	for res := range f.Response() {
-		for _, b := range res.blocks {
-			err := s.cfg.Storage.FinalizeBlock(b)
-			if err != nil && !errors.Is(err, consensus.ErrKnownBlock) {
-				s.cancel()
-				return errors.Wrap(err, "Error processing block batch")
-			}
-
-			log.Infof("Sync and save block %d / %d", b.Num, targetBlockNum)
-		}
-	}
-
-	return nil
+	return s.requestData(startBlockNum, targetBlockNum, peers, false)
 }
 
 func (s *Service) syncToMaxBlock() error {
@@ -173,23 +150,45 @@ func (s *Service) syncToMaxBlock() error {
 
 	peers, targetBlockNum := s.findPeersForSyncWithMaxBlock()
 
-	if len(peers) < minPeers {
-		return errors.New("Not enough peers to sync")
+	return s.requestData(startBlockNum, targetBlockNum, peers, true)
+}
+
+func (s *Service) requestData(startBlockNum, targetBlockNum uint64, peers []peer.ID, maxBlockMode bool) error {
+	if len(peers) == 0 {
+		return errors.New("No peers to sync")
 	}
 
-	f := NewFetcher(s.ctx, startBlockNum, targetBlockNum, s, peers)
+	f := NewFetcher(s.ctx, startBlockNum, targetBlockNum, s, maxBlockMode)
 
-	for res := range f.Response() {
-		for _, b := range res.blocks {
-			err := s.cfg.Storage.FinalizeBlock(b)
-			if err != nil && !errors.Is(err, consensus.ErrKnownBlock) {
-				s.cancel()
-				return errors.Wrap(err, "Error processing block batch")
+	for {
+		select {
+		case <-s.ctx.Done():
+			return nil
+		case res := <-f.Response():
+			for _, b := range res.blocks {
+				err := s.cfg.Storage.FinalizeBlock(b)
+				if err != nil && !errors.Is(err, consensus.ErrKnownBlock) {
+					s.cancel()
+					return errors.Wrap(err, "Error processing block batch")
+				}
+
+				log.Infof("Sync and save block %d / %d", b.Num, targetBlockNum)
 			}
-
-			log.Infof("Sync and save block %d / %d", b.Num, targetBlockNum)
+		case err := <-f.Error():
+			return err
 		}
 	}
+}
 
-	return nil
+func (s *Service) findPeers(findWithMaxBlock bool) ([]peer.ID, uint64) {
+	var peers []peer.ID
+	var targetBlockNum uint64
+	if findWithMaxBlock {
+		peers, targetBlockNum = s.findPeersForSyncWithMaxBlock()
+	} else {
+		localBlockNum := s.cfg.Blockchain.GetHeadBlockNum()
+		peers, targetBlockNum = s.findPeersForSync(localBlockNum)
+	}
+
+	return peers, targetBlockNum
 }

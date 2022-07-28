@@ -288,6 +288,8 @@ func (r *RDONode) registerSyncService() error {
 		P2P: p2pSrv,
 		Storage: coreService,
 		Blockchain: blockchainService,
+		DisableSync: r.cliCtx.Bool(flags.DisableSync.Name),
+		MinSyncPeers: r.cliCtx.Int(flags.MinSyncPeers.Name),
 	}
 	srv := rsync.NewService(r.ctx, &cfg)
 

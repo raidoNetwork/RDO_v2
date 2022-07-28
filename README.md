@@ -54,7 +54,8 @@ Config file can take all flags from the list below as params.
 | `verbosity` | Logging verbosity (trace, debug, info=default, warn, error, fatal, panic). |
 | `sql-cfg` | Config file path with MySQL host, port, user and password. |
 | `datadir` | Data directory for the databases and keystore. |
-| `log-file` | Specify log file name, relative or absolute. |
+| `disable-sync` | Disable initial sync with network. |
+| `min-sync-peers` | Setup minimal number of peers should be connected to the node for syncing. |
 
 ### Network settings
 

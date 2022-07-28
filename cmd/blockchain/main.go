@@ -50,6 +50,10 @@ var appFlags = []cli.Flag{
 	flags.EnableMetrics,
 	flags.MetricsHost,
 	flags.MetricsPort,
+
+	// sync
+	flags.DisableSync,
+	flags.MinSyncPeers,
 }
 
 var log = logrus.WithField("prefix", "main")
