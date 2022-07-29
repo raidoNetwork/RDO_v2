@@ -27,7 +27,6 @@ type fetcher struct {
 	errCh chan error
 	requestCh chan blockRequest
 	responseCh chan *blockResponse
-	parsedData chan *blockResponse
 	data map[uint64]*blockResponse
 
 	mu sync.Mutex
@@ -104,8 +103,6 @@ func (f *fetcher) mainLoop() {
 func (f *fetcher) requestHandlers(wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	log.Info("Start request handler")
-
 	for {
 		select {
 		case req, ok := <-f.requestCh:
@@ -175,12 +172,7 @@ func (f *fetcher) handleResponse() {
 			continue
 		}
 
-		log.Debugf("Wait for block batch from #%d %d", targetSlot, len(f.data))
-		f.mu.Lock()
-		for slot, _ := range f.data {
-			log.Warnf("Slots saved %d", slot)
-		}
-		f.mu.Unlock()
+		log.Infof("Wait for block batch from slot #%d. Blocks stored: ~%d", targetSlot, len(f.data) * blocksPerRequest)
 		<-time.After(200 * time.Millisecond)
 	}
 }

@@ -61,6 +61,8 @@ func (s *Service) Start(){
 		return
 	}
 
+	s.stateFeed.Send(state.Initialized)
+
 	// sync database
 	err = s.SyncDatabase()
 	if err != nil {

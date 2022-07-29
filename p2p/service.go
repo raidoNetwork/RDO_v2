@@ -485,6 +485,8 @@ func (s *Service) waitLocalSync(){
 			return
 		case st := <-s.stateEvent:
 			switch st {
+			case state.Initialized:
+				continue
 			case state.LocalSynced:
 				fallthrough
 			case state.Synced:

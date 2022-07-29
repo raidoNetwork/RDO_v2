@@ -28,7 +28,6 @@ const (
 
 	ttfbTimeout = 5 * time.Second
 
-	minPeers = 1
 	blocksPerRequest = 64
 )
 
@@ -79,6 +78,8 @@ type Service struct{
 
 func (s *Service) Start(){
 	go s.listenNodeState()
+
+	<-s.initialized
 
 	// set stream handler for block receiving
 	s.addStreamHandler(p2p.MetaProtocol, s.metaHandler)
@@ -158,8 +159,6 @@ func (s *Service) Stop() error {
 	// cancel context
 	s.cancel()
 
-	// todo update logic
-
 	return nil
 }
 
@@ -177,6 +176,8 @@ func (s *Service) listenNodeState(){
 			return
 		case st := <-s.stateEvent:
 			switch st {
+			case state.Initialized:
+				s.initialized <- struct{}{}
 			case state.LocalSynced:
 				time.Sleep(500 * time.Millisecond)
 				close(s.initialized)
@@ -231,10 +232,6 @@ func (s *Service) listenIncoming() {
 
 func (s *Service) pushSyncedState() {
 	s.pushStateEvent(state.Synced)
-}
-
-func (s *Service) pushSyncingState() {
-	s.pushStateEvent(state.Syncing)
 }
 
 func (s *Service) pushStateEvent(st state.State) {

@@ -3,8 +3,7 @@ package state
 type State int
 
 const (
-	LocalSynced State = iota + 1
+	Initialized State = iota + 1
+	LocalSynced
 	Synced
-	ForgeFailed
-	Syncing
 )
