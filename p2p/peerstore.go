@@ -93,6 +93,12 @@ func (ps *PeerStore) AddMeta(pid peer.ID, meta *prototype.Metadata) {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
+	if _, exists := ps.data[pid]; !exists {
+		ps.data[pid] = &PeerData{
+			Id: pid,
+		}
+	}
+
 	ps.data[pid].LastUpdate = time.Now()
 	ps.data[pid].MetaData = MetaData{
 		HeadSlot: meta.HeadSlot,

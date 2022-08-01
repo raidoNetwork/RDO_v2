@@ -26,26 +26,30 @@ func (s *Service) blockRangeHandler(ctx context.Context, msg interface{}, stream
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
-	blockRange, ok := msg.(*prototype.BlockRequest)
+	req, ok := msg.(*prototype.BlockRequest)
 	if !ok {
 		return errors.New("Message type is not block request")
 	}
 
 	peer := stream.Conn().RemotePeer()
-	if err := s.validateBlockRangeHandler(blockRange); err != nil {
+	if err := s.validateBlockRangeHandler(req); err != nil {
 		s.cfg.P2P.PeerStore().BadResponse(peer)
 		writeCodeToStream(stream, codeValidationError)
 		return errors.Wrap(err, "Error process block message")
 	}
 
-	step := blockRange.Step
-	startSlot := blockRange.StartSlot
-	endReqSlot := startSlot + blockRange.Count * step
+	step := req.Step
+	startSlot := req.StartSlot
+	endReqSlot := startSlot + req.Count * step
 	endSlot := startSlot + blocksPerRequest
 
 	log.Debugf("Write blocks from %d to %d", startSlot, endReqSlot)
 
 	for startSlot <= endReqSlot {
+		if endSlot > endReqSlot {
+			endSlot = endReqSlot
+		}
+
 		err := s.writeBlockRangeToStream(ctx, startSlot, endSlot, stream)
 		if err != nil {
 			writeCodeToStream(stream, codeInternalError)
@@ -56,10 +60,6 @@ func (s *Service) blockRangeHandler(ctx context.Context, msg interface{}, stream
 
 		startSlot = endSlot + 1
 		endSlot += blocksPerRequest
-
-		if endSlot > endReqSlot {
-			endSlot = endReqSlot
-		}
 
 		<-ticker.C
 	}
@@ -118,19 +118,14 @@ func (s *Service) sendBlockRangeRequest(ctx context.Context, req *prototype.Bloc
 	}
 	defer closeStream(stream)
 
-	log.Debugf("Open %s stream with %s", p2p.BlockRangeProtocol, pid.String())
+	log.Debugf("Open %s stream with %s from %d", p2p.BlockRangeProtocol, pid.String(), req.StartSlot)
 
 	if req.Step == 0 {
 		return nil, errors.New("Wrong request step given")
 	}
 
 	blocks := make([]*prototype.Block, 0)
-
-	totalCount := req.Count * req.Step
-
-	if req.StartSlot == 0 {
-		totalCount++
-	}
+	totalCount := req.Count * req.Step + 1
 
 	endSlot := req.StartSlot + totalCount
 	var prevNum uint64
@@ -145,6 +140,7 @@ func (s *Service) sendBlockRangeRequest(ctx context.Context, req *prototype.Bloc
 		}
 
 		if i >= totalCount || i >= maxRequestBlocksCount {
+			log.Errorf("i: %d total: %d max: %d start: %d count: %d", i, totalCount, maxRequestBlocksCount, req.StartSlot, req.Count)
 			return nil, errors.New("Invalid response data")
 		}
 

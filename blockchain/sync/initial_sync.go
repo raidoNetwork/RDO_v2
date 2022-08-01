@@ -164,7 +164,11 @@ func (s *Service) requestData(startBlockNum, targetBlockNum uint64, peers []peer
 		select {
 		case <-s.ctx.Done():
 			return nil
-		case res := <-f.Response():
+		case res, ok := <-f.Response():
+			if !ok {
+				return nil
+			}
+
 			for _, b := range res.blocks {
 				err := s.cfg.Storage.FinalizeBlock(b)
 				if err != nil && !errors.Is(err, consensus.ErrKnownBlock) {
