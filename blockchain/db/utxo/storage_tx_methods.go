@@ -3,6 +3,7 @@ package utxo
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/utxo/dbshared"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
@@ -18,7 +19,7 @@ func (s *Store) AddOutputIfNotExists(txID int, uo *types.UTxO) (err error) {
 		return errors.Errorf("Undefined transaction #%d", txID)
 	}
 
-	query := `INSERT INTO ` + dbshared.UtxoTable + ` 
+	query := fmt.Sprintf(`INSERT INTO %s 
 			(
 				tx_type, 
 				hash, 
@@ -29,21 +30,21 @@ func (s *Store) AddOutputIfNotExists(txID int, uo *types.UTxO) (err error) {
 				timestamp, 
 				block_id, 
 				address_node
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE tx_type = ?`
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE tx_type = ?`, dbshared.UtxoTable)
 
 	_, err = tx.Exec(
-			query,
-			uo.TxType,
-			uo.Hash.Hex(),
-			uo.Index,
-			uo.From.Hex(),
-			uo.To.Hex(),
-			uo.Amount,
-			uo.Timestamp,
-			uo.BlockNum,
-			uo.Node.Hex(),
-			uo.TxType,
-		)
+		query,
+		uo.TxType,
+		uo.Hash.Hex(),
+		uo.Index,
+		uo.From.Hex(),
+		uo.To.Hex(),
+		uo.Amount,
+		uo.Timestamp,
+		uo.BlockNum,
+		uo.Node.Hex(),
+		uo.TxType,
+	)
 
 	return
 }
@@ -58,7 +59,11 @@ func (s *Store) AddOutputBatch(txID int, values string) (rows int64, err error) 
 		return 0, errors.Errorf("Undefined transaction #%d", txID)
 	}
 
-	query := `INSERT INTO ` + dbshared.UtxoTable + ` (tx_type, hash, tx_index, address_from, address_to, address_node, amount, timestamp, block_id) VALUES ` + values
+	query := fmt.Sprintf(
+		"INSERT INTO %s (tx_type, hash, tx_index, address_from, address_to, address_node, amount, timestamp, block_id) VALUES %s",
+		dbshared.UtxoTable,
+		values,
+	)
 
 	res, err := tx.Exec(query)
 	if err != nil {
@@ -78,7 +83,7 @@ func (s *Store) SpendOutput(txID int, hash string, index uint32) (int64, error) 
 		return 0, errors.Errorf("SpendOutput: Undefined transaction #%d", txID)
 	}
 
-	query := `DELETE FROM ` + dbshared.UtxoTable + ` WHERE hash = ? AND tx_index = ?`
+	query := fmt.Sprintf("DELETE FROM %s WHERE hash = ? AND tx_index = ?", dbshared.UtxoTable)
 
 	res, err := tx.Exec(query, hash, index)
 	if err != nil {
@@ -98,7 +103,7 @@ func (s *Store) DeleteOutputs(txID int, blockNum uint64) error {
 		return errors.Errorf("OutputDB.DeleteOutputs: Undefined transaction #%d", txID)
 	}
 
-	query := `DELETE FROM ` + dbshared.UtxoTable + ` WHERE block_id = ?`
+	query := fmt.Sprintf("DELETE FROM %s WHERE block_id = ?", dbshared.UtxoTable)
 
 	_, err := tx.Exec(query, blockNum)
 	if err != nil {

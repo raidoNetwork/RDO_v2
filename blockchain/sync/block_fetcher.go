@@ -62,11 +62,6 @@ func (f *fetcher) mainLoop() {
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 
-	defer func() {
-		wg.Wait()
-		close(f.responseCh)
-	} ()
-
 	// start response handler
 	go f.handleResponse()
 
@@ -132,11 +127,6 @@ func (f *fetcher) request(start, end uint64) {
 	}
 
 	f.mu.Lock()
-	_, exists := f.data[start]
-	if exists {
-		panic("Double block request")
-	}
-
 	f.data[start] = &blockResponse{
 		blocks: blocks,
 		start: start,
@@ -175,4 +165,6 @@ func (f *fetcher) handleResponse() {
 		log.Infof("Wait for block batch from slot #%d. Blocks stored: ~%d", targetSlot, len(f.data) * blocksPerRequest)
 		<-time.After(200 * time.Millisecond)
 	}
+
+	close(f.responseCh)
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
+	"github.com/raidoNetwork/RDO_v2/utils/async"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	"math"
 	"strings"
@@ -40,12 +41,14 @@ type OutputManager struct {
 	maxBlockNum uint64
 
 	mu sync.Mutex
+	finalizeLock async.Mutex
 
 	syncing bool
 }
 
 // FindAllUTxO find all address' unspent outputs
 func (om *OutputManager) FindAllUTxO(from string) ([]*types.UTxO, error) {
+	om.finalizeLock.WaitLock()
 	return om.db.FindAllUTxO(from)
 }
 
@@ -455,6 +458,7 @@ func (om *OutputManager) FindStakeDeposits() ([]*types.UTxO, error) {
 
 // FindStakeDepositsOfAddress return list of stake deposits actual to the moment of block with given num.
 func (om *OutputManager) FindStakeDepositsOfAddress(address string) ([]*types.UTxO, error) {
+	om.finalizeLock.WaitLock()
 	return om.db.FindStakeDepositsOfAddress(address)
 }
 
@@ -483,3 +487,16 @@ func (om *OutputManager) cleanGenesisUTxO(tx int) error {
 
 	return nil
 }
+
+func (om *OutputManager) FinalizeLock() {
+	om.finalizeLock.Lock()
+}
+
+func (om *OutputManager) WaitFinalizeLock() {
+	om.finalizeLock.WaitLock()
+}
+
+func (om *OutputManager) FinalizeUnlock() {
+	om.finalizeLock.Unlock()
+}
+

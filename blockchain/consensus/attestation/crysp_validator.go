@@ -484,7 +484,7 @@ func (cv *CryspValidator) getTxInputsFromDB(tx *types.Transaction) ([]*types.UTx
 
 	if cv.cfg.EnableMetrics {
 		end := time.Since(start)
-		log.Infof("ValidateTransaction: Read all UTxO of user %s Count: %d Time: %s", from, utxoSize, common.StatFmt(end))
+		log.Debugf("ValidateTransaction: Read all UTxO of user %s Count: %d Time: %s", from, utxoSize, common.StatFmt(end))
 	}
 
 	return utxo, nil

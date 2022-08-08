@@ -97,13 +97,13 @@ func (s *Store) DatabasePath() string {
 
 // FindAllUTxO find all addresses' unspent outputs
 func (s *Store) FindAllUTxO(addr string) (uoArr []*types.UTxO, err error) {
-	query := `WHERE address_to = ? AND address_node = ?`
+	query := "WHERE address_to = ? AND address_node = ?"
 	return s.getOutputsList(query, addr, "")
 }
 
 // FindLastBlockNum search max block num in the database.
 func (s *Store) FindLastBlockNum() (num uint64, err error) {
-	query := `SELECT IFNULL(MAX(block_id), 0) as maxBlockId FROM ` + dbshared.UtxoTable
+	query := fmt.Sprintf("SELECT IFNULL(MAX(block_id), 0) as maxBlockId FROM %s", dbshared.UtxoTable)
 	rows, err := s.db.Query(query)
 	if err != nil {
 		return
@@ -124,7 +124,7 @@ func (s *Store) FindLastBlockNum() (num uint64, err error) {
 
 // GetTotalAmount return sum amount of network
 func (s *Store) GetTotalAmount() (uint64, error) {
-	query := `SELECT IFNULL(SUM(amount), 0) FROM ` + dbshared.UtxoTable
+	query := fmt.Sprintf("SELECT IFNULL(SUM(amount), 0) FROM %s", dbshared.UtxoTable)
 	rows, err := s.db.Query(query)
 	if err != nil {
 		return 0, nil
@@ -145,20 +145,20 @@ func (s *Store) GetTotalAmount() (uint64, error) {
 
 // FindStakeDeposits shows all actual stake deposits and return list of deposit outputs.
 func (s *Store) FindStakeDeposits() (uoArr []*types.UTxO, err error) {
-	query := `WHERE (tx_type = ? OR tx_type = ?) AND address_node = ?`
+	query := "WHERE (tx_type = ? OR tx_type = ?) AND address_node = ?"
 	return s.getOutputsList(query, common.StakeTxType, common.UnstakeTxType, common.BlackHoleAddress)
 }
 
 // FindStakeDepositsOfAddress shows actual stake deposits of given address
 // and return list of deposit outputs.
 func (s *Store) FindStakeDepositsOfAddress(address string) ([]*types.UTxO, error) {
-	query := `WHERE (tx_type = ? OR tx_type = ? ) AND address_node = ? AND address_to = ?`
+	query := "WHERE (tx_type = ? OR tx_type = ? ) AND address_node = ? AND address_to = ?"
 	return s.getOutputsList(query, common.StakeTxType, common.UnstakeTxType, common.BlackHoleAddress, address)
 }
 
 // getOutputsList return outputs list with given query and params.
-func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*types.UTxO, err error) {
-	prefix := `SELECT id, 
+func (s *Store) getOutputsList(condQuery string, params ...interface{}) (uoArr []*types.UTxO, err error) {
+	query := fmt.Sprintf(`SELECT id,
 					hash,
 					tx_index, 
 					address_from, 
@@ -167,9 +167,9 @@ func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*ty
 					amount, 
 					timestamp, 
 					block_id, 
-					tx_type FROM ` + dbshared.UtxoTable + ` `
-	
-	rows, err := s.db.Query(prefix + query, params...)
+					tx_type FROM %s %s`, dbshared.UtxoTable, condQuery)
+
+	rows, err := s.db.Query(query, params...)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +188,6 @@ func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*ty
 		}
 
 		uo := types.NewUTxOFull(id, hash, from, to, node, index, amount, blockNum, timestamp, typev)
-
 		uoArr = append(uoArr, uo)
 	}
 
@@ -196,7 +195,7 @@ func (s *Store) getOutputsList(query string, params ...interface{}) (uoArr []*ty
 }
 
 func (s *Store) ClearDatabase() error {
-	query := `DROP TABLE ` + dbshared.UtxoTable
+	query := fmt.Sprintf("DROP TABLE %s", dbshared.UtxoTable)
 	_, err := s.db.Exec(query)
 	return err
 }

@@ -247,6 +247,9 @@ func (s *Service) GetGenesis() *prototype.Block {
 
 // FinalizeBlock save block to the local databases
 func (s *Service) FinalizeBlock(block *prototype.Block) error {
+	s.outm.FinalizeLock()
+	defer s.outm.FinalizeUnlock()
+
 	// save block
 	err := s.bc.SaveBlock(block)
 	if err != nil {
@@ -304,6 +307,8 @@ LOOP: for {
 		}
 
 		return nil, errors.Wrap(err, "Error reading block")
+	case <-ctx.Done():
+		return nil, errors.New("Context deadline exceeded")
 	case b := <-blockCh:
 		blocks = append(blocks, b)
 

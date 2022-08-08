@@ -212,7 +212,11 @@ func (bc *BlockChain) GetBlockCount() uint64 {
 
 // GetHeadBlock get last block
 func (bc *BlockChain) GetHeadBlock() (*prototype.Block, error) {
-	if bc.headBlock == nil {
+	bc.mu.Lock()
+	headBlock := bc.headBlock
+	bc.mu.Unlock()
+
+	if headBlock == nil {
 		blk, err := bc.GetBlockByNum(bc.headBlockNum)
 		if err != nil {
 			return nil, err
@@ -227,12 +231,9 @@ func (bc *BlockChain) GetHeadBlock() (*prototype.Block, error) {
 
 		bc.headBlock = blk
 		return blk, nil
-	} else {
-		bc.mu.Lock()
-		defer bc.mu.Unlock()
-
-		return bc.headBlock, nil
 	}
+
+	return headBlock, nil
 }
 
 // GetHeadBlockNum get number of last block in the chain
