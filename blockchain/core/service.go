@@ -143,7 +143,6 @@ func (s *Service) mainLoop() {
 				s.statusErr = err
 				s.mu.Unlock()
 
-				//s.stateFeed.Send(state.ForgeFailed)
 				return
 			}
 
@@ -158,11 +157,13 @@ func (s *Service) mainLoop() {
 			if err != nil {
 				log.Errorf("[CoreService] Error finalizing block: %s", err.Error())
 
-				s.mu.Lock()
-				s.statusErr = err
-				s.mu.Unlock()
+				if !errors.Is(err, consensus.ErrKnownBlock) {
+					s.mu.Lock()
+					s.statusErr = err
+					s.mu.Unlock()
 
-				return
+					return
+				}
 			}
 
 			blockSize := block.SizeSSZ() / 1024

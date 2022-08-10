@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
-const maxRequestHandlers = 10
+const (
+	maxRequestHandlers = 10
+	responseHandlerTimeout = 200 * time.Millisecond
+)
 
 type blockResponse struct {
 	blocks []*prototype.Block
@@ -119,6 +122,10 @@ func (f *fetcher) request(start, end uint64) {
 		Step:      1,
 	}
 
+	if start == 0 {
+		request.Count += 1
+	}
+
 	peers, _ := f.s.findPeers(f.maxBlockMode)
 	blocks, err := f.s.requestBlocks(request, peers)
 	if err != nil {
@@ -162,8 +169,8 @@ func (f *fetcher) handleResponse() {
 			continue
 		}
 
-		log.Infof("Wait for block batch from slot #%d. Blocks stored: ~%d", targetSlot, len(f.data) * blocksPerRequest)
-		<-time.After(200 * time.Millisecond)
+		log.Infof("Wait for block batch from slot #%d. Blocks stored: %d", targetSlot, len(f.data) * blocksPerRequest)
+		<-time.After(responseHandlerTimeout)
 	}
 
 	close(f.responseCh)

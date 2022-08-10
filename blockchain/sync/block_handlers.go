@@ -35,7 +35,7 @@ func (s *Service) blockRangeHandler(ctx context.Context, msg interface{}, stream
 	if err := s.validateBlockRangeHandler(req); err != nil {
 		s.cfg.P2P.PeerStore().BadResponse(peer)
 		writeCodeToStream(stream, codeValidationError)
-		return errors.Wrap(err, "Error process block message")
+		return errors.Wrap(err, "Validation error for block request")
 	}
 
 	step := req.Step
@@ -136,7 +136,7 @@ func (s *Service) sendBlockRangeRequest(ctx context.Context, req *prototype.Bloc
 		}
 
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "Error receiving block")
 		}
 
 		if i >= totalCount || i >= maxRequestBlocksCount {

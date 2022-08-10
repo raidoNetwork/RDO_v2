@@ -284,39 +284,20 @@ func (s *Service) GetBlockBySlot(slot uint64) (*prototype.Block, error) {
 func (s *Service) GetBlocksRange(ctx context.Context, start uint64, end uint64) ([]*prototype.Block, error) {
 	count := int(end - start)
 	blocks := make([]*prototype.Block, 0, count)
-	blockCh := make(chan *prototype.Block)
-	errCh := make(chan error)
 
-	go func() {
-		for num := start; num < end; num++ {
+	for num := start; num <= end; num++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
 			block, err := s.bc.GetBlockByNum(num)
-			if err != nil {
-				errCh <- err
-				return
+			if err != nil && !errors.Is(err, ErrNotForgedBlock) {
+				return nil, err
 			}
 
-			blockCh <- block
-		}
-	} ()
-
-LOOP: for {
-	select {
-	case err := <-errCh:
-		if errors.Is(err, ErrNotForgedBlock) {
-			break LOOP
-		}
-
-		return nil, errors.Wrap(err, "Error reading block")
-	case <-ctx.Done():
-		return nil, errors.New("Context deadline exceeded")
-	case b := <-blockCh:
-		blocks = append(blocks, b)
-
-		if len(blocks) == count {
-			break LOOP
+			blocks = append(blocks, block)
 		}
 	}
-}
 
 	return blocks, nil
 }
