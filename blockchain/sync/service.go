@@ -5,6 +5,7 @@ import (
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/blockchain/state"
 	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/p2p"
@@ -107,8 +108,10 @@ func (s *Service) Start(){
 	// wait for local database syncing
 	<-s.initialized
 
+	log.Info("Start blockchain syncing...")
+
 	// sync state with network
-	if !s.cfg.DisableSync {
+	if !s.cfg.DisableSync && !slot.Ticker().GenesisAfter() {
 		err := s.syncWithNetwork()
 		if err != nil {
 			panic(err)
@@ -116,6 +119,7 @@ func (s *Service) Start(){
 	}
 
 	s.pushSyncedState()
+	log.Warnf("Node synced with network")
 
 	// gossip new blocks and transactions
 	go s.gossipEvents()
@@ -178,8 +182,8 @@ func (s *Service) listenNodeState(){
 			switch st {
 			case state.Initialized:
 				s.initialized <- struct{}{}
-			case state.LocalSynced:
 				time.Sleep(500 * time.Millisecond)
+			case state.LocalSynced:
 				close(s.initialized)
 			case state.Synced:
 				atomic.StoreInt32(&s.synced, 1)
@@ -288,7 +292,7 @@ func (s *Service) addStreamHandler(topic string, handle streamHandler) {
 
 		if err := handle(ctx, msg, stream); err != nil {
 			messageFailedProcessingCounter.WithLabelValues(topic).Inc()
-			log.WithError(err).Debug("Could not handle p2p RPC")
+			log.Errorf("Could not handle p2p RPC: %s", err)
 		}
 	})
 }

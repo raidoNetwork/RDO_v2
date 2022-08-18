@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+const waitPeerInterval = 5 * time.Second
+
 func (s *Service) waitMinimumPeersForSync(findWithMaxBlock bool) {
 	for {
 		select {
@@ -22,7 +24,7 @@ func (s *Service) waitMinimumPeersForSync(findWithMaxBlock bool) {
 			}
 
 			log.Infof("Waiting for enough peers. Need: %d. Now: %d.", s.cfg.MinSyncPeers, len(peers))
-			time.Sleep(5 * time.Second)
+			time.Sleep(waitPeerInterval)
 		}
 	}
 }

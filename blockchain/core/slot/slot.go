@@ -41,6 +41,8 @@ type SlotTicker struct{
 	c chan uint64
 
 	mu sync.Mutex
+
+	genesisTime time.Time
 }
 
 func (st *SlotTicker) C() <-chan uint64 {
@@ -58,6 +60,10 @@ func (st *SlotTicker) Start(genesisTime time.Time) error {
 		return errors.New("zero Genesis time")
 	}
 
+	st.mu.Lock()
+	st.genesisTime = genesisTime
+	st.mu.Unlock()
+
 	var nextTickTime time.Time
 	timePassed := time.Since(genesisTime)
 	if timePassed < st.slotDuration {
@@ -70,6 +76,7 @@ func (st *SlotTicker) Start(genesisTime time.Time) error {
 	slotsPerEpoch := params.RaidoConfig().SlotsPerEpoch
 
 	st.mu.Lock()
+	st.genesisTime = genesisTime
 
 	// count current slot
 	st.slot = st.currentSlot(genesisTime)
@@ -88,22 +95,22 @@ func (st *SlotTicker) Start(genesisTime time.Time) error {
 			waitTime := time.Until(nextTickTime)
 
 			select {
-				case <-time.After(waitTime):
-					st.c <- st.slot
+			case <-time.After(waitTime):
+				st.c <- st.slot
 
-					st.mu.Lock()
-					st.slot++
+				st.mu.Lock()
+				st.slot++
 
-					if st.slot % slotsPerEpoch == 0 && st.slot > 0 {
-						st.epoch++
-						st.startEpochSlot = st.slot
-						st.lastEpochSlot = st.slot + slotsPerEpoch
-					}
-					st.mu.Unlock()
+				if st.slot % slotsPerEpoch == 0 && st.slot > 0 {
+					st.epoch++
+					st.startEpochSlot = st.slot
+					st.lastEpochSlot = st.slot + slotsPerEpoch
+				}
+				st.mu.Unlock()
 
-					nextTickTime = nextTickTime.Add(st.slotDuration)
-				case <-st.done:
-					return
+				nextTickTime = nextTickTime.Add(st.slotDuration)
+			case <-st.done:
+				return
 			}
 		}
 	}()
@@ -146,4 +153,11 @@ func (st *SlotTicker) IsLastEpochSlot() bool {
 	defer st.mu.Unlock()
 
 	return st.slot == st.lastEpochSlot
+}
+
+func (st *SlotTicker) GenesisAfter() bool {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	return st.genesisTime.After(time.Now())
 }
