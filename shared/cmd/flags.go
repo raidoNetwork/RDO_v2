@@ -55,6 +55,11 @@ var (
 		Usage: "Logging verbosity (trace, debug, info=default, warn, error, fatal, panic)",
 		Value: "info",
 	})
+	// ConsensusConfigFileFlag specifies the filepath to load flag values.
+	ConsensusConfigFileFlag = &cli.StringFlag{
+		Name:  "poa-config-file",
+		Usage: "The path to a YAML file with consensus config values",
+	}
 )
 
 // LoadFlagsFromConfig sets flags values from config file if ConfigFileFlag is set.

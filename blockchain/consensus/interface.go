@@ -57,8 +57,8 @@ type BlockchainReader interface{
 	GenesisReader
 }
 
-// BlockForger interface for any struct that can create and save block to the database
-type BlockForger interface {
+// BlockFinalizer interface for any struct that can create and save block to the database
+type BlockFinalizer interface {
 	// FinalizeBlock store block to the blockchain.
 	FinalizeBlock(*prototype.Block) error
 

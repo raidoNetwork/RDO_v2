@@ -58,7 +58,7 @@ func NewBlock(blockNum, slot uint64, parent []byte, txBatch []*prototype.Transac
 	}
 
 	tstamp := uint64(time.Now().UnixNano())
-	header.Hash = hash.BlockHash(header.Num, header.Slot, header.Version, header.Parent, header.TxRoot, tstamp)
+	header.Hash = hash.BlockHash(header.Num, header.Slot, header.Version, header.Parent, header.TxRoot, tstamp, blockSheet.Proposer.Address)
 
 	block := &prototype.Block{
 		Num:          header.Num,
@@ -70,9 +70,9 @@ func NewBlock(blockNum, slot uint64, parent []byte, txBatch []*prototype.Transac
 		Timestamp:    tstamp,
 		Proposer:     blockSheet.Proposer,
 		Transactions: txBatch,
+		Approvers: make([]*prototype.Sign, 0),
+		Slashers:  make([]*prototype.Sign, 0),
 	}
-
-	// TODO add approvers and slashers
 
 	return block
 }
@@ -86,3 +86,12 @@ func signBlock(header *BlockHeader, validator *keystore.ValidatorAccount) *proto
 	return sign
 }
 
+func GetBlockHeader(block *prototype.Block) *BlockHeader {
+	return &BlockHeader{
+		Num:     block.Num,
+		Parent:  block.Parent,
+		Version: []byte{1, 0, 0},
+		TxRoot:  block.Txroot,
+		Slot: block.Slot,
+	}
+}

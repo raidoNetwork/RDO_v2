@@ -10,16 +10,18 @@ import (
 	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/p2p"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/async"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
+	"github.com/raidoNetwork/RDO_v2/validator"
 	"github.com/sirupsen/logrus"
 	"runtime/debug"
-	"sync/atomic"
 	"time"
 )
 
 var log = logrus.WithField("prefix", "syncBlocks")
+var _ shared.Service = (*Service)(nil)
 
 const (
 	txGossipCount = 200
@@ -41,6 +43,7 @@ type Config struct{
 	P2P          P2P
 	DisableSync  bool
 	MinSyncPeers int
+	ValidatorService *validator.Service
 }
 
 func NewService(ctx context.Context, cfg *Config) *Service {
@@ -74,7 +77,6 @@ type Service struct{
 	cancel  context.CancelFunc
 
 	initialized	chan struct{}
-	synced int32
 }
 
 func (s *Service) Start(){
@@ -126,6 +128,10 @@ func (s *Service) Start(){
 
 	// listen incoming data
 	go s.listenIncoming()
+
+	if s.cfg.ValidatorService != nil {
+		go s.listenValidatorTopics()
+	}
 }
 
 func (s *Service) gossipEvents(){
@@ -163,6 +169,8 @@ func (s *Service) Stop() error {
 	// cancel context
 	s.cancel()
 
+	// todo update logic
+
 	return nil
 }
 
@@ -186,7 +194,7 @@ func (s *Service) listenNodeState(){
 			case state.LocalSynced:
 				close(s.initialized)
 			case state.Synced:
-				atomic.StoreInt32(&s.synced, 1)
+				// todo do nothing
 				return
 			default:
 				log.Infof("Unknown state event %d", st)
@@ -202,12 +210,6 @@ func (s *Service) listenIncoming() {
 		case <-s.ctx.Done():
 			return
 		case notty := <-s.notification:
-			// skip messages till full sync
-			if atomic.LoadInt32(&s.synced) != 1 {
-				time.Sleep(1 * time.Second)
-				continue
-			}
-
 			switch notty.Topic {
 			case p2p.BlockTopic:
 				block, err := serialize.UnmarshalBlock(notty.Data)
@@ -215,6 +217,8 @@ func (s *Service) listenIncoming() {
 					log.Errorf("Error unmarshaling block: %s", err)
 					break
 				}
+
+				log.Debugf("Receive block #%d", block.Num)
 
 				s.cfg.BlockFeed.Send(block)
 				receivedMessages.WithLabelValues(p2p.BlockTopic).Inc()
@@ -262,6 +266,7 @@ func (s *Service) addStreamHandler(topic string, handle streamHandler) {
 
 		defer func() {
 			_ = stream.Reset()
+			log.Warnf("Reset stream on response for %s", string(stream.Protocol()))
 		}()
 
 		log := log.WithField("peer", stream.Conn().RemotePeer().Pretty()).WithField("topic", string(stream.Protocol()))

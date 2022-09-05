@@ -254,7 +254,7 @@ func (cv *CryspValidator) validateCollapseTx(tx *types.Transaction, block *proto
 			input := uo.ToInput()
 			inputKey := serialize.GenKeyFromInput(input)
 
-			// last inputs
+			// skip not used last address outputs
 			if isLastAddress {
 				if _, exists := lastAddrOutputs[inputKey]; !exists {
 					continue

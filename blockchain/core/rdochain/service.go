@@ -8,6 +8,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/blockchain/state"
 	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
@@ -15,6 +16,7 @@ import (
 	"sync"
 )
 
+var _ shared.Service = (*Service)(nil)
 var log = logrus.WithField("prefix", "blockchain")
 
 var (

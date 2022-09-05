@@ -9,6 +9,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/hash"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
+	vtypes "github.com/raidoNetwork/RDO_v2/validator/types"
 	"strconv"
 	"time"
 )
@@ -117,7 +118,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensu
 		return nil, err
 	}
 
-	blockHash := hash.BlockHash(block.Num, block.Slot, block.Version, block.Parent, block.Txroot, block.Timestamp)
+	blockHash := hash.BlockHash(block.Num, block.Slot, block.Version, block.Parent, block.Txroot, block.Timestamp, block.Proposer.Address)
 	if !bytes.Equal(blockHash, block.Hash) {
 		return nil, errors.Errorf("Bad block hash given. Expected: %s. Given: %s", common.Encode(blockHash), common.Encode(block.Hash))
 	}
@@ -166,8 +167,8 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensu
 		return nil, errors.Errorf("ValidateBlock: Timestamp is too small. Previous: %d. Current: %d.", prevBlock.Timestamp, block.Timestamp)
 	}
 
-	approversCount := cv.countValidSigns(block, block.Approvers)
-	slashersCount := cv.countValidSigns(block, block.Slashers)
+	approversCount := cv.countValidSigns(block, block.Approvers, vtypes.Approve)
+	slashersCount := cv.countValidSigns(block, block.Slashers, vtypes.Reject)
 
 	log.Infof("Approvers %d, slashers %d", approversCount, slashersCount)
 
@@ -239,11 +240,11 @@ func (cv *CryspValidator) verifyBlockSign(block *prototype.Block, sign *prototyp
 	return types.GetBlockSigner().Verify(header, sign)
 }
 
-func (cv *CryspValidator) countValidSigns(block *prototype.Block, signatures []*prototype.Sign) int {
+func (cv *CryspValidator) countValidSigns(block *prototype.Block, signatures []*prototype.Sign, attestationType vtypes.AttestationType) int {
 	validCount := 0
 	header := types.NewHeader(block)
 	for _, sign := range signatures {
-		err := types.GetBlockSigner().Verify(header, sign)
+		err := vtypes.VerifyBlockSign(header, attestationType, sign)
 		if err != nil {
 			continue
 		}

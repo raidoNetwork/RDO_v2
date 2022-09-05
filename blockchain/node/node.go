@@ -23,6 +23,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/cmd"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/version"
+	"github.com/raidoNetwork/RDO_v2/validator"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"os"
@@ -37,9 +38,6 @@ var log = logrus.WithField("prefix", "node")
 
 const maxMsgSize =  1 << 22
 
-// RDONode defines a struct that handles the services running a random rdo chain
-// full PoS node. It handles the lifecycle of the entire system and registers
-// services to a service registry.
 type RDONode struct {
 	cliCtx   *cli.Context
 	ctx      context.Context
@@ -52,6 +50,9 @@ type RDONode struct {
 	stateFeed events.Bus
 	blockFeed events.Bus
 	txFeed	  events.Bus
+	// validator events
+	proposeFeed events.Bus
+	attestationFeed events.Bus
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -67,7 +68,7 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 	registry := shared.NewServiceRegistry()
 
 	// create slot ticker
-	slot.NewSlotTicker()
+	slot.CreateSlotTicker()
 
 	ctx, cancel := context.WithCancel(cliCtx.Context)
 	rdo := &RDONode{
@@ -136,6 +137,37 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 	return rdo, nil
 }
 
+func (r *RDONode) InitValidatorService() error {
+	var blockchainService *rdochain.Service
+	err := r.services.FetchService(&blockchainService)
+	if err != nil {
+		return err
+	}
+
+	var attestationService *attestation.Service
+	err = r.services.FetchService(&attestationService)
+	if err != nil {
+		return err
+	}
+
+	cfg := validator.Config{
+		BlockFinalizer:  blockchainService,
+		AttestationPool: attestationService,
+		ProposeFeed:     &r.proposeFeed,
+		AttestationFeed: &r.attestationFeed,
+		BlockFeed: 		 &r.blockFeed,
+		StateFeed:  	 &r.stateFeed,
+		Context:         r.ctx,
+	}
+
+	srv, err := validator.New(r.cliCtx, &cfg)
+	if err != nil {
+		return err
+	}
+
+	return r.services.RegisterService(srv)
+}
+
 func (r *RDONode) registerCoreService() error {
 	var blockchainService *rdochain.Service
 	err := r.services.FetchService(&blockchainService)
@@ -150,11 +182,11 @@ func (r *RDONode) registerCoreService() error {
 	}
 
 	cfg := core.Config{
-		BlockForger: blockchainService,
+		BlockFinalizer:  blockchainService,
 		AttestationPool: attestationService,
-		BlockFeed: r.BlockFeed(),
-		StateFeed: r.StateFeed(),
-		Context:   r.ctx,
+		BlockFeed:       r.BlockFeed(),
+		StateFeed:       r.StateFeed(),
+		Context:         r.ctx,
 	}
 	srv, err := core.NewService(r.cliCtx, &cfg)
 	if err != nil {
@@ -246,6 +278,12 @@ func (r *RDONode) registerAttestationService() error {
 }
 
 func (r *RDONode) registerP2P() error {
+	var validatorService *validator.Service
+	err := r.services.FetchService(&validatorService)
+	if err != nil {
+		validatorService = nil
+	}
+
 	cfg := p2p.Config{
 		Host: r.cliCtx.String(flags.P2PHost.Name),
 		Port: r.cliCtx.Int(flags.P2PPort.Name),
@@ -253,6 +291,7 @@ func (r *RDONode) registerP2P() error {
 		DataDir: r.cliCtx.String(cmd.DataDirFlag.Name),
 		StateFeed: r.StateFeed(),
 		EnableNAT: r.cliCtx.Bool(flags.P2PEnableNat.Name),
+		ListenValidatorData: validatorService != nil,
 	}
 	srv, err := p2p.NewService(r.ctx, &cfg)
 	if err != nil {
@@ -281,6 +320,12 @@ func (r *RDONode) registerSyncService() error {
 		return err
 	}
 
+	var validatorService *validator.Service
+	err = r.services.FetchService(&validatorService)
+	if err != nil {
+		validatorService = nil
+	}
+
 	cfg := rsync.Config{
 		BlockFeed: r.BlockFeed(),
 		TxFeed: r.TxFeed(),
@@ -290,6 +335,7 @@ func (r *RDONode) registerSyncService() error {
 		Blockchain: blockchainService,
 		DisableSync: r.cliCtx.Bool(flags.DisableSync.Name),
 		MinSyncPeers: r.cliCtx.Int(flags.MinSyncPeers.Name),
+		ValidatorService: validatorService,
 	}
 	srv := rsync.NewService(r.ctx, &cfg)
 

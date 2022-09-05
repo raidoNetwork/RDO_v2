@@ -41,6 +41,7 @@ type Config struct {
 	DataDir        string
 	StateFeed	   events.Feed
 	EnableNAT	   bool
+	ListenValidatorData bool
 }
 
 func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
@@ -127,6 +128,7 @@ type Service struct {
 	startFail error
 
 	notifier events.Bus
+	validatorNotifier events.Bus
 
 	// discovery
 	dht *dht.IpfsDHT
@@ -249,6 +251,12 @@ func (s *Service) readMessages(){
 	for t := range topicMap {
 		go s.listenTopic(t)
 	}
+
+	if s.cfg.ListenValidatorData {
+		for t := range validatorMap {
+			go s.listenTopic(t)
+		}
+	}
 }
 
 func (s *Service) listenTopic(topic string){
@@ -276,7 +284,8 @@ func (s *Service) listenTopic(topic string){
 			continue
 		}
 
-		go s.receiveMessage(msg)
+		_, isValidatorTopic := validatorMap[topic]
+		go s.receiveMessage(msg, isValidatorTopic)
 	}
 }
 
@@ -342,7 +351,7 @@ func (s *Service) logID(){
 	log.Infof("Start listen on %s/p2p/%s", s.host.Addrs()[0].String(), s.id.Pretty())
 }
 
-func (s *Service) receiveMessage(msg *pubsub.Message){
+func (s *Service) receiveMessage(msg *pubsub.Message, isValidatorMessage bool){
 	n := Notty{
 		Data: msg.Data,
 		Topic: *msg.Topic,
@@ -350,11 +359,19 @@ func (s *Service) receiveMessage(msg *pubsub.Message){
 	}
 
 	// send event
-	s.notifier.Send(n)
+	if isValidatorMessage {
+		s.validatorNotifier.Send(n)
+	} else {
+		s.notifier.Send(n)
+	}
 }
 
 func (s *Service) Notifier() *events.Bus {
 	return &s.notifier
+}
+
+func (s *Service) ValidatorNotifier() *events.Bus {
+	return &s.validatorNotifier
 }
 
 func (s *Service) AddConnectionHandlers(connectHandler, disconnectHandler ConnectionHandler) {
@@ -462,11 +479,13 @@ func (s *Service) CreateStream(ctx context.Context, msg ssz.Marshaler, topic str
 	if _, err := s.EncodeStream(stream, msg); err != nil {
 		_err := stream.Reset()
 		_ = _err
+		log.Warnf("Reset stream on write for %s", string(stream.Protocol()))
 		return nil, err
 	}
 
 	// Close stream for writing.
 	if err := stream.CloseWrite(); err != nil {
+		log.Warnf("Reset stream on close write for %s", string(stream.Protocol()))
 		_err := stream.Reset()
 		_ = _err
 		return nil, err

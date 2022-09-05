@@ -15,15 +15,28 @@ type BlockSigner interface {
 	// Sign given digest with given key.
 	Sign(*BlockHeader, *ecdsa.PrivateKey) (*prototype.Sign, error)
 
+	// SignMixed sign given block with mixed value
+	SignMixed(*BlockHeader, []byte, *ecdsa.PrivateKey) (*prototype.Sign, error)
+
 	// Verify sign of given input.
 	Verify(*BlockHeader, *prototype.Sign) error
+
+	// VerifyMixed verify sign of given block with mixed value
+	VerifyMixed(*BlockHeader, []byte, *prototype.Sign) error
 }
 
 type KeccakBlockSigner struct {}
 
 func (kbs *KeccakBlockSigner) Sign(header *BlockHeader, key *ecdsa.PrivateKey) (*prototype.Sign, error){
-	hash := kbs.getBlockDomain(header)
+	return kbs.signRaw(kbs.getBlockDomain(header, nil), key)
+}
 
+func (kbs *KeccakBlockSigner) SignMixed(header *BlockHeader, mix []byte, key *ecdsa.PrivateKey) (*prototype.Sign, error){
+	hash := kbs.getBlockDomain(header, mix)
+	return kbs.signRaw(hash, key)
+}
+
+func (kbs *KeccakBlockSigner) signRaw(hash []byte, key *ecdsa.PrivateKey) (*prototype.Sign, error) {
 	kdst := crypto.FromECDSA(key)
 	signature, err := secp256k1.Sign(hash, kdst)
 	if err != nil {
@@ -40,8 +53,15 @@ func (kbs *KeccakBlockSigner) Sign(header *BlockHeader, key *ecdsa.PrivateKey) (
 }
 
 func (kbs *KeccakBlockSigner) Verify(header *BlockHeader, sign *prototype.Sign) error {
-	dgst := kbs.getBlockDomain(header)
+	return kbs.verifyRaw(kbs.getBlockDomain(header, nil), sign)
+}
 
+func (kbs *KeccakBlockSigner) VerifyMixed(header *BlockHeader, mix []byte, sign *prototype.Sign) error {
+	dgst := kbs.getBlockDomain(header, mix)
+	return kbs.verifyRaw(dgst, sign)
+}
+
+func (kbs *KeccakBlockSigner) verifyRaw(dgst []byte, sign *prototype.Sign) error {
 	pubKey, err := crypto.SigToPub(dgst, sign.Signature)
 	if err != nil {
 		return err
@@ -55,7 +75,7 @@ func (kbs *KeccakBlockSigner) Verify(header *BlockHeader, sign *prototype.Sign) 
 	return nil
 }
 
-func (kbs *KeccakBlockSigner) getBlockDomain(header *BlockHeader) []byte {
+func (kbs *KeccakBlockSigner) getBlockDomain(header *BlockHeader, mix []byte) []byte {
 	var buf = make([]byte, 0, 75)
 
 	// Put Num
@@ -65,6 +85,10 @@ func (kbs *KeccakBlockSigner) getBlockDomain(header *BlockHeader) []byte {
 	buf = append(buf, header.Parent...)
 	buf = append(buf, header.Version...)
 	buf = append(buf, header.TxRoot...)
+
+	if len(mix) > 0 {
+		buf = append(buf, mix...)
+	}
 
 	return crypto.Keccak256Hash(buf)
 }

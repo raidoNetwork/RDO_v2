@@ -1,4 +1,4 @@
-package miner
+package forger
 
 import (
 	"github.com/pkg/errors"
@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-var log = logrus.WithField("prefix", "Miner")
+var log = logrus.WithField("prefix", "Forger")
 
 var (
 	ErrZeroFeeAmount = errors.New("Block has no transactions with fee.")
@@ -26,8 +26,8 @@ type Config struct {
 	Proposer 	 *keystore.ValidatorAccount
 }
 
-func NewMiner(bc consensus.BlockForger, att consensus.AttestationPool, cfg *Config) *Miner {
-	m := Miner{
+func New(bc consensus.BlockFinalizer, att consensus.AttestationPool, cfg *Config) *Forger {
+	m := Forger{
 		bf:       bc,
 		att:      att,
 		cfg:      cfg,
@@ -37,15 +37,15 @@ func NewMiner(bc consensus.BlockForger, att consensus.AttestationPool, cfg *Conf
 	return &m
 }
 
-type Miner struct {
-	bf  consensus.BlockForger
+type Forger struct {
+	bf  consensus.BlockFinalizer
 	att consensus.AttestationPool
 	cfg      *Config
 	skipAddr map[string]struct{}
 }
 
 // ForgeBlock create block from tx pool data
-func (m *Miner) ForgeBlock() (*prototype.Block, error) {
+func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 	start := time.Now()
 	bn := start.Unix()
 	totalSize := 0 // current size of block in bytes
@@ -184,7 +184,7 @@ func (m *Miner) ForgeBlock() (*prototype.Block, error) {
 	return block, nil
 }
 
-func (m *Miner) addRewardTxToBatch(txBatch []*prototype.Transaction, collapseBatch []*prototype.Transaction, totalSize int, bn int64) ([]*prototype.Transaction, []*prototype.Transaction, int, error) {
+func (m *Forger) addRewardTxToBatch(txBatch []*prototype.Transaction, collapseBatch []*prototype.Transaction, totalSize int, bn int64) ([]*prototype.Transaction, []*prototype.Transaction, int, error) {
 	rewardTx, err := m.createRewardTx(m.bf.GetBlockCount())
 	if err != nil {
 		if errors.Is(err, consensus.ErrNoStakers) {
@@ -220,7 +220,7 @@ func (m *Miner) addRewardTxToBatch(txBatch []*prototype.Transaction, collapseBat
 	return txBatch, collapseBatch, totalSize, nil
 }
 
-func (m *Miner) createFeeTx(txarr []*prototype.Transaction) (*prototype.Transaction, error) {
+func (m *Forger) createFeeTx(txarr []*prototype.Transaction) (*prototype.Transaction, error) {
 	var feeAmount uint64
 
 	for _, tx := range txarr {
@@ -248,7 +248,7 @@ func (m *Miner) createFeeTx(txarr []*prototype.Transaction) (*prototype.Transact
 	return ntx, nil
 }
 
-func (m *Miner) createRewardTx(blockNum uint64) (*prototype.Transaction, error) {
+func (m *Forger) createRewardTx(blockNum uint64) (*prototype.Transaction, error) {
 	outs := m.att.StakePool().GetRewardOutputs()
 	if len(outs) == 0 {
 		return nil, consensus.ErrNoStakers
@@ -269,7 +269,7 @@ func (m *Miner) createRewardTx(blockNum uint64) (*prototype.Transaction, error) 
 	return ntx, nil
 }
 
-func (m *Miner) createCollapseTx(tx *types.Transaction, blockNum uint64) (*types.Transaction, error) {
+func (m *Forger) createCollapseTx(tx *types.Transaction, blockNum uint64) (*types.Transaction, error) {
 	const CollapseOutputsNum = 100 // minimal count of UTxO to collapse address outputs
 	const InputsPerTxLimit = 2000
 

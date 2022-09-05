@@ -1,4 +1,4 @@
-package miner
+package forger
 
 import (
 	"github.com/prometheus/client_golang/prometheus"

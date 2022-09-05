@@ -1,13 +1,11 @@
 package p2p
 
-// todo add version to each protocol
-
 const (
 	mainPrefix 		  = "/raido/"
 	blockSuffix 	  = "block-forge"
 	txSuffix          = "tx"
 	attestationSuffix = "attestation-suffix"
-	slashingSuffix    = "slashing"
+	proposalSuffix    = "proposal"
 	blockRangeSuffix  = "block-range"
 	metaSuffix		  = "metadata"
 
@@ -16,11 +14,16 @@ const (
 	BlockRangeProtocol = mainPrefix + blockRangeSuffix
 	TxTopic            = mainPrefix + txSuffix
 	AttestationTopic = mainPrefix + attestationSuffix
-	SlashTopic = mainPrefix + slashingSuffix
+	ProposalTopic = mainPrefix + proposalSuffix
 )
 
 var topicMap = map[string]int{
 	BlockTopic: 1,
 	TxTopic: 2,
+}
+
+var validatorMap = map[string]int{
+	AttestationTopic: 3,
+	ProposalTopic: 4,
 }
 

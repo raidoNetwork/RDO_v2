@@ -9,10 +9,14 @@ import (
 
 var mainTicker *SlotTicker
 
-func NewSlotTicker(){
+func CreateSlotTicker(){
+	mainTicker = NewSlotTicker()
+}
+
+func NewSlotTicker() *SlotTicker {
 	slotDuration := params.RaidoConfig().SlotTime
 
-	ticker := &SlotTicker{
+	return &SlotTicker{
 		slot: 0,
 		epoch: 0,
 		done: make(chan struct{}),
@@ -20,8 +24,6 @@ func NewSlotTicker(){
 		slotDuration: time.Duration(slotDuration) * time.Second,
 		slotSec: slotDuration,
 	}
-
-	mainTicker = ticker
 }
 
 func Ticker() *SlotTicker {
@@ -53,6 +55,11 @@ func (st *SlotTicker) Stop(){
 	go func(){
 		st.done <- struct{}{}
 	}()
+}
+
+func (st *SlotTicker) StartFromTimestamp(tstamp uint64) error {
+	timeFormat := time.Unix(0, int64(tstamp))
+	return st.Start(timeFormat)
 }
 
 func (st *SlotTicker) Start(genesisTime time.Time) error {
@@ -160,4 +167,11 @@ func (st *SlotTicker) GenesisAfter() bool {
 	defer st.mu.Unlock()
 
 	return st.genesisTime.After(time.Now())
+}
+
+func (st *SlotTicker) GenesisTime() time.Time {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	return st.genesisTime
 }

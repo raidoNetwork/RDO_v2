@@ -2,18 +2,13 @@ package core
 
 import (
 	"context"
-	"fmt"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
-	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/miner"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/blockchain/state"
-	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
 	"github.com/raidoNetwork/RDO_v2/events"
-	"github.com/raidoNetwork/RDO_v2/keystore"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
-	"github.com/raidoNetwork/RDO_v2/shared/cmd"
-	"github.com/raidoNetwork/RDO_v2/shared/params"
+	"github.com/raidoNetwork/RDO_v2/shared"
 	utypes "github.com/raidoNetwork/RDO_v2/utils/types"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -22,9 +17,10 @@ import (
 )
 
 var log = logrus.WithField("prefix", "core")
+var _ shared.Service = (*Service)(nil)
 
 type Config struct{
-	BlockForger consensus.BlockForger
+	BlockFinalizer  consensus.BlockFinalizer
 	AttestationPool consensus.AttestationPool
 	StateFeed events.Feed
 	BlockFeed events.Feed
@@ -33,41 +29,12 @@ type Config struct{
 
 // NewService creates new CoreService
 func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
-	dataDir := cliCtx.String(cmd.DataDirFlag.Name)
-	netCfg := params.RaidoConfig()
-
-	// TODO rework validator address loading
-	proposer, err := keystore.NewValidatorAccountFromFile(dataDir)
-	if err != nil {
-		return nil, err
-	}
-
-	var msg string
-	if proposer.Key() != nil {
-		msg = fmt.Sprintf("Master node with proposer %s", proposer.Addr().Hex())
-	} else {
-		msg = "Slave node"
-	}
-	log.Info(msg)
-
-	minerCfg := &miner.Config{
-		EnableMetrics: cliCtx.Bool(flags.EnableMetrics.Name),
-		BlockSize:     netCfg.BlockSize,
-		Proposer:      proposer,
-	}
-
-	// new block miner
-	forger := miner.NewMiner(cfg.BlockForger, cfg.AttestationPool, minerCfg)
-
 	ctx, finish := context.WithCancel(cfg.Context)
 
 	srv := &Service{
 		cliCtx:     cliCtx,
 		ctx:        ctx,
 		cancelFunc: finish,
-		miner:      forger,
-		proposer:   proposer,
-		bc:         cfg.BlockForger,
 		att:	    cfg.AttestationPool,
 
 		ticker:     slot.Ticker(),
@@ -79,6 +46,8 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		// feeds
 		blockFeed: cfg.BlockFeed,
 		stateFeed: cfg.StateFeed,
+
+		bc: cfg.BlockFinalizer,
 	}
 
 	return srv, nil
@@ -90,11 +59,9 @@ type Service struct {
 	ctx          context.Context
 	cancelFunc   context.CancelFunc
 	statusErr    error
-	bc			 consensus.BlockForger
 	att			 consensus.AttestationPool
-	proposer 	 *keystore.ValidatorAccount
+	bc			 consensus.BlockFinalizer
 
-	miner *miner.Miner            // block miner
 	ticker *slot.SlotTicker
 
 	mu sync.Mutex
@@ -126,30 +93,6 @@ func (s *Service) mainLoop() {
 			return
 		case <-s.ticker.C():
 			updateCoreMetrics()
-
-			// Master node has key
-			if s.proposer.Key() == nil {
-				continue
-			}
-
-			start := time.Now()
-
-			// generate block with block miner
-			block, err := s.miner.ForgeBlock()
-			if err != nil {
-				log.Errorf("[CoreService] Error forging block: %s", err.Error())
-
-				s.mu.Lock()
-				s.statusErr = err
-				s.mu.Unlock()
-
-				return
-			}
-
-			// push block to events
-			s.blockFeed.Send(block)
-
-			log.Debugf("Block #%d forged in %d ms", block.Num, time.Since(start).Milliseconds())
 		case block := <-s.blockEvent:
 			start := time.Now()
 
@@ -167,8 +110,8 @@ func (s *Service) mainLoop() {
 			}
 
 			blockSize := block.SizeSSZ() / 1024
-			log.Warnf("[CoreService] Block #%d finalized. Transactions in block: %d. Size: %d kB.", block.Num, len(block.Transactions), blockSize)
-			log.Debugf("Block #%d finalized time %d ms", block.Num, time.Since(start).Milliseconds())
+			log.Warnf("[CoreService] Block#%d finalized. Transactions in block: %d. Size: %d kB.", block.Num, len(block.Transactions), blockSize)
+			log.Debugf("Block#%d finalized time %d ms", block.Num, time.Since(start).Milliseconds())
 		}
 	}
 }
@@ -197,8 +140,7 @@ func (s *Service) waitInitialized() {
 			switch st {
 			case state.LocalSynced:
 				// start slot ticker
-				genesisTime := time.Unix(0, int64(s.bc.GetGenesis().Timestamp))
-				err := slot.Ticker().Start(genesisTime)
+				err := s.ticker.StartFromTimestamp(s.bc.GetGenesis().Timestamp)
 				if err != nil {
 					panic("Zero Genesis time")
 				}
