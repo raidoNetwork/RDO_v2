@@ -8,6 +8,11 @@ raido:
 	@echo "Done building raido."
 	@echo "Run \"$(GOBIN)/raido\" to launch RaidoChain node."
 
+validator:
+	$(GOBUILD) bin/validator cmd/validator/main.go
+	@echo "Done building raido validator."
+	@echo "Run \"$(GOBIN)/validator\" to launch RaidoChain validator node."
+
 keygen:
 	$(GOBUILD) bin/raido-keygen cmd/keygen/main.go
 	@echo "Done building keygen."
