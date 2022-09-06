@@ -110,8 +110,8 @@ func (s *Service) mainLoop() {
 			}
 
 			blockSize := block.SizeSSZ() / 1024
-			log.Warnf("[CoreService] Block#%d finalized. Transactions in block: %d. Size: %d kB.", block.Num, len(block.Transactions), blockSize)
-			log.Debugf("Block#%d finalized time %d ms", block.Num, time.Since(start).Milliseconds())
+			log.Warnf("[CoreService] Block #%d finalized. Transactions in block: %d. Size: %d kB.", block.Num, len(block.Transactions), blockSize)
+			log.Debugf("Block #%d finalized time %d ms", block.Num, time.Since(start).Milliseconds())
 		}
 	}
 }

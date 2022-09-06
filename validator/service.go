@@ -9,6 +9,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/blockchain/state"
 	"github.com/raidoNetwork/RDO_v2/cmd/blockchain/flags"
+	vflags "github.com/raidoNetwork/RDO_v2/cmd/validator/flags"
 	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/keystore"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -19,6 +20,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/validator/types"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -153,7 +155,6 @@ func (s *Service) loop() {
 			blockHash := common.Encode(att.Block.Hash)
 			err := types.VerifyAttestationSign(att)
 			if err != nil {
-				// todo mark validator as malicious
 				log.Warnf(
 					"Malicious validator %s. Wrong sign on block %d %s.",
 					common.Encode(att.Signature.Address),
@@ -182,7 +183,6 @@ func (s *Service) loop() {
 				}
 			}
 		case <-s.ctx.Done():
-			// todo unsubscribe
 			return
 		case <-finishVoting:
 			votingIsFinished = true
@@ -240,11 +240,16 @@ func (s *Service) waitInitEvent() {
 }
 
 func New(cliCtx *cli.Context, cfg *Config) (*Service, error) {
-	dataDir := cliCtx.String(cmd.DataDirFlag.Name)
-	netCfg := params.RaidoConfig()
+	var path string
+	validatorPath := cliCtx.String(vflags.ValidatorKey.Name)
+	if validatorPath != "" {
+		path = validatorPath
+	} else {
+		dataDir := cliCtx.String(cmd.DataDirFlag.Name)
+		path = filepath.Join(dataDir, "validator", "validator.key")
+	}
 
-	// TODO rework validator address loading
-	proposer, err := keystore.NewValidatorAccountFromFile(dataDir)
+	proposer, err := keystore.NewValidatorAccountFromFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -258,6 +263,7 @@ func New(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		return nil, errors.New("Attach validator key to start validator flow")
 	}
 
+	netCfg := params.RaidoConfig()
 	forgerCfg := &forger.Config{
 		EnableMetrics: cliCtx.Bool(flags.EnableMetrics.Name),
 		BlockSize:     netCfg.BlockSize,

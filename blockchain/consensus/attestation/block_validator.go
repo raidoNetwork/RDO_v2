@@ -167,8 +167,18 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensu
 		return nil, errors.Errorf("ValidateBlock: Timestamp is too small. Previous: %d. Current: %d.", prevBlock.Timestamp, block.Timestamp)
 	}
 
+	blockNumDiff := block.Num - prevBlock.Num
+	if blockNumDiff > 1 {
+		return nil, errors.Errorf("ValidateBlock: Too big block num difference. Need: 1. Current: %d", blockNumDiff)
+	}
+
 	approversCount := cv.countValidSigns(block, block.Approvers, vtypes.Approve)
 	slashersCount := cv.countValidSigns(block, block.Slashers, vtypes.Reject)
+
+	err = consensus.IsEnoughVotes(approversCount, slashersCount)
+	if err != nil {
+		return nil, errors.Wrap(err, "Block voting error")
+	}
 
 	log.Infof("Approvers %d, slashers %d", approversCount, slashersCount)
 

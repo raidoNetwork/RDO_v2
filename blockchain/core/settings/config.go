@@ -13,3 +13,10 @@ func ConfigureChainConfig(cliCtx *cli.Context) {
 		params.LoadChainConfigFile(chainConfigFileName)
 	}
 }
+
+func ConfigureConsensusConfig(cliCtx *cli.Context) {
+	if cliCtx.IsSet(cmd.ConsensusConfigFileFlag.Name) {
+		configFileName := cliCtx.String(cmd.ConsensusConfigFileFlag.Name)
+		params.LoadConsensusConfigFile(configFileName)
+	}
+}

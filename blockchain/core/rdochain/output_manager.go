@@ -303,7 +303,7 @@ func (om *OutputManager) syncDataInRange(min, max uint64, clear bool) error {
 		} else {
 			block, err = om.bc.GetBlockByNum(blockNum)
 			if err != nil {
-				return errors.Wrap(err, "GetBlockByNum error: ")
+				return errors.Wrap(err, "GetBlockByNum error")
 			}
 
 			// sync given block with SQL

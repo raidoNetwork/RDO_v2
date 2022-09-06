@@ -12,7 +12,7 @@ import (
 // LoadChainConfigFile load, convert hex values into valid param yaml format,
 // unmarshal , and apply raido blockchain config file.
 func LoadChainConfigFile(chainConfigFileName string) {
-	yamlFile, err := ioutil.ReadFile(chainConfigFileName) // #nosec G304
+	yamlFile, err := ioutil.ReadFile(chainConfigFileName)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to read chain config file.")
 	}
@@ -21,8 +21,6 @@ func LoadChainConfigFile(chainConfigFileName string) {
 	// Convert 0x hex inputs to fixed bytes arrays
 	lines := strings.Split(string(yamlFile), "\n")
 	for i, line := range lines {
-		// No need to convert the deposit contract address to byte array (as config expects a string).
-
 		if !strings.HasPrefix(line, "#") && strings.Contains(line, "0x") {
 			parts := replaceHexStringWithYAMLFormat(line)
 			lines[i] = strings.Join(parts, "\n")
@@ -39,6 +37,24 @@ func LoadChainConfigFile(chainConfigFileName string) {
 	}
 	log.Debugf("Config file values: %+v", conf)
 	OverrideRDOConfig(conf)
+}
+
+func LoadConsensusConfigFile(consensusConfigFile string) {
+	yamlFile, err := ioutil.ReadFile(consensusConfigFile)
+	if err != nil {
+		log.WithError(err).Fatal("Failed to read chain config file.")
+	}
+	// Default config
+	conf := ConsensusConfig().Copy()
+	if err := yaml.UnmarshalStrict(yamlFile, conf); err != nil {
+		if _, ok := err.(*yaml.TypeError); !ok {
+			log.WithError(err).Fatal("Failed to parse consensus config yaml file.")
+		} else {
+			log.WithError(err).Error("There were some issues parsing the config from a yaml file")
+		}
+	}
+	log.Debugf("Consensus config file values: %+v", conf)
+	OverwriteConsensusConfig(conf)
 }
 
 func replaceHexStringWithYAMLFormat(line string) []string {

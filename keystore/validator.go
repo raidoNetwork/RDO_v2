@@ -5,7 +5,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
 	"github.com/raidoNetwork/RDO_v2/utils/file"
-	"path/filepath"
 )
 
 type ValidatorAccount struct {
@@ -26,9 +25,7 @@ func NewValidatorAccount(key *ecdsa.PrivateKey) *ValidatorAccount {
 	return &ValidatorAccount{key, addr}
 }
 
-func NewValidatorAccountFromFile(dataDir string) (*ValidatorAccount, error) {
-	path := filepath.Join(dataDir, "validator", "validator.key")
-
+func NewValidatorAccountFromFile(path string) (*ValidatorAccount, error) {
 	if !file.FileExists(path) {
 		return &ValidatorAccount{}, nil
 	}

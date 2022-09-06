@@ -10,11 +10,14 @@ import (
 	"github.com/raidoNetwork/RDO_v2/blockchain/state"
 	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"google.golang.org/grpc/status"
 	"time"
 )
+
+var _ shared.Service = (*Service)(nil)
 
 type Config struct {
 	TxFeed events.Feed
@@ -98,14 +101,14 @@ func (s *Service) txListener() {
 
 	for {
 		select {
-			case tx := <-s.txEvent:
-				err := s.txPool.Insert(tx)
-				if err != nil {
-					log.Error(errors.Wrap(err , "Transaction listener error"))
-				}
-			case <-s.ctx.Done():
-				log.Debugf("Stop Transaction listener loop")
-				return
+		case tx := <-s.txEvent:
+			err := s.txPool.Insert(tx)
+			if err != nil {
+				log.Error(errors.Wrap(err , "Transaction listener error"))
+			}
+		case <-s.ctx.Done():
+			log.Debugf("Stop Transaction listener loop")
+			return
 		}
 	}
 }
