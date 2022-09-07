@@ -58,6 +58,7 @@ var appFlags = []cli.Flag{
 
 	// validator
 	vflags.ValidatorKey,
+	cmd.ConsensusConfigFileFlag,
 }
 
 var log = logrus.WithField("prefix", "main")
