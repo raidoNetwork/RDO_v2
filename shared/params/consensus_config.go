@@ -6,6 +6,7 @@ var consensusConfig = mainnetConsensusConfig()
 
 type PoAConfig struct {
 	Proposers []string `yaml:"proposers"`
+	CommitteeSize int `yaml:"committee-size"`
 }
 
 func mainnetConsensusConfig() *PoAConfig {
@@ -15,6 +16,7 @@ func mainnetConsensusConfig() *PoAConfig {
 			"0x0290896c2fe347db4d1971d95414cafc641b21f0", // node 1
 			"0x8da19d2ef6b876900b214133e48469467fb85342", // node 2
 		},
+		CommitteeSize: 2,
 	}
 }
 

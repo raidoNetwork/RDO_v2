@@ -164,7 +164,7 @@ func (s *Service) FinalizeBlock(block *prototype.Block) error {
 	}
 
 	// validate block
-	failedTx, err := s.att.Validator().ValidateBlock(block, s.att.TxPool())
+	failedTx, err := s.att.Validator().ValidateBlock(block, s.att.TxPool(), true)
 	if err != nil {
 		if failedTx != nil {
 			s.att.TxPool().Finalize(failedTx)

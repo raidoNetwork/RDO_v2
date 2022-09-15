@@ -43,7 +43,7 @@ type Config struct{
 	P2P          P2P
 	DisableSync  bool
 	MinSyncPeers int
-	ValidatorService *validator.Service
+	ValidatorService *validator.Service // todo replace with interface
 }
 
 func NewService(ctx context.Context, cfg *Config) *Service {
@@ -120,8 +120,8 @@ func (s *Service) Start(){
 		}
 	}
 
-	s.pushSyncedState()
 	log.Warnf("Node synced with network")
+	s.pushSyncedState()
 
 	// gossip new blocks and transactions
 	go s.gossipEvents()
@@ -131,6 +131,7 @@ func (s *Service) Start(){
 
 	if s.cfg.ValidatorService != nil {
 		go s.listenValidatorTopics()
+		go s.gossipValidatorMessages()
 	}
 }
 
@@ -169,8 +170,6 @@ func (s *Service) Stop() error {
 	// cancel context
 	s.cancel()
 
-	// todo update logic
-
 	return nil
 }
 
@@ -193,8 +192,6 @@ func (s *Service) listenNodeState(){
 				time.Sleep(500 * time.Millisecond)
 			case state.LocalSynced:
 				close(s.initialized)
-			case state.Synced:
-				// todo do nothing
 				return
 			default:
 				log.Infof("Unknown state event %d", st)
@@ -218,7 +215,7 @@ func (s *Service) listenIncoming() {
 					break
 				}
 
-				log.Debugf("Receive block #%d", block.Num)
+				log.Debugf("Receive block for save #%d", block.Num)
 
 				s.cfg.BlockFeed.Send(block)
 				receivedMessages.WithLabelValues(p2p.BlockTopic).Inc()

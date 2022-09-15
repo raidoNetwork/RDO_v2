@@ -23,7 +23,7 @@ $ raido
 This command will start raido node with default parameters.
 
 ### Logging
-Logs are output to the path set with flag `-log-file`. If flag is not specified logs are output to `os.Stdout`.
+ Logs are output to the path set with flag `-log-file`. If flag is not specified logs are output to `os.Stdout`.
 
 ### Recommended usage
 ```bash
@@ -59,7 +59,7 @@ Config file can take all flags from the list below as params.
 
 ### Network settings
 
-`--chain-config-file` specifies path to the network config file with the following params:
+`--chain-config-file` specifies path to the network config file with the following params:  
 
 |     **Param**     |  **Desciprtion** | 
 |--------------------------|-------------------------------|
@@ -70,6 +70,15 @@ Config file can take all flags from the list below as params.
 | `BLOCK_SIZE` | Block maximum size in bytes. |
 | `VALIDATOR_REGISTRY_LIMIT` | Validator slots count. |
 | `GENESIS_PATH` | Path to the Genesis json. |
+
+### Consensus settings
+
+`--poa-config-file` specifies path to the network config file with the following params:
+
+|     **Param**     |  **Desciprtion** | 
+|--------------------------|-------------------------------|
+| `proposers` | Array of validator wallets. |
+| `committee-size` | Number of validators committee to process block. |
 
 ## Genesis block
 
@@ -86,10 +95,10 @@ To create special Genesis block use structure below:
 ```
 
 ## Web3 API
-`Raido node` has built-in support for a JSON-RPC based APIs to interact with it. This can be exposed **only** via HTTP.
+`Raido node` has built-in support for a JSON-RPC based APIs to interact with it. This can be exposed **only** via HTTP. 
 Full list of `raido node` API methods is presented in Swagger Docs.
 
-### Signing and verifying data
+### Signing and verifying data 
 Signing any data and signature verification with Node.js requires npm packages `keccak` and `secp256k1` to be installed.
 Example:
 ```javascript
@@ -150,7 +159,7 @@ function signTx(hash, privateKey){
 
     let dgst = createSignDigest(hash);
     let {signature, recid} = ecdsaSign(dgst, Buffer.from(privateKey, 'hex'));
-
+    
     return Buffer.concat([Buffer.from(signature), Buffer.from([recid])]);
 }
 

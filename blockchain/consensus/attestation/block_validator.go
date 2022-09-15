@@ -95,7 +95,7 @@ func (cv *CryspValidator) validateBlockHeader(block *prototype.Block) error {
 }
 
 // ValidateBlock validate block and return an error if something is wrong
-func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensus.TxJournal) ([]*types.Transaction, error) {
+func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensus.TxJournal, countSign bool) ([]*types.Transaction, error) {
 	log.Debugf("Validate block #%d", block.Num)
 
 	start := time.Now()
@@ -172,15 +172,17 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensu
 		return nil, errors.Errorf("ValidateBlock: Too big block num difference. Need: 1. Current: %d", blockNumDiff)
 	}
 
-	approversCount := cv.countValidSigns(block, block.Approvers, vtypes.Approve)
-	slashersCount := cv.countValidSigns(block, block.Slashers, vtypes.Reject)
+	if countSign {
+		approversCount := cv.countValidSigns(block, block.Approvers, vtypes.Approve)
+		slashersCount := cv.countValidSigns(block, block.Slashers, vtypes.Reject)
 
-	err = consensus.IsEnoughVotes(approversCount, slashersCount)
-	if err != nil {
-		return nil, errors.Wrap(err, "Block voting error")
+		err = consensus.IsEnoughVotes(approversCount, slashersCount)
+		if err != nil {
+			return nil, errors.Wrap(err, "Block voting error")
+		}
+
+		log.Infof("Approvers %d, slashers %d", approversCount, slashersCount)
 	}
-
-	log.Infof("Approvers %d, slashers %d", approversCount, slashersCount)
 
 	failedTx, err := cv.verifyTransactions(block, journal)
 	if err != nil {

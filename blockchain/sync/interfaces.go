@@ -17,6 +17,10 @@ type GossipPublisher interface{
 	Notifier() *events.Bus
 }
 
+type ValidatorGossipPublisher interface {
+	ValidatorNotifier() *events.Bus
+}
+
 type BlockchainInfo interface{
 	GetBlockCount() uint64
 	GetHeadBlockNum() uint64
@@ -42,4 +46,5 @@ type P2P interface {
 	AddConnectionHandlers(connectHandler, disconnectHandler p2p.ConnectionHandler)
 	GossipPublisher
 	StreamProcessor
+	ValidatorGossipPublisher
 }

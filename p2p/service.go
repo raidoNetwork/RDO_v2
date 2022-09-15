@@ -297,6 +297,15 @@ func (s *Service) SubscribeAll() error {
 		}
 	}
 
+	if s.cfg.ListenValidatorData {
+		for t := range validatorMap {
+			err := s.subscribeTopic(t)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -358,8 +367,11 @@ func (s *Service) receiveMessage(msg *pubsub.Message, isValidatorMessage bool){
 		From: msg.ReceivedFrom.String(),
 	}
 
+	log.Debugf("IsValidatorMessage %v", isValidatorMessage)
+
 	// send event
 	if isValidatorMessage {
+		log.Debugf("Send validator message")
 		s.validatorNotifier.Send(n)
 	} else {
 		s.notifier.Send(n)
@@ -516,4 +528,8 @@ func (s *Service) waitLocalSync(){
 			}
 		}
 	}
+}
+
+func (s *Service) EnableValidatorMode() {
+	s.cfg.ListenValidatorData = true
 }

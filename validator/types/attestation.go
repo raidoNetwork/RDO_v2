@@ -16,14 +16,14 @@ const (
 
 var mixMap = map[AttestationType][]byte{
 	Approve: {1},
-	Reject: {2},
+	Reject:  {2},
 }
 
 type Attestation struct {
 	Validator common.Address `ssz-size:"20"`
-	Block *prototype.Block
+	Block     *prototype.Block
 	Signature *prototype.Sign
-	Type AttestationType
+	Type      AttestationType
 }
 
 func NewAttestation(block *prototype.Block, proposer Proposer, attestType AttestationType) (*Attestation, error) {

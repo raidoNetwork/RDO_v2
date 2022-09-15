@@ -3,9 +3,10 @@ package consensus
 import (
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/shared/params"
+	log "github.com/sirupsen/logrus"
 )
 
-const COMMITTEE_SIZE = 2
 const SUCCESS_PERCENT = 60
 
 type PoA interface {
@@ -15,13 +16,22 @@ type PoA interface {
 }
 
 func IsEnoughVotes(approvers, slashers int) error {
+	commiteeSize := float64(params.ConsensusConfig().CommitteeSize)
 	votedCount := approvers + slashers
-	votedPercent := float64(votedCount) / COMMITTEE_SIZE * 100
+	votedPercent := float64(votedCount) / commiteeSize * 100
+
+	log.Debugf(
+		"Approvers: %d Slashers: %d VotedPercent: %f",
+		approvers,
+		slashers,
+		votedPercent,
+	)
+
 	if votedPercent < SUCCESS_PERCENT {
 		return errors.New("Too small validators voted per block")
 	}
 
-	approvedPercent := float64(approvers) / COMMITTEE_SIZE * 100
+	approvedPercent := float64(approvers) / commiteeSize * 100
 	if approvedPercent < SUCCESS_PERCENT {
 		return errors.New("Not enough approvers per block")
 	}

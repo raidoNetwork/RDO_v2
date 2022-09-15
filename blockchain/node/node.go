@@ -138,6 +138,9 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 }
 
 func (r *RDONode) InitValidatorService() error {
+	// setup consensus config
+	settings.ConfigureConsensusConfig(r.cliCtx)
+
 	var blockchainService *rdochain.Service
 	err := r.services.FetchService(&blockchainService)
 	if err != nil {
@@ -150,7 +153,21 @@ func (r *RDONode) InitValidatorService() error {
 		return err
 	}
 
-	cfg := validator.Config{
+	var p2pService *p2p.Service
+	err = r.services.FetchService(&p2pService)
+	if err != nil {
+		return err
+	}
+
+	var syncService *rsync.Service
+	err = r.services.FetchService(&syncService)
+	if err != nil {
+		return err
+	}
+
+	p2pService.EnableValidatorMode()
+
+	cfg := &validator.Config{
 		BlockFinalizer:  blockchainService,
 		AttestationPool: attestationService,
 		ProposeFeed:     &r.proposeFeed,
@@ -160,10 +177,12 @@ func (r *RDONode) InitValidatorService() error {
 		Context:         r.ctx,
 	}
 
-	srv, err := validator.New(r.cliCtx, &cfg)
+	srv, err := validator.New(r.cliCtx, cfg)
 	if err != nil {
 		return err
 	}
+
+	syncService.EnableValidatorMode(srv)
 
 	return r.services.RegisterService(srv)
 }
@@ -278,12 +297,6 @@ func (r *RDONode) registerAttestationService() error {
 }
 
 func (r *RDONode) registerP2P() error {
-	var validatorService *validator.Service
-	err := r.services.FetchService(&validatorService)
-	if err != nil {
-		validatorService = nil
-	}
-
 	cfg := p2p.Config{
 		Host: r.cliCtx.String(flags.P2PHost.Name),
 		Port: r.cliCtx.Int(flags.P2PPort.Name),
@@ -291,7 +304,6 @@ func (r *RDONode) registerP2P() error {
 		DataDir: r.cliCtx.String(cmd.DataDirFlag.Name),
 		StateFeed: r.StateFeed(),
 		EnableNAT: r.cliCtx.Bool(flags.P2PEnableNat.Name),
-		ListenValidatorData: validatorService != nil,
 	}
 	srv, err := p2p.NewService(r.ctx, &cfg)
 	if err != nil {
@@ -320,12 +332,6 @@ func (r *RDONode) registerSyncService() error {
 		return err
 	}
 
-	var validatorService *validator.Service
-	err = r.services.FetchService(&validatorService)
-	if err != nil {
-		validatorService = nil
-	}
-
 	cfg := rsync.Config{
 		BlockFeed: r.BlockFeed(),
 		TxFeed: r.TxFeed(),
@@ -335,7 +341,6 @@ func (r *RDONode) registerSyncService() error {
 		Blockchain: blockchainService,
 		DisableSync: r.cliCtx.Bool(flags.DisableSync.Name),
 		MinSyncPeers: r.cliCtx.Int(flags.MinSyncPeers.Name),
-		ValidatorService: validatorService,
 	}
 	srv := rsync.NewService(r.ctx, &cfg)
 

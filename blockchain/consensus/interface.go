@@ -17,7 +17,7 @@ type TxValidator interface {
 // BlockValidator checks only blocks
 type BlockValidator interface {
 	// ValidateBlock validate block and return an error if something is wrong
-	ValidateBlock(*prototype.Block, TxJournal) ([]*types.Transaction, error)
+	ValidateBlock(*prototype.Block, TxJournal, bool) ([]*types.Transaction, error)
 
 	// ValidateGenesis compare given Genesis with local
 	ValidateGenesis(*prototype.Block) error

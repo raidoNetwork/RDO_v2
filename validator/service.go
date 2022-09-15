@@ -28,7 +28,10 @@ import (
 var log = logrus.WithField("prefix", "validator")
 var _ shared.Service = (*Service)(nil)
 
-const votingDuration = 5 * time.Second
+const (
+	votingDuration = 5 * time.Second
+	attestationsCount = 10
+)
 
 type Config struct{
 	BlockFinalizer  consensus.BlockFinalizer
@@ -67,6 +70,12 @@ type Service struct {
 	backend consensus.PoA
 
 	unsubscribe func()
+
+	// validation loop
+	proposedBlock *prototype.Block
+	votingIsFinished bool
+	blockVoting map[string]*voting
+	finishVoting <-chan time.Time
 }
 
 func (s *Service) Start() {
@@ -90,108 +99,49 @@ func (s *Service) Stop() error {
 }
 
 func (s *Service) loop() {
-	var finishVoting <-chan time.Time
-	var proposedBlock *prototype.Block
-	blockVoting := map[string]*voting{}
-	votingIsFinished := false
+	clearInterval := time.NewTicker(30 * time.Second)
+	clearVoting := func() {
+		proposedBlockHash := ""
+		if s.proposedBlock != nil {
+			proposedBlockHash = common.Encode(s.proposedBlock.Hash)
+		}
+
+		for hash := range s.blockVoting {
+			if hash == proposedBlockHash {
+				continue
+			}
+
+			delete(s.blockVoting, hash)
+		}
+	}
+
+	defer clearInterval.Stop()
 
 	for {
 		select {
 		case <-s.ticker.C():
-			// Check node is leader now
-			if !s.backend.IsLeader(s.proposer.Addr()) {
-				continue
-			}
-
-			start := time.Now()
-
-			// generate block with block miner
-			block, err := s.miner.ForgeBlock()
-			if err != nil {
-				log.Errorf("[ValidatorService] Error forging block: %s", err.Error())
-
-				s.mu.Lock()
-				s.statusErr = err
-				s.mu.Unlock()
-
-				return
-			}
-
-			// setup block for updates
-			proposedBlock = block
-
-			log.Warnf("Propose block #%d %s", block.Num, common.Encode(block.Hash))
-
-			// push block to events
-			s.proposeFeed.Send(block)
-			finishVoting = time.After(votingDuration)
-			votingIsFinished = false
-
-			log.Debugf("Block #%d forged in %d ms", block.Num, time.Since(start).Milliseconds())
+			s.forgeBlock()
 		case block := <-s.proposeEvent:
-			if common.Encode(block.Proposer.Address) == s.proposer.Addr().Hex() {
-				continue
-			}
-
-			attestationType := types.Approve
-			_, err := s.att.Validator().ValidateBlock(block, s.att.TxPool())
+			err := s.verifyBlock(block)
 			if err != nil {
-				log.Errorf("Failed block attestation: %s", err)
-				attestationType = types.Reject
+				panic(err)
 			}
-
-			att, err := types.NewAttestation(block, s.proposer, attestationType)
-			if err != nil {
-				log.Errorf("Attestation error: %s", err)
-				return
-			}
-
-			s.attestationFeed.Send(att)
 		case att := <-s.attestationEvent:
-			if !s.backend.IsValidator(common.BytesToAddress(att.Block.Proposer.Address)) {
-				continue
-			}
-
-			blockHash := common.Encode(att.Block.Hash)
-			err := types.VerifyAttestationSign(att)
-			if err != nil {
-				log.Warnf(
-					"Malicious validator %s. Wrong sign on block %d %s.",
-					common.Encode(att.Signature.Address),
-					att.Block.Num,
-					blockHash,
-				)
-				continue
-			}
-
-			if _, exists := blockVoting[blockHash]; !exists {
-				blockVoting[blockHash] = &voting{}
-			}
-
-			isLocalProposer := common.Encode(att.Block.Proposer.Address) == s.proposer.Addr().Hex()
-			if att.Type == types.Approve {
-				blockVoting[blockHash].approved += 1
-
-				if isLocalProposer && !votingIsFinished {
-					proposedBlock.Approvers = append(proposedBlock.Approvers, att.Signature)
-				}
-			} else {
-				blockVoting[blockHash].rejected += 1
-
-				if isLocalProposer && !votingIsFinished {
-					proposedBlock.Slashers = append(proposedBlock.Slashers, att.Signature)
-				}
-			}
+			s.processAttestation(att)
 		case <-s.ctx.Done():
+			log.Warn("Finish validation process...")
+			// todo unsubscribe
 			return
-		case <-finishVoting:
-			votingIsFinished = true
+		case <-s.finishVoting:
+			s.votingIsFinished = true
 
 			// gossip to network
-			s.blockFeed.Send(proposedBlock)
+			s.blockFeed.Send(s.proposedBlock)
 
-			delete(blockVoting, common.Encode(proposedBlock.Hash))
-			proposedBlock = nil
+			delete(s.blockVoting, common.Encode(s.proposedBlock.Hash))
+			s.proposedBlock = nil
+		case <-clearInterval.C:
+			clearVoting()
 		}
 	}
 }
@@ -227,8 +177,7 @@ func (s *Service) waitInitEvent() {
 		case <-s.ctx.Done():
 			return
 		case st := <-stateEvent:
-			switch st {
-			case state.Synced:
+			if st == state.Synced {
 				err := s.ticker.StartFromTimestamp(s.bc.GetGenesis().Timestamp)
 				if err != nil {
 					panic("Zero Genesis time")
@@ -237,6 +186,112 @@ func (s *Service) waitInitEvent() {
 			}
 		}
 	}
+}
+
+func (s *Service) verifyBlock(block *prototype.Block) error {
+	log.Warnf("Got propose block #%d", block.Num)
+
+	blockProposer := common.BytesToAddress(block.Proposer.Address)
+	if blockProposer.Hex() == s.proposer.Addr().Hex() {
+		log.Debugf("Skip local block attestation %s", blockProposer.Hex())
+		return nil
+	}
+
+	if !s.backend.IsLeader(blockProposer) {
+		// todo mark validator as malicious
+		log.Warnf("Not ordered block proposition from %s", blockProposer.Hex())
+		return nil
+	}
+
+	attestationType := types.Approve
+	_, err := s.att.Validator().ValidateBlock(block, s.att.TxPool(), false)
+	if err != nil {
+		log.Errorf("Failed block attestation: %s", err)
+		attestationType = types.Reject
+	}
+
+	att, err := types.NewAttestation(block, s.proposer, attestationType)
+	if err != nil {
+		return errors.Wrap(err, "Attestation error")
+	}
+
+	log.Debugf("Attestate block %s", common.Encode(block.Hash))
+
+	s.attestationFeed.Send(att)
+	return nil
+}
+
+func (s *Service) processAttestation(att *types.Attestation) {
+	if !s.backend.IsValidator(common.BytesToAddress(att.Block.Proposer.Address)) {
+		return
+	}
+
+	blockHash := common.Encode(att.Block.Hash)
+	err := types.VerifyAttestationSign(att)
+	if err != nil {
+		// todo mark validator as malicious
+		log.Warnf(
+			"Malicious validator %s. Wrong sign on block %d %s.",
+			common.Encode(att.Signature.Address),
+			att.Block.Num,
+			blockHash,
+		)
+		return
+	}
+
+	if _, exists := s.blockVoting[blockHash]; !exists {
+		s.blockVoting[blockHash] = &voting{
+			started: time.Now(),
+		}
+	}
+
+	isLocalProposer := common.Encode(att.Block.Proposer.Address) == s.proposer.Addr().Hex()
+	if att.Type == types.Approve {
+		s.blockVoting[blockHash].approved += 1
+
+		if isLocalProposer && !s.votingIsFinished {
+			s.proposedBlock.Approvers = append(s.proposedBlock.Approvers, att.Signature)
+		}
+	} else {
+		s.blockVoting[blockHash].rejected += 1
+
+		if isLocalProposer && !s.votingIsFinished {
+			s.proposedBlock.Slashers = append(s.proposedBlock.Slashers, att.Signature)
+		}
+	}
+}
+
+func (s *Service) forgeBlock() {
+	// Check node is leader now
+	if !s.backend.IsLeader(s.proposer.Addr()) {
+		return
+	}
+
+	start := time.Now()
+
+	// generate block with block miner
+	block, err := s.miner.ForgeBlock()
+	if err != nil {
+		log.Errorf("[ValidatorService] Error forging block: %s", err.Error())
+
+		s.mu.Lock()
+		s.statusErr = err
+		s.mu.Unlock()
+
+		return
+	}
+
+	// setup block for updates
+	s.proposedBlock = block
+
+	log.Warnf("Propose block #%d %s", block.Num, common.Encode(block.Hash))
+
+	// push block to events
+	s.proposeFeed.Send(block)
+	s.finishVoting = time.After(votingDuration)
+	s.votingIsFinished = false
+
+	log.Debugf("Block #%d forged in %d ms", block.Num, time.Since(start).Milliseconds())
 }
 
 func New(cliCtx *cli.Context, cfg *Config) (*Service, error) {
@@ -257,6 +312,8 @@ func New(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 	if proposer.Key() == nil {
 		return nil, errors.New("Not found validator key file")
 	}
+
+	log.Infof("Register validator key %s", proposer.Addr().Hex())
 
 	engine := poa.New()
 	if !engine.IsValidator(proposer.Addr()) {
@@ -288,7 +345,7 @@ func New(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 
 		// events
 		proposeEvent: make(chan *prototype.Block, 1),
-		attestationEvent: make(chan *types.Attestation, 1),
+		attestationEvent: make(chan *types.Attestation, attestationsCount),
 
 		// feeds
 		proposeFeed: cfg.ProposeFeed,
@@ -298,6 +355,9 @@ func New(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 
 		// engine
 		backend: engine,
+
+		// validator loop
+		blockVoting: map[string]*voting{},
 	}
 
 	return srv, nil
