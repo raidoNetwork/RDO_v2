@@ -293,7 +293,9 @@ func (s *Service) GetBlocksRange(ctx context.Context, start uint64, end uint64) 
 			return nil, ctx.Err()
 		default:
 			block, err := s.bc.GetBlockByNum(num)
-			if err != nil && !errors.Is(err, ErrNotForgedBlock) {
+			if errors.Is(err, ErrNotForgedBlock) {
+				continue
+			} else if err != nil {
 				return nil, err
 			}
 

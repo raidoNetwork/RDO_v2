@@ -367,11 +367,8 @@ func (s *Service) receiveMessage(msg *pubsub.Message, isValidatorMessage bool){
 		From: msg.ReceivedFrom.String(),
 	}
 
-	log.Debugf("IsValidatorMessage %v", isValidatorMessage)
-
 	// send event
 	if isValidatorMessage {
-		log.Debugf("Send validator message")
 		s.validatorNotifier.Send(n)
 	} else {
 		s.notifier.Send(n)
