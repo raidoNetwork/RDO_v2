@@ -49,6 +49,8 @@ func IsLegacyTx(tx *prototype.Transaction) bool {
 // IsSystemTx check transaction is created by blockchain self
 func IsSystemTx(tx *prototype.Transaction) bool {
 	switch tx.Type {
+	case GenesisTxType:
+		fallthrough
 	case FeeTxType:
 		fallthrough
 	case RewardTxType:

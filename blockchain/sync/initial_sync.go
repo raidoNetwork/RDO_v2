@@ -125,6 +125,7 @@ func (s *Service) findPeersForSyncWithMaxBlock() ([]peer.ID, uint64) {
 }
 
 func (s *Service) syncToBestKnownBlock() error {
+	// todo fix default values
 	startBlockNum := s.cfg.Blockchain.GetHeadBlockNum()
 	if startBlockNum >= s.cfg.P2P.PeerStore().Scorers().PeerHeadBlock.Get() {
 		log.Info("Node is already synced")

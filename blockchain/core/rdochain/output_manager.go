@@ -296,11 +296,13 @@ func (om *OutputManager) syncDataInRange(min, max uint64, clear bool) error {
 		}
 
 		if clear && blockNum != min {
+			log.Debugf("Clear outputs for block %d", blockNum)
 			err = om.db.DeleteOutputs(tx, blockNum)
 			if err != nil {
 				return err
 			}
 		} else {
+			log.Debugf("Start syncing block %d...", blockNum)
 			block, err = om.bc.GetBlockByNum(blockNum)
 			if err != nil {
 				return errors.Wrap(err, "GetBlockByNum error")
@@ -458,21 +460,6 @@ func (om *OutputManager) IsSyncing() bool {
 
 func (om *OutputManager) GetTotalAmount() (uint64, error) {
 	return om.db.GetTotalAmount()
-}
-
-func (om *OutputManager) cleanGenesisUTxO(tx int) error {
-	log.Info("Clear Genesis outputs...")
-	err := om.db.DeleteOutputs(tx, GenesisBlockNum)
-	if err != nil {
-		errb := om.db.RollbackTx(tx)
-		if errb != nil {
-			log.Errorf("Clearing Genesis: %s", errb)
-		}
-
-		return err
-	}
-
-	return nil
 }
 
 func (om *OutputManager) FinalizeLock() {

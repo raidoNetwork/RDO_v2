@@ -4,7 +4,7 @@ const (
 	mainPrefix 		  = "/raido/"
 	blockSuffix 	  = "block-forge"
 	txSuffix          = "tx"
-	attestationSuffix = "attestation-suffix"
+	attestationSuffix = "attestation"
 	proposalSuffix    = "proposal"
 	blockRangeSuffix  = "block-range"
 	metaSuffix		  = "metadata"

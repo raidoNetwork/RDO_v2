@@ -29,42 +29,42 @@ var log = logrus.WithField("prefix", "validator")
 var _ shared.Service = (*Service)(nil)
 
 const (
-	votingDuration = 5 * time.Second
+	votingDuration    = 3 * time.Second
 	attestationsCount = 10
 )
 
-type Config struct{
+type Config struct {
 	BlockFinalizer  consensus.BlockFinalizer
 	AttestationPool consensus.AttestationPool
-	ProposeFeed events.Feed
+	ProposeFeed     events.Feed
 	AttestationFeed events.Feed
-	BlockFeed	events.Feed
-	StateFeed events.Feed
-	Context context.Context
+	BlockFeed       events.Feed
+	StateFeed       events.Feed
+	Context         context.Context
 }
 
 type Service struct {
-	cliCtx       *cli.Context
-	ctx          context.Context
-	cancelFunc   context.CancelFunc
-	statusErr    error
-	bc			 consensus.BlockFinalizer
-	att			 consensus.AttestationPool
-	proposer 	 *keystore.ValidatorAccount
+	cliCtx     *cli.Context
+	ctx        context.Context
+	cancelFunc context.CancelFunc
+	statusErr  error
+	bc         consensus.BlockFinalizer
+	att        consensus.AttestationPool
+	proposer   *keystore.ValidatorAccount
 
-	miner *forger.Forger // block miner
+	miner  *forger.Forger // block miner
 	ticker *slot.SlotTicker
 
 	mu sync.Mutex
 
 	// events
-	proposeEvent chan *prototype.Block
+	proposeEvent     chan *prototype.Block
 	attestationEvent chan *types.Attestation
 
-	proposeFeed events.Feed
+	proposeFeed     events.Feed
 	attestationFeed events.Feed
-	blockFeed events.Feed
-	stateFeed events.Feed
+	blockFeed       events.Feed
+	stateFeed       events.Feed
 
 	// consensus Engine
 	backend consensus.PoA
@@ -72,10 +72,10 @@ type Service struct {
 	unsubscribe func()
 
 	// validation loop
-	proposedBlock *prototype.Block
+	proposedBlock    *prototype.Block
 	votingIsFinished bool
-	blockVoting map[string]*voting
-	finishVoting <-chan time.Time
+	blockVoting      map[string]*voting
+	finishVoting     <-chan time.Time
 }
 
 func (s *Service) Start() {
@@ -92,8 +92,11 @@ func (s *Service) Status() error {
 }
 
 func (s *Service) Stop() error {
+	log.Info("Stop validator service")
+
 	s.unsubscribe()
 	s.cancelFunc()
+	s.ticker.Stop()
 
 	return nil
 }
@@ -130,7 +133,6 @@ func (s *Service) loop() {
 			s.processAttestation(att)
 		case <-s.ctx.Done():
 			log.Warn("Finish validation process...")
-			// todo unsubscribe
 			return
 		case <-s.finishVoting:
 			s.votingIsFinished = true
@@ -170,10 +172,10 @@ func (s *Service) waitInitEvent() {
 
 	defer func() {
 		subs.Unsubscribe()
-	} ()
+	}()
 
 	for {
-		select{
+		select {
 		case <-s.ctx.Done():
 			return
 		case st := <-stateEvent:
@@ -189,11 +191,10 @@ func (s *Service) waitInitEvent() {
 }
 
 func (s *Service) verifyBlock(block *prototype.Block) error {
-	log.Warnf("Got propose block #%d", block.Num)
-
 	blockProposer := common.BytesToAddress(block.Proposer.Address)
+
 	if blockProposer.Hex() == s.proposer.Addr().Hex() {
-		log.Debugf("Skip local block attestation %s", blockProposer.Hex())
+		log.Debug("Skip local block attestation")
 		return nil
 	}
 
@@ -215,28 +216,35 @@ func (s *Service) verifyBlock(block *prototype.Block) error {
 		return errors.Wrap(err, "Attestation error")
 	}
 
-	log.Debugf("Attestate block %s", common.Encode(block.Hash))
-
 	s.attestationFeed.Send(att)
+
 	return nil
 }
 
 func (s *Service) processAttestation(att *types.Attestation) {
-	if !s.backend.IsValidator(common.BytesToAddress(att.Block.Proposer.Address)) {
+	proposer := common.BytesToAddress(att.Block.Proposer.Address)
+	if !s.backend.IsValidator(proposer) {
 		return
 	}
 
 	blockHash := common.Encode(att.Block.Hash)
-	err := types.VerifyAttestationSign(att)
-	if err != nil {
-		// todo mark validator as malicious
-		log.Warnf(
-			"Malicious validator %s. Wrong sign on block %d %s.",
-			common.Encode(att.Signature.Address),
+	if att.Validator.Hex() != s.proposer.Addr().Hex() {
+		log.Debugf(
+			"Receive attestation for block #%d %s",
 			att.Block.Num,
 			blockHash,
 		)
-		return
+
+		if err := types.VerifyAttestationSign(att); err != nil {
+			// todo mark validator as malicious
+			log.Warnf(
+				"Malicious validator %s. Wrong sign on block %d %s.",
+				common.Encode(att.Signature.Address),
+				att.Block.Num,
+				blockHash,
+			)
+			return
+		}
 	}
 
 	if _, exists := s.blockVoting[blockHash]; !exists {
@@ -245,17 +253,18 @@ func (s *Service) processAttestation(att *types.Attestation) {
 		}
 	}
 
-	isLocalProposer := common.Encode(att.Block.Proposer.Address) == s.proposer.Addr().Hex()
+	isLocalProposer := proposer.Hex() == s.proposer.Addr().Hex()
+	canUpdateProposedBlock := isLocalProposer && !s.votingIsFinished
 	if att.Type == types.Approve {
 		s.blockVoting[blockHash].approved += 1
 
-		if isLocalProposer && !s.votingIsFinished {
+		if canUpdateProposedBlock {
 			s.proposedBlock.Approvers = append(s.proposedBlock.Approvers, att.Signature)
 		}
 	} else {
 		s.blockVoting[blockHash].rejected += 1
 
-		if isLocalProposer && !s.votingIsFinished {
+		if canUpdateProposedBlock {
 			s.proposedBlock.Slashers = append(s.proposedBlock.Slashers, att.Signature)
 		}
 	}
@@ -288,6 +297,7 @@ func (s *Service) forgeBlock() {
 
 	// push block to events
 	s.proposeFeed.Send(block)
+
 	s.finishVoting = time.After(votingDuration)
 	s.votingIsFinished = false
 
@@ -338,20 +348,20 @@ func New(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		miner:      blockForger,
 		proposer:   proposer,
 
-		bc:         cfg.BlockFinalizer,
-		att:	    cfg.AttestationPool,
+		bc:  cfg.BlockFinalizer,
+		att: cfg.AttestationPool,
 
-		ticker:     slot.NewSlotTicker(),
+		ticker: slot.NewSlotTicker(),
 
 		// events
-		proposeEvent: make(chan *prototype.Block, 1),
+		proposeEvent:     make(chan *prototype.Block, 1),
 		attestationEvent: make(chan *types.Attestation, attestationsCount),
 
 		// feeds
-		proposeFeed: cfg.ProposeFeed,
+		proposeFeed:     cfg.ProposeFeed,
 		attestationFeed: cfg.AttestationFeed,
-		blockFeed: cfg.BlockFeed,
-		stateFeed: cfg.StateFeed,
+		blockFeed:       cfg.BlockFeed,
+		stateFeed:       cfg.StateFeed,
 
 		// engine
 		backend: engine,

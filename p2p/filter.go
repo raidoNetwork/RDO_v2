@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const subscriptionsLimit = 2
+const subscriptionsLimit = 10
 
 func (s *Service) CanSubscribe(topic string) bool {
 	words := strings.Split(topic, "/")
@@ -29,8 +29,6 @@ func (s *Service) CanSubscribe(topic string) bool {
 }
 
 func(s *Service) FilterIncomingSubscriptions(id peer.ID, subs []*pb.RPC_SubOpts) ([]*pb.RPC_SubOpts, error){
-	log.Infof("Got new subscriber %v", id)
-
 	if len(subs) > subscriptionsLimit {
 		return nil, pubsub.ErrTooManySubscriptions
 	}

@@ -66,7 +66,6 @@ func (b *Bus) Send(data interface{}) int {
 	b.once.Do(b.init)
 
 	b.lock.Lock()
-	defer b.lock.Unlock()
 
 	cases := b.cases
 
@@ -78,6 +77,8 @@ func (b *Bus) Send(data interface{}) int {
 		cases[i].Send = dval
 	}
 
+	b.lock.Unlock()
+
 	for {
 		// try to send data
 		for i := 0;i < len(cases);i++ {
@@ -86,7 +87,7 @@ func (b *Bus) Send(data interface{}) int {
 				sent++
 				i--
 			} else {
-				log.Printf("Can't send %v", cases[i].Chan.Type().String())
+				log.Errorf("Can't send event %v", cases[i].Chan.Type().String())
 			}
 		}
 

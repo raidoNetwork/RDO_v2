@@ -37,8 +37,12 @@ func (bc *BlockChain) insertGenesis() error {
 
 	err = bc.db.SaveGenesis(block)
 	if err != nil {
-		log.Errorf("Error saving Genesis block: %s", err)
-		return err
+		return errors.Wrap(err, "Error storing Genesis block")
+	}
+
+	err = bc.db.WriteBlock(block)
+	if err != nil {
+		return errors.Wrap(err, "Error storing Genesis block")
 	}
 
 	bc.genesisBlock = block

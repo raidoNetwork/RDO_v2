@@ -145,11 +145,11 @@ func SignedTxValue(tx *prototype.Transaction) *prototype.SignedTxValue {
 }
 
 func TxFromTxValue(txv *prototype.SignedTxValue) *prototype.Transaction {
-	tx := new(prototype.Transaction)
-
-	if txv.Data == nil {
+	if txv == nil || txv.Data == nil {
 		return nil
 	}
+
+	tx := new(prototype.Transaction)
 
 	tx.Num = txv.Data.Num
 	tx.Type = txv.Data.Type

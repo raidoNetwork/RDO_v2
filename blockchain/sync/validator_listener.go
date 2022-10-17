@@ -3,8 +3,8 @@ package sync
 import (
 	"github.com/raidoNetwork/RDO_v2/p2p"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
+	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
-	"github.com/raidoNetwork/RDO_v2/validator"
 	"github.com/raidoNetwork/RDO_v2/validator/types"
 )
 
@@ -26,9 +26,7 @@ func (s *Service) listenValidatorTopics() {
 					break
 				}
 
-				log.Debugf("Receive proposed block #%d", block.Num)
-
-				s.cfg.ValidatorService.ProposeFeed().Send(block)
+				s.cfg.Validator.ProposeFeed.Send(block)
 				receivedMessages.WithLabelValues(p2p.ProposalTopic).Inc()
 			case p2p.AttestationTopic:
 				att, err := serialize.UnmarshalAttestation(notty.Data)
@@ -37,9 +35,7 @@ func (s *Service) listenValidatorTopics() {
 					break
 				}
 
-				log.Debugf("Receive attestation fro block #%d", att.Block.Num)
-
-				s.cfg.ValidatorService.AttestationFeed().Send(att)
+				s.cfg.Validator.AttestationFeed.Send(att)
 				receivedMessages.WithLabelValues(p2p.AttestationTopic).Inc()
 			default:
 				log.Warnf("Unsupported notification %s", notty.Topic)
@@ -52,8 +48,8 @@ func (s *Service) gossipValidatorMessages() {
 	proposeEvent := make(chan *prototype.Block, 1)
 	attEvent := make(chan *types.Attestation, 5)
 
-	proposeSub := s.cfg.ValidatorService.ProposeFeed().Subscribe(proposeEvent)
-	attSub := s.cfg.ValidatorService.AttestationFeed().Subscribe(attEvent)
+	proposeSub := s.cfg.Validator.ProposeFeed.Subscribe(proposeEvent)
+	attSub := s.cfg.Validator.AttestationFeed.Subscribe(attEvent)
 
 	defer func() {
 		proposeSub.Unsubscribe()
@@ -84,12 +80,14 @@ func (s *Service) gossipValidatorMessages() {
 			if err != nil {
 				log.Errorf("Error sending attestation: %s", err)
 			}
+
+			log.Debugf("Publish attestation for block #%d %s", att.Block.Num, common.Encode(att.Block.Hash))
 		case <-s.ctx.Done():
 			return
 		}
 	}
 }
 
-func (s *Service) EnableValidatorMode(validator *validator.Service) {
-	s.cfg.ValidatorService = validator
+func (s *Service) EnableValidatorMode() {
+	s.cfg.Validator.Enabled = true
 }

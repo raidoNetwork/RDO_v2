@@ -20,9 +20,9 @@ import (
 var log = logrus.WithField("prefix", "prometheus")
 
 var logCounterVec = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "log_entry_count",
-		Help: "Log messages counter",
-	}, []string{"level", "prefix"})
+	Name: "log_entry_count",
+	Help: "Log messages counter",
+}, []string{"level", "prefix"})
 
 type Service struct {
 	server          *http.Server
@@ -134,6 +134,8 @@ func (s *Service) Start() {
 
 // Stop the service gracefully.
 func (s *Service) Stop() error {
+	log.Info("Stop metrics server")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	return s.server.Shutdown(ctx)

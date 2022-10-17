@@ -185,3 +185,10 @@ func (ps *PeerStore) IsBad(pid peer.ID) bool {
 
 	return ps.data[pid].Scorers.BadResponse >= badThreshold
 }
+
+func (ps *PeerStore) Peer(pid peer.ID) PeerData {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	return *ps.data[pid]
+}

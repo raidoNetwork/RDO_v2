@@ -59,7 +59,7 @@ func SetWriteDeadline(stream network.Stream) {
 
 func ReadStatusCode(stream network.Stream) (uint8, string, error) {
 	// Set ttfb deadline.
-	setStreamDeadlines(stream)
+	SetWriteDeadline(stream)
 	b := make([]byte, 1)
 	_, err := stream.Read(b)
 	if err != nil {

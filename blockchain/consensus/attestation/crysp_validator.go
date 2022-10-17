@@ -207,30 +207,30 @@ func (cv *CryspValidator) validateCollapseTx(tx *types.Transaction, block *proto
 		}
 
 		lastAddr = in.Address()
- 	}
+	}
 
-	 // tx must contain one output for each address
-	 // with amount equal to sum of address inputs
-	 readedMap := map[string]struct{}{}
-	 for _, out := range tx.Outputs() {
-		 key := out.Address().Hex()
+	// tx must contain one output for each address
+	// with amount equal to sum of address inputs
+	readedMap := map[string]struct{}{}
+	for _, out := range tx.Outputs() {
+		key := out.Address().Hex()
 
-		 if balance, exists := addrBalance[key]; exists {
-			 if balance != out.Amount() {
-				 return errors.New("Address balance inconsistent sum")
-			 }
+		if balance, exists := addrBalance[key]; exists {
+			if balance != out.Amount() {
+				return errors.New("Address balance inconsistent sum")
+			}
 
-			 if _, exists := readedMap[key]; exists {
-				 return errors.New("Address has to many outputs")
-			 }
+			if _, exists := readedMap[key]; exists {
+				return errors.New("Address has to many outputs")
+			}
 
 			readedMap[key] = struct{}{}
-		 } else {
-			 return errors.New("The recipient without sender")
-		 }
-	 }
+		} else {
+			return errors.New("The recipient without sender")
+		}
+	}
 
-	 // get last addr map
+	// get last addr map
 	lastAddrOutputs := map[string]struct{}{}
 	for _, in := range tx.Inputs() {
 		if !bytes.Equal(in.Address(), lastAddr) {

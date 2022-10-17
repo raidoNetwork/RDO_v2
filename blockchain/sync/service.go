@@ -14,7 +14,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/async"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
-	"github.com/raidoNetwork/RDO_v2/validator"
 	"github.com/sirupsen/logrus"
 	"runtime/debug"
 	"time"
@@ -34,6 +33,12 @@ const (
 	blocksPerRequest = 64
 )
 
+type ValidatorCfg struct {
+	ProposeFeed events.Feed
+	AttestationFeed events.Feed
+	Enabled bool
+}
+
 type Config struct{
 	BlockFeed events.Feed
 	TxFeed	  events.Feed
@@ -43,7 +48,7 @@ type Config struct{
 	P2P          P2P
 	DisableSync  bool
 	MinSyncPeers int
-	ValidatorService *validator.Service // todo replace with interface
+	Validator ValidatorCfg
 }
 
 func NewService(ctx context.Context, cfg *Config) *Service {
@@ -80,7 +85,7 @@ type Service struct{
 }
 
 func (s *Service) Start(){
-	go s.listenNodeState()
+	go s.stateListener()
 
 	<-s.initialized
 
@@ -129,7 +134,7 @@ func (s *Service) Start(){
 	// listen incoming data
 	go s.listenIncoming()
 
-	if s.cfg.ValidatorService != nil {
+	if s.cfg.Validator.Enabled {
 		go s.listenValidatorTopics()
 		go s.gossipValidatorMessages()
 	}
@@ -167,6 +172,8 @@ func (s *Service) gossipEvents(){
 }
 
 func (s *Service) Stop() error {
+	log.Info("Stop sync service")
+
 	// cancel context
 	s.cancel()
 
@@ -177,7 +184,7 @@ func (s *Service) Status() error {
 	return nil
 }
 
-func (s *Service) listenNodeState(){
+func (s *Service) stateListener(){
 	sub := s.cfg.StateFeed.Subscribe(s.stateEvent)
 	defer sub.Unsubscribe()
 
@@ -214,8 +221,6 @@ func (s *Service) listenIncoming() {
 					log.Errorf("Error unmarshaling block: %s", err)
 					break
 				}
-
-				log.Debugf("Receive block for save #%d", block.Num)
 
 				s.cfg.BlockFeed.Send(block)
 				receivedMessages.WithLabelValues(p2p.BlockTopic).Inc()

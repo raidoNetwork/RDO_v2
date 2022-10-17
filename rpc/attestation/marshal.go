@@ -3,6 +3,7 @@ package attestation
 import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/utilities"
+	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/rpc/cast"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
@@ -30,6 +31,9 @@ func UnmarshalTx(enc string) (*prototype.Transaction, error) {
 	}
 
 	tx := cast.TxFromTxValue(&protoReq)
+	if tx == nil {
+		return nil, errors.New("Empty transaction data")
+	}
 
 	return tx, nil
 }

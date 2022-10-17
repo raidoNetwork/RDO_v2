@@ -166,6 +166,7 @@ func (r *RDONode) InitValidatorService() error {
 	}
 
 	p2pService.EnableValidatorMode()
+	syncService.EnableValidatorMode()
 
 	cfg := &validator.Config{
 		BlockFinalizer:  blockchainService,
@@ -181,8 +182,6 @@ func (r *RDONode) InitValidatorService() error {
 	if err != nil {
 		return err
 	}
-
-	syncService.EnableValidatorMode(srv)
 
 	return r.services.RegisterService(srv)
 }
@@ -341,6 +340,10 @@ func (r *RDONode) registerSyncService() error {
 		Blockchain: blockchainService,
 		DisableSync: r.cliCtx.Bool(flags.DisableSync.Name),
 		MinSyncPeers: r.cliCtx.Int(flags.MinSyncPeers.Name),
+		Validator: rsync.ValidatorCfg{
+			ProposeFeed: &r.proposeFeed,
+			AttestationFeed: &r.attestationFeed,
+		},
 	}
 	srv := rsync.NewService(r.ctx, &cfg)
 

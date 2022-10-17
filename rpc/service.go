@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"net"
+	runtimeDebug "runtime/debug"
 	"strings"
 	"sync"
 )
@@ -72,6 +73,7 @@ func (s *Service) Start() {
 		middleware.WithUnaryServerChain(
 			s.healthInterceptor,
 			grpc_prometheus.UnaryServerInterceptor,
+			s.recoveryInterceptor,
 		),
 		grpc.MaxRecvMsgSize(s.cfg.MaxMsgSize),
 	}
@@ -112,6 +114,8 @@ func (s *Service) Start() {
 
 // Stop the service.
 func (s *Service) Stop() error {
+	log.Info("Stop gRPC service")
+
 	s.cancel()
 	if s.listener != nil {
 		s.connectionMu.Lock()
@@ -161,4 +165,19 @@ func (s *Service) logNewClientConnection(ctx context.Context) {
 			s.connectedRPCClients[clientInfo.Addr] = true
 		}
 	}
+}
+
+func (s *Service) recoveryInterceptor(ctx context.Context,
+	req interface{},
+	_ *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler,
+) (res interface{}, err error)  {
+	defer func() {
+		if x := recover(); x != nil {
+			log.Errorf("gRPC handler panic: %v\n%v", x, string(runtimeDebug.Stack()))
+			err = status.Error(17, "Server Internal Error")
+		}
+	} ()
+
+	return handler(ctx, req)
 }

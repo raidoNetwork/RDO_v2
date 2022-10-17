@@ -85,8 +85,6 @@ func (s *Service) Start() {
 
 // mainLoop is main loop of service
 func (s *Service) mainLoop() {
-	log.Warn("[CoreService] Start main loop.")
-
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -105,7 +103,7 @@ func (s *Service) mainLoop() {
 					s.statusErr = err
 					s.mu.Unlock()
 
-					return
+					continue
 				}
 			}
 
@@ -118,9 +116,8 @@ func (s *Service) mainLoop() {
 
 // Stop stops tx generator service
 func (s *Service) Stop() error {
+	log.Info("Stop Core service")
 	s.cancelFunc()  // finish context
-
-	log.Warn("Core service stopped")
 	return nil
 }
 
@@ -157,6 +154,7 @@ func (s *Service) subscribeOnEvents() {
 }
 
 func (s *Service) FinalizeBlock(block *prototype.Block) error {
+	log.Debugf("Finalizing block #%d", block.Num)
 	start := time.Now()
 
 	if block.Num == 0 {

@@ -5,6 +5,7 @@ import (
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	discovery "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	discoveryUtil "github.com/libp2p/go-libp2p/p2p/discovery/util"
+	"time"
 )
 
 const (
@@ -55,6 +56,7 @@ func (s *Service) dhtOpts() []dht.Option {
 		dht.ProtocolPrefix(discoveryProtocol),
 		dht.BootstrapPeers(s.getPeerInfo(s.cfg.BootstrapNodes)...),
 		dht.Mode(dht.ModeAutoServer),
+		dht.RoutingTableRefreshPeriod(20 * time.Second),
 	}
 
 	return dopts

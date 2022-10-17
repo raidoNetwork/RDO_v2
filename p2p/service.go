@@ -72,6 +72,7 @@ func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
 		topics:  map[string]*pubsub.Topic{},
 		subs:	 map[string]*pubsub.Subscription{},
 		stateEvent: make(chan state.State, 1),
+		initialized: make(chan struct{}),
 	}
 
 	opts, err := srv.optionsList(nodePrivKey, p2pHostAddr, cfg)
@@ -134,11 +135,15 @@ type Service struct {
 	dht *dht.IpfsDHT
 
 	peerStore *PeerStore
+
+	initialized chan struct{}
 }
 
 func (s *Service) Start() {
+	go s.stateListener()
+
 	// wait local db syncing
-	s.waitLocalSync()
+	<-s.initialized
 
 	s.logID()
 
@@ -152,6 +157,13 @@ func (s *Service) Start() {
 	// connect to bootstrap nodes
 	s.connectPeers()
 
+	async.WithInterval(s.ctx, 5 * time.Second, func() {
+		s.updateMetrics()
+	})
+
+	// wait full sync
+	<-s.initialized
+
 	// join topics
 	err = s.SubscribeAll()
 	if err != nil {
@@ -162,13 +174,11 @@ func (s *Service) Start() {
 
 	// list new messages
 	go s.readMessages()
-
-	async.WithInterval(s.ctx, 5 * time.Second, func() {
-		s.updateMetrics()
-	})
 }
 
 func (s *Service) Stop() error {
+	log.Info("P2P shutdown...")
+
 	// cancel stream handlers
 	for _, p := range s.host.Mux().Protocols() {
 		s.host.RemoveStreamHandler(protocol.ID(p))
@@ -207,7 +217,10 @@ func (s *Service) connectPeers() {
 	}
 
 	for _, info := range infos {
-		go s.connectPeer(info)
+		err := s.connectPeer(info)
+		if err != nil {
+			log.Error(err)
+		}
 	}
 }
 
@@ -246,8 +259,6 @@ func (s *Service) connectPeer(info peer.AddrInfo) error {
 }
 
 func (s *Service) readMessages(){
-	log.Info("Start listening messages")
-
 	for t := range topicMap {
 		go s.listenTopic(t)
 	}
@@ -344,12 +355,18 @@ func (s *Service) Publish(topicName string, message []byte) error {
 		return errors.New("undefined topic")
 	}
 
-	err := topic.Publish(s.ctx, message)
-	if err != nil {
-		return errors.Wrap(err, "error Publish message")
-	}
+	for {
+		if len(topic.ListPeers()) > 0 {
+			return topic.Publish(s.ctx, message)
+		}
 
-	return nil
+		select {
+		case <-s.ctx.Done():
+			return errors.Wrap(s.ctx.Err(), "no peers found to publish message")
+		default:
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
 }
 
 func (s *Service) logID(){
@@ -503,7 +520,7 @@ func (s *Service) CreateStream(ctx context.Context, msg ssz.Marshaler, topic str
 	return stream, nil
 }
 
-func (s *Service) waitLocalSync(){
+func (s *Service) stateListener(){
 	sub := s.cfg.StateFeed.Subscribe(s.stateEvent)
 	defer sub.Unsubscribe()
 
@@ -513,15 +530,13 @@ func (s *Service) waitLocalSync(){
 			return
 		case st := <-s.stateEvent:
 			switch st {
-			case state.Initialized:
-				continue
 			case state.LocalSynced:
-				fallthrough
+				s.initialized <- struct{}{}
 			case state.Synced:
+				close(s.initialized)
 				return
 			default:
-				log.Infof("Unknown state event %d", st)
-				return
+				time.Sleep(500 * time.Millisecond)
 			}
 		}
 	}

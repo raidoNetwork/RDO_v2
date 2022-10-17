@@ -3,7 +3,6 @@ package gateway
 import (
 	gwruntime "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // MuxConfig contains configuration that should be used when registering the beacon node in the gateway.
@@ -22,15 +21,7 @@ func DefaultConfig() MuxConfig {
 
 	v1Mux := gwruntime.NewServeMux(
 		gwruntime.WithMarshalerOption(gwruntime.MIMEWildcard, &gwruntime.HTTPBodyMarshaler{
-			Marshaler: &gwruntime.JSONPb{
-				MarshalOptions: protojson.MarshalOptions{
-					UseProtoNames:   true,
-					EmitUnpopulated: true,
-				},
-				UnmarshalOptions: protojson.UnmarshalOptions{
-					DiscardUnknown: true,
-				},
-			},
+			Marshaler: &gwruntime.JSONBuiltin{},
 		}),
 	)
 
