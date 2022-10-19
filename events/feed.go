@@ -95,10 +95,15 @@ func (b *Bus) Send(data interface{}) int {
 			break
 		}
 
-		// Select on all the receivers, waiting for them to unblock.
-		chosen, _, _ := reflect.Select(cases)
-		cases = deleteItem(cases, chosen)
-		sent++
+		if len(cases) == 1 {
+			cases = deleteItem(cases, 0)
+			break
+		} else {
+			// Select on all the receivers, waiting for them to unblock.
+			chosen, _, _ := reflect.Select(cases)
+			cases = deleteItem(cases, chosen)
+			sent++
+		}
 	}
 
 	// reset value of all send cases
