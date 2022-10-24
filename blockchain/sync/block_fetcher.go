@@ -10,6 +10,7 @@ import (
 const (
 	maxRequestHandlers = 10
 	responseHandlerTimeout = 200 * time.Millisecond
+	aheadBlocksCount = 10
 )
 
 type blockResponse struct {
@@ -118,7 +119,7 @@ func (f *fetcher) requestHandlers(wg *sync.WaitGroup) {
 func (f *fetcher) request(start, end uint64) {
 	request := &prototype.BlockRequest{
 		StartSlot: start,
-		Count:     end - start,
+		Count:     end - start + aheadBlocksCount,
 		Step:      1,
 	}
 
@@ -169,7 +170,9 @@ func (f *fetcher) handleResponse() {
 			continue
 		}
 
+		f.mu.Lock()
 		log.Infof("Wait for block batch from slot #%d. Blocks stored: %d", targetSlot, len(f.data) * blocksPerRequest)
+		f.mu.Unlock()
 		<-time.After(responseHandlerTimeout)
 	}
 

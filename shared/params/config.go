@@ -19,4 +19,6 @@ type RDOBlockChainConfig struct {
 	GenesisPath string `yaml:"GENESIS_PATH"` // GenesisPath defines path to the Genesis JSON file.
 	ResponseTimeout int64 `yaml:"RESPONSE_TIMEOUT"` // ResponseTimeout defines timeout for p2p response
 	SlotsPerEpoch uint64 `yaml:"SLOTS_PER_EPOCH"` // SlotPerEpoch defines slots' number for one epoch
+
+	CommitteeSize int `yaml:"COMMITTEE_SIZE"`
 }

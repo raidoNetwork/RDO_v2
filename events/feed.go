@@ -66,6 +66,7 @@ func (b *Bus) Send(data interface{}) int {
 	b.once.Do(b.init)
 
 	b.lock.Lock()
+	defer b.lock.Unlock()
 
 	cases := b.cases
 
@@ -76,8 +77,6 @@ func (b *Bus) Send(data interface{}) int {
 	for i := range cases {
 		cases[i].Send = dval
 	}
-
-	b.lock.Unlock()
 
 	for {
 		// try to send data
@@ -95,15 +94,10 @@ func (b *Bus) Send(data interface{}) int {
 			break
 		}
 
-		if len(cases) == 1 {
-			cases = deleteItem(cases, 0)
-			break
-		} else {
-			// Select on all the receivers, waiting for them to unblock.
-			chosen, _, _ := reflect.Select(cases)
-			cases = deleteItem(cases, chosen)
-			sent++
-		}
+		// Select on all the receivers, waiting for them to unblock.
+		chosen, _, _ := reflect.Select(cases)
+		cases = deleteItem(cases, chosen)
+		sent++
 	}
 
 	// reset value of all send cases

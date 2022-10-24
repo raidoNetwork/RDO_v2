@@ -30,6 +30,7 @@ var maxDialTimeout = time.Duration(params.RaidoConfig().ResponseTimeout) * time.
 const (
 	messageQueueSize = 256
 	MaxChunkSize = 1 << 20
+	failPublishLimit = 10
 )
 
 type ConnectionHandler func(context.Context, peer.ID) error
@@ -178,6 +179,7 @@ func (s *Service) Start() {
 
 func (s *Service) Stop() error {
 	log.Info("P2P shutdown...")
+	s.cancel()
 
 	// cancel stream handlers
 	for _, p := range s.host.Mux().Protocols() {
@@ -186,16 +188,16 @@ func (s *Service) Stop() error {
 
 	// cancel topic subscribes
 	for _, t := range s.pubsub.GetTopics() {
+		s.topicLock.Lock()
 		if sub, exists := s.subs[t]; exists {
 			sub.Cancel()
 		}
+		s.topicLock.Unlock()
 	}
 
 	if err := s.host.Close(); err != nil {
 		return err
 	}
-
-	s.cancel()
 
 	return nil
 }
@@ -355,16 +357,25 @@ func (s *Service) Publish(topicName string, message []byte) error {
 		return errors.New("undefined topic")
 	}
 
+	failCounter := 0
 	for {
 		if len(topic.ListPeers()) > 0 {
 			return topic.Publish(s.ctx, message)
 		}
 
+		// todo fix events, create unblocking send
+		if failCounter == failPublishLimit {
+			return errors.New("no topic subscribers")
+		}
+
+		log.Debugf("Try public %s...", topicName)
+
 		select {
 		case <-s.ctx.Done():
 			return errors.Wrap(s.ctx.Err(), "no peers found to publish message")
 		default:
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
+			failCounter++
 		}
 	}
 }

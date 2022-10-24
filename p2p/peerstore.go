@@ -108,6 +108,7 @@ func (ps *PeerStore) AddMeta(pid peer.ID, meta *prototype.Metadata) {
 
 	ps.PeerHeadSlot.Set(meta.HeadSlot)
 	ps.PeerHeadBlock.Set(meta.HeadBlockNum)
+	ps.PeerHeadBlock.Initialize()
 }
 
 func (ps *PeerStore) Stats() map[string]int {

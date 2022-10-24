@@ -138,17 +138,17 @@ type Transaction struct {
 	tx        *prototype.Transaction
 	hash 	  common.Hash
 	from	  common.Address
-	txType	  uint32
-	size     int
-	feePrice uint64
-	fee 	 uint64
-	num      uint64
+	txType    uint32
+	size      int
+	feePrice  uint64
+	fee       uint64
+	num       uint64
 	timestamp uint64
 	doubles   []*Transaction
 	inputs    []*Input
 	outputs   []*Output
 	lock      sync.Mutex
-	droped	  bool
+	dropped   bool
 }
 
 func (tx *Transaction) GetTx() *prototype.Transaction {
@@ -257,14 +257,14 @@ func (tx *Transaction) Drop() {
 	tx.lock.Lock()
 	defer tx.lock.Unlock()
 
-	tx.droped = true
+	tx.dropped = true
 }
 
 func (tx *Transaction) IsDropped() bool {
 	tx.lock.Lock()
 	defer tx.lock.Unlock()
 
-	return tx.droped
+	return tx.dropped
 }
 
 type Input struct {

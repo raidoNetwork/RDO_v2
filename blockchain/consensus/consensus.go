@@ -16,7 +16,7 @@ type PoA interface {
 }
 
 func IsEnoughVotes(approvers, slashers int) error {
-	commiteeSize := float64(params.ConsensusConfig().CommitteeSize)
+	commiteeSize := float64(params.RaidoConfig().CommitteeSize)
 	votedCount := approvers + slashers
 	votedPercent := float64(votedCount) / commiteeSize * 100
 

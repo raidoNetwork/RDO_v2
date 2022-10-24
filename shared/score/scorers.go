@@ -13,6 +13,7 @@ const (
 type Scorer struct {
 	val uint64
 	strategy int8
+	initialized bool
 
 	sync.Mutex
 }
@@ -52,4 +53,18 @@ func (s *Scorer) Get() uint64 {
 	defer s.Unlock()
 
 	return s.val
+}
+
+func (s *Scorer) Initialize() {
+	s.Lock()
+	defer s.Unlock()
+
+	s.initialized = true
+}
+
+func (s *Scorer) Initialized() bool {
+	s.Lock()
+	defer s.Unlock()
+
+	return s.initialized
 }

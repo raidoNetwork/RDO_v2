@@ -94,8 +94,8 @@ func (s *Service) Status() error {
 func (s *Service) Stop() error {
 	log.Info("Stop validator service")
 
-	s.unsubscribe()
 	s.cancelFunc()
+	s.unsubscribe()
 	s.ticker.Stop()
 
 	return nil
