@@ -52,7 +52,7 @@ func (cv *CryspValidator) ValidateTransaction(tx *types.Transaction) error {
 	case common.UnstakeTxType:
 		return cv.validateUnstakeTx(tx)
 	case common.StakeTxType:
-		if !cv.stakeValidator.CanStake(false) {
+		if !cv.stakeValidator.CanValidatorStake(false) {
 			return consensus.ErrStakeLimit
 		}
 
