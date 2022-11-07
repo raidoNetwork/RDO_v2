@@ -21,6 +21,14 @@ var (
 
 const maxOutputs = 2000
 
+type StakeType int
+
+const (
+	NoStake StakeType = iota
+	ValidatorStake
+	ElectorStake
+)
+
 type CryspValidatorConfig struct {
 	SlotTime               time.Duration // SlotTime defines main generator ticker timeout.
 	RewardBase             uint64        // RewardBase defines reward per validation slot.
@@ -50,9 +58,19 @@ type CryspValidator struct {
 func (cv *CryspValidator) ValidateTransaction(tx *types.Transaction) error {
 	switch tx.Type() {
 	case common.UnstakeTxType:
+		_, err := cv.checkStakeType(tx)
+		if err != nil {
+			return err
+		}
+
 		return cv.validateUnstakeTx(tx)
 	case common.StakeTxType:
-		if !cv.stakeValidator.CanValidatorStake(false) {
+		st, err := cv.checkStakeType(tx)
+		if err != nil {
+			return err
+		}
+
+		if st == ValidatorStake && !cv.stakeValidator.CanValidatorStake(false) {
 			return consensus.ErrStakeLimit
 		}
 
@@ -329,7 +347,7 @@ func (cv *CryspValidator) validateRewardTx(tx *types.Transaction, block *prototy
 	}
 
 	// get stakers from database
-	stakeDeposits, err := cv.bc.FindStakeDeposits()
+	stakeDeposits, err := cv.bc.FindValidatorStakeDeposits()
 	if err != nil {
 		return err
 	}
@@ -553,4 +571,43 @@ func (cv *CryspValidator) validateUnstakeTx(tx *types.Transaction) error {
 	}
 
 	return cv.validateTxInputs(tx)
+}
+
+func (cv *CryspValidator) checkStakeType(tx *types.Transaction) (StakeType, error) {
+	hasStaking := false
+	hasValidatorStaking := false
+	var validator string
+	for _, out := range tx.Outputs() {
+		if len(out.Node()) == common.AddressLength {
+			if out.Node().Hex() == common.BlackHoleAddress {
+				hasValidatorStaking = true
+			} else {
+				if !cv.stakeValidator.HasElector(out.Node().Hex(), tx.From().Hex()) {
+					return NoStake, errors.New("Stake not found")
+				}
+
+				if validator == "" {
+					validator = out.Node().Hex()
+				} else if validator != out.Node().Hex() {
+					return NoStake, errors.New("Different validators stake in one tx")
+				}
+			}
+
+			hasStaking = true
+		}
+	}
+
+	if hasValidatorStaking && validator != "" {
+		return NoStake, errors.New("Different stake types in one tx")
+	}
+
+	if !hasStaking {
+		return NoStake, nil
+	}
+
+	if hasValidatorStaking {
+		return ValidatorStake, nil
+	} else {
+		return ElectorStake, nil
+	}
 }

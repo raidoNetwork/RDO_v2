@@ -41,6 +41,9 @@ type BlockchainReader interface{
 	// FindStakeDeposits find all block stake deposits
 	FindStakeDeposits() ([]*types.UTxO, error)
 
+	// FindValidatorStakeDeposits find all stake validator deposits
+	FindValidatorStakeDeposits() ([]*types.UTxO, error)
+
 	// FindStakeDepositsOfAddress returns all address stake outputs.
 	FindStakeDepositsOfAddress(string) ([]*types.UTxO, error)
 
