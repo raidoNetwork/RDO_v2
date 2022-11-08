@@ -9,102 +9,58 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/sirupsen/logrus"
 	"sync"
+	"unicode/utf8"
 )
 
-var log = logrus.WithField("prefix", "stake pool")
+var log = logrus.WithField("prefix", "StakePool")
 
-func NewPool(blockchain consensus.BlockchainReader, slotsLimit int, reward uint64, stakeAmount uint64) consensus.StakePool {
-	p := &Pool{
-		slots:         make([]string, 0, slotsLimit),
-		blockReward:   reward,
-		stakeAmount:   stakeAmount,
-		slotsLimit: slotsLimit,
-		blockchain: blockchain,
-	}
-
-	return p
+type ValidatorStakeData struct {
+	SlotsFilled     int
+	CumulativeStake uint64
+	Electors        map[string]uint64 // Staker => StakedAmount
+	SelfStake       uint64
 }
 
-type Pool struct {
-	blockReward   uint64   // fixed reward per block
-	slotsLimit    int      // slots limit
-	slots         []string // address list
-	reservedSlots int
-	mu            sync.RWMutex
-	stakeAmount   uint64
-
+type StakingPool struct {
+	validators map[string]*ValidatorStakeData
+	electors map[string]map[string]struct{}
+	cumulativeStake uint64
+	rewardPerBlock uint64
+	stakeAmountPerSlot uint64
+	slotsLimit int
+	slotsFilled int
+	slotsReserved int
 	blockchain consensus.BlockchainReader
+
+	mu sync.Mutex
 }
 
-func (p *Pool) LoadData() error {
+func (p *StakingPool) Init() error {
 	deposits, err := p.blockchain.FindStakeDeposits()
 	if err != nil {
 		return err
 	}
 
 	for _, uo := range deposits {
-		err = p.registerStake(uo.To.Hex(), uo.Amount)
+		if len(uo.Node) != common.AddressLength {
+			continue
+		}
+
+		if uo.Node.Hex() == common.BlackHoleAddress {
+			err = p.registerValidatorStake(uo.To.Hex(), uo.Amount)
+		} else {
+			err = p.registerElectorStake(uo.From.Hex(), uo.To.Hex(), uo.Amount)
+		}
+
 		if err != nil {
 			return err
 		}
 	}
 
-	log.Warnf("Stake deposits loaded. Count: %d", len(p.slots))
-	stakeSlotsFilled.Set(float64(len(p.slots)))
-
 	return nil
 }
 
-// CanStake shows if there are free slots for staking
-func (p *Pool) CanStake(includeReserved bool) bool {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	return p.filledSlots(includeReserved) < p.slotsLimit
-}
-
-func (p *Pool) filledSlots(includeReserved bool) int {
-	slotsCount := len(p.slots)
-	if includeReserved {
-		slotsCount += p.reservedSlots
-	}
-	return slotsCount
-}
-
-// ReserveSlots add address to reserved slots
-func (p *Pool) ReserveSlots(amount uint64) error {
-	if !p.CanStake(true) {
-		return errors.New("All stake slots are filled.")
-	}
-
-	p.mu.Lock()
-	stakeAmount := p.stakeAmount
-	p.mu.Unlock()
-
-	if amount%stakeAmount != 0 {
-		return errors.New("Wrong amount for staking given.")
-	}
-
-	count := amount / stakeAmount
-
-	if count == 0 {
-		return errors.New("Too low amount for staking.")
-	}
-
-	emptySlots := uint64(p.slotsLimit-p.filledSlots(true))
-	if emptySlots < count {
-		return errors.New("Can't reserve all slots with given amount.")
-	}
-
-	p.mu.Lock()
-	p.reservedSlots += int(count)
-	p.mu.Unlock()
-
-	return nil
-}
-
-// registerStake close validator slots
-func (p *Pool) registerStake(address string, amount uint64) error {
+func (p *StakingPool) registerValidatorStake(validator string, amount uint64) error {
 	empty := p.getEmptySlots()
 	if empty == 0 {
 		return errors.New("Validator slots limit is reached.")
@@ -114,69 +70,250 @@ func (p *Pool) registerStake(address string, amount uint64) error {
 		return errors.New("Validator slots inconsistent.")
 	}
 
-
-	count := amount / p.stakeAmount
-	if uint64(empty) < count {
-		return errors.Errorf("Can't feel all slots. Empty: %d. Given: %d.", empty, count)
+	slotsCount := int(amount / p.stakeAmountPerSlot)
+	if empty < slotsCount {
+		return errors.Errorf("Can't feel all slots. Empty: %d. Given: %d.", empty, slotsCount)
 	}
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	var i uint64
-	for i = 0; i < count; i++ {
-		p.slots = append(p.slots, address)
-	}
-	stakeSlotsFilled.Set(float64(len(p.slots)))
-
-	return nil
-}
-
-// unregisterStake open validator slots
-func (p *Pool) unregisterStake(address string, amount uint64) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	count := amount / p.stakeAmount
-	if count == 0 {
-		return errors.Errorf("Bad unstake amount given: %d.", amount)
-	}
-
-	var i uint64
-	for i = 0;i < count;i++ {
-		for k, slotAddress := range p.slots {
-			if slotAddress == address {
-				p.slots = append(p.slots[:k], p.slots[k+1:]...)
-				break
-			}
+	if _, exists := p.validators[validator]; !exists {
+		p.validators[validator] = &ValidatorStakeData{
+			Electors: map[string]uint64{},
 		}
 	}
 
-	stakeSlotsFilled.Set(float64(len(p.slots)))
+	validatorData := p.validators[validator]
+	validatorData.CumulativeStake += amount
+	validatorData.SelfStake += amount
+	validatorData.SlotsFilled += slotsCount
+
+	p.slotsFilled += slotsCount
+	p.cumulativeStake += amount
 
 	return nil
 }
 
-func (p *Pool) getEmptySlots() int {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+func (p *StakingPool) cancelValidatorStake(validator string, amount uint64) error  {
+	slotsCount := int(amount / p.stakeAmountPerSlot)
+	if slotsCount == 0 {
+		return errors.Errorf("Bad unstake amount given: %d.", amount)
+	}
 
-	return p.slotsLimit - len(p.slots)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if _, exists := p.validators[validator]; !exists {
+		return errors.New("Validator not found")
+	}
+
+	validatorData := p.validators[validator]
+
+	if validatorData.SlotsFilled == slotsCount {
+		delete(p.validators, validator)
+	} else {
+		validatorData.SelfStake -= amount
+		validatorData.SlotsFilled -= slotsCount
+	}
+
+	p.cumulativeStake -= amount
+	p.slotsFilled -= slotsCount
+
+	return nil
 }
 
-func (p *Pool) GetRewardPerSlot(slots uint64) uint64 {
-	return p.blockReward / slots
+func (p *StakingPool) registerElectorStake(elector, validator string, amount uint64) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if _, exists := p.validators[validator]; !exists {
+		log.Debugf("Not found validator %s with elector %s", validator, elector)
+		return errors.New("Not found validator")
+	}
+
+	validatorData := p.validators[validator]
+	validatorData.CumulativeStake += amount
+	validatorData.Electors[elector] += amount
+
+	if _, exists := p.electors[elector]; !exists {
+		p.electors[elector] = map[string]struct{}{}
+	}
+
+	p.electors[elector][validator] = struct{}{}
+	p.cumulativeStake += amount
+
+	return nil
 }
 
-func (p *Pool) updateStakeSlots(batch []*types.Transaction) error {
+func (p *StakingPool) cancelElectorStake(elector, validator string, amount uint64) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if _, exists := p.validators[validator]; !exists {
+		log.Debugf("Not found validator %s with elector %s", validator, elector)
+		return errors.New("Not found validator")
+	}
+
+	validatorData := p.validators[validator]
+	if _, exists := validatorData.Electors[elector]; !exists {
+		return errors.New("Not found elector")
+	}
+
+	if validatorData.Electors[elector] == amount {
+		delete(validatorData.Electors, elector)
+	} else {
+		validatorData.Electors[elector] -= amount
+	}
+
+	validatorData.CumulativeStake -= amount
+	p.cumulativeStake -= amount
+
+	return nil
+}
+
+func (p *StakingPool) getEmptySlots() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.slotsLimit - p.slotsFilled
+}
+
+func (p *StakingPool) filledSlots(includeReserved bool) int {
+	slots := p.slotsFilled
+	if includeReserved {
+		slots += p.slotsReserved
+	}
+
+	return slots
+}
+
+func (p *StakingPool) CanValidatorStake(includeReserved bool) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.filledSlots(includeReserved) < p.slotsLimit
+}
+
+func (p *StakingPool) ReserveSlots(amount uint64) error {
+	if !p.CanValidatorStake(true) {
+		return errors.New("All stake slots are filled.")
+	}
+
+	p.mu.Lock()
+	stakeAmount := p.stakeAmountPerSlot
+	p.mu.Unlock()
+
+	if amount%stakeAmount != 0 {
+		return errors.New("Wrong amount for staking given.")
+	}
+
+	count := int(amount / stakeAmount)
+	if count == 0 {
+		return errors.New("Too low amount for staking.")
+	}
+
+	emptySlots := p.slotsLimit-p.filledSlots(true)
+	if emptySlots < count {
+		return errors.New("Can't reserve all slots with given amount.")
+	}
+
+	p.mu.Lock()
+	p.slotsReserved += count
+	p.mu.Unlock()
+
+	return nil
+}
+
+func (p *StakingPool) processStakeTx(tx *types.Transaction) error {
+	var validatorAmount uint64
+	var electorAmount uint64
+	for _, out := range tx.Outputs() {
+		if len(out.Node()) != common.AddressLength {
+			continue
+		}
+
+		if out.Node().Hex() == common.BlackHoleAddress {
+			validatorAmount += out.Amount()
+		} else {
+			electorAmount += out.Amount()
+		}
+	}
+
+	sender := tx.From().Hex()
+	if validatorAmount > 0 {
+		err := p.registerValidatorStake(sender, validatorAmount)
+		if err != nil {
+			log.Errorf("Error proccessing stake transaction: %s", err)
+			return err
+		}
+	}
+
+	if electorAmount > 0 {
+		err := p.registerValidatorStake(sender, electorAmount)
+		if err != nil {
+			log.Errorf("Error proccessing stake transaction: %s", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (p *StakingPool) processUnstakeTx(tx *types.Transaction) error {
+	// count tx stake amount
+	var amount uint64
+	for _, in := range tx.Inputs() {
+		amount += in.Amount()
+	}
+
+	// find amount to unstake
+	isValidatorUnstake := false
+	var validator string
+	for _, out := range tx.Outputs() {
+		if len(out.Node()) == common.AddressLength {
+			if out.Node().Hex() == common.BlackHoleAddress {
+				isValidatorUnstake = true
+			} else {
+				validator = out.Node().Hex()
+			}
+
+			amount -= out.Amount()
+		}
+	}
+
+	if !isValidatorUnstake && utf8.RuneCountInString(validator) != 42 {
+		return errors.New("Incorrect unstake tx")
+	}
+
+	var err error
+	if isValidatorUnstake {
+		err = p.cancelValidatorStake(tx.From().Hex(), amount)
+	} else {
+		err = p.cancelElectorStake(tx.From().Hex(), validator, amount)
+	}
+
+	if err != nil {
+		log.Errorf("Error unstaking slots: %s.", err)
+		return err
+	}
+
+	return nil
+}
+
+func (p *StakingPool) FinalizeStaking(batch []*types.Transaction) error {
+	p.mu.Lock()
+	p.slotsReserved = 0
+	p.mu.Unlock()
+
 	for _, tx := range batch {
 		var err error
 
 		switch tx.Type() {
 		case common.StakeTxType:
-			err = p.addStakeSlots(tx)
+			err = p.processStakeTx(tx)
 		case common.UnstakeTxType:
-			err = p.removeStakeSlots(tx)
+			err = p.processUnstakeTx(tx)
 		}
 
 		if err != nil {
@@ -187,75 +324,42 @@ func (p *Pool) updateStakeSlots(batch []*types.Transaction) error {
 	return nil
 }
 
-func (p *Pool) addStakeSlots(tx *types.Transaction) error {
-	var amount uint64
-	for _, out := range tx.Outputs() {
-		if out.Node().Hex() == common.BlackHoleAddress {
-			amount += out.Amount()
-		}
-	}
-
-	err := p.registerStake(tx.From().Hex(), amount)
-	if err != nil {
-		log.Errorf("Error proccessing stake transaction: %s", err)
-		return err
-	}
-
-	return nil
-}
-
-func (p *Pool) removeStakeSlots(tx *types.Transaction) error {
-	// count tx stake amount
-	var amount uint64
-	for _, in := range tx.Inputs() {
-		amount += in.Amount()
-	}
-
-	// find amount to unstake
-	for _, out := range tx.Outputs() {
-		if out.Node().Hex() == common.BlackHoleAddress {
-			amount -= out.Amount()
-		}
-	}
-
-	err := p.unregisterStake(tx.From().Hex(), amount)
-	if err != nil {
-		log.Errorf("Error unstaking slots: %s.", err)
-		return err
-	}
-
-	return nil
-}
-
-func (p *Pool) FinalizeStaking(batch []*types.Transaction) error {
-	p.mu.Lock()
-	p.reservedSlots = 0
-	p.mu.Unlock()
-
-	err := p.updateStakeSlots(batch)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (p *Pool) GetRewardOutputs() []*prototype.TxOutput {
+func (p *StakingPool) GetRewardMap() map[string]uint64 {
 	p.mu.Lock()
 
-	size := len(p.slots)
-	if size == 0 {
+	if p.slotsFilled == 0 {
 		p.mu.Unlock()
-		return nil
+		return map[string]uint64{}
 	}
 
 	// divide rewards among all validator slots
-	rewardPerSlot := params.RaidoConfig().RewardBase / uint64(size)
+	rewardPerSlot := p.rewardPerBlock / uint64(p.slotsFilled)
 	rewards := map[string]uint64{}
-	for _, addrHex := range p.slots {
-		rewards[addrHex] += rewardPerSlot
+	for validator, stakeData := range p.validators {
+		fullValidatorReward := rewardPerSlot * uint64(stakeData.SlotsFilled)
+
+		validatorPercent := params.RaidoConfig().ValidatorRewardPercent
+		if len(stakeData.Electors) > 0 {
+			validatorPercent = params.RaidoConfig().ChosenValidatorRewardPercent
+		}
+
+		// validator takes more percent of reward if he has electors
+		validatorReward := fullValidatorReward * validatorPercent / 100
+		rewards[validator] += validatorReward
+
+		// each elector will receive a reward in proportion to the bet on the validator
+		electorsReward := fullValidatorReward - validatorReward
+		electorsStake := stakeData.CumulativeStake - stakeData.SelfStake
+		for elector, stakeAmount := range stakeData.Electors {
+			rewards[elector] += electorsStake / stakeAmount * electorsReward
+		}
 	}
 	p.mu.Unlock()
+	return rewards
+}
+
+func (p *StakingPool) GetRewardOutputs() []*prototype.TxOutput {
+	rewards := p.GetRewardMap()
 
 	outs := make([]*prototype.TxOutput, 0, len(rewards))
 	for addr, amount := range rewards {
@@ -264,4 +368,32 @@ func (p *Pool) GetRewardOutputs() []*prototype.TxOutput {
 	}
 
 	return outs
+}
+
+func (p *StakingPool) GetRewardPerSlot(slots uint64) uint64 {
+	return p.rewardPerBlock / slots
+}
+
+func (p *StakingPool) HasElector(validator, elector string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	v, exists := p.validators[validator]
+	if !exists {
+		return false
+	}
+
+	_, exists = v.Electors[elector]
+	return exists
+}
+
+func NewPool(blockchain consensus.BlockchainReader, slotsLimit int, reward uint64, stakeAmount uint64) consensus.StakePool {
+	return &StakingPool{
+		validators: map[string]*ValidatorStakeData{},
+		electors: map[string]map[string]struct{}{},
+		blockchain: blockchain,
+		slotsLimit: slotsLimit,
+		stakeAmountPerSlot: stakeAmount,
+		rewardPerBlock: reward,
+	}
 }

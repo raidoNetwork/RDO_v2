@@ -444,6 +444,10 @@ func (om *OutputManager) FindStakeDeposits() ([]*types.UTxO, error) {
 	return om.db.FindStakeDeposits()
 }
 
+func (om *OutputManager) FindValidatorStakeDeposits() ([]*types.UTxO, error) {
+	return om.db.FindValidatorStakeDeposits()
+}
+
 // FindStakeDepositsOfAddress return list of stake deposits actual to the moment of block with given num.
 func (om *OutputManager) FindStakeDepositsOfAddress(address string) ([]*types.UTxO, error) {
 	om.finalizeLock.WaitLock()

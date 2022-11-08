@@ -21,6 +21,14 @@ var (
 
 const maxOutputs = 2000
 
+type StakeType int
+
+const (
+	NoStake StakeType = iota
+	ValidatorStake
+	ElectorStake
+)
+
 type CryspValidatorConfig struct {
 	SlotTime               time.Duration // SlotTime defines main generator ticker timeout.
 	RewardBase             uint64        // RewardBase defines reward per validation slot.
@@ -50,9 +58,19 @@ type CryspValidator struct {
 func (cv *CryspValidator) ValidateTransaction(tx *types.Transaction) error {
 	switch tx.Type() {
 	case common.UnstakeTxType:
+		_, err := cv.checkStakeType(tx)
+		if err != nil {
+			return err
+		}
+
 		return cv.validateUnstakeTx(tx)
 	case common.StakeTxType:
-		if !cv.stakeValidator.CanStake(false) {
+		st, err := cv.checkStakeType(tx)
+		if err != nil {
+			return err
+		}
+
+		if st == ValidatorStake && !cv.stakeValidator.CanValidatorStake(false) {
 			return consensus.ErrStakeLimit
 		}
 
@@ -318,52 +336,33 @@ func (cv *CryspValidator) validateRewardTx(tx *types.Transaction, block *prototy
 		return errors.Errorf("Transaction has wrong type: %d.", tx.Type())
 	}
 
-	rewardSize := len(tx.Outputs())
-	if rewardSize == 0 || rewardSize > cv.cfg.ValidatorRegistryLimit {
-		return errors.Errorf("Wrong outputs size. Given: %d. Expected: 0 < x <= %d.", rewardSize, cv.cfg.ValidatorRegistryLimit)
-	}
-
 	// reward tx num should be equal to the block num
 	if tx.Num() != block.Num {
 		return errors.New("Wrong tx reward num.")
 	}
 
-	// get stakers from database
-	stakeDeposits, err := cv.bc.FindStakeDeposits()
-	if err != nil {
-		return err
+	rewardSize := len(tx.Outputs())
+	rewardMap := cv.stakeValidator.GetRewardMap()
+	if rewardSize != len(rewardMap) {
+		return errors.Errorf("Wrong outputs size. Given: %d. Expected: %d.", rewardSize, len(rewardMap))
 	}
 
-	var userSlots, slots uint64
-	var to string
-
-	receivers := map[string]uint64{}
-	for _, uo := range stakeDeposits {
-		to = uo.To.Hex()
-		userSlots = uo.Amount / cv.cfg.StakeUnit
-		receivers[to] += userSlots
-		slots += userSlots
-	}
-
-	if rewardSize != len(receivers) {
-		return errors.Errorf("Wrong tx reward outputs size. Given: %d. Expected: %d.", rewardSize, len(receivers))
-	}
-
-	// count reward amount for each stake slot
-	rewardAmount := cv.stakeValidator.GetRewardPerSlot(slots)
-
-	// check outputs amount and receiver addresses
-	for i, out := range tx.Outputs() {
-		addrHex := out.Address().Hex()
-
-		if slots, exists := receivers[addrHex]; exists {
-			stakedAmount := rewardAmount * slots
-			if out.Amount() != stakedAmount {
-				return errors.Errorf("Wrong reward amount on output %d address %s. Expect: %d. Real: %d.", i, addrHex, stakedAmount, out.Amount())
-			}
-		} else {
-			return errors.Errorf("Undefined staker %s", addrHex)
+	processed := map[string]struct{}{}
+	for _, out := range tx.Outputs() {
+		staker := out.Address().Hex()
+		if _, exists := processed[staker]; exists {
+			return errors.Errorf("Already processed staker %s", staker)
 		}
+
+		if rewardMap[staker] != out.Amount() {
+			return errors.Errorf("Wrong staker %s reward amount. Given: %d. Expected: %d", staker, out.Amount(), rewardMap[staker])
+		}
+
+		processed[staker] = struct{}{}
+	}
+
+	if len(processed) != len(rewardMap) {
+		return errors.Errorf("Not all stakers take reward")
 	}
 
 	return nil
@@ -553,4 +552,44 @@ func (cv *CryspValidator) validateUnstakeTx(tx *types.Transaction) error {
 	}
 
 	return cv.validateTxInputs(tx)
+}
+
+// checkStakeType check stake tx type
+func (cv *CryspValidator) checkStakeType(tx *types.Transaction) (StakeType, error) {
+	hasStaking := false
+	hasValidatorStaking := false
+	var validator string
+	for _, out := range tx.Outputs() {
+		if len(out.Node()) == common.AddressLength {
+			if out.Node().Hex() == common.BlackHoleAddress {
+				hasValidatorStaking = true
+			} else {
+				if !cv.stakeValidator.HasElector(out.Node().Hex(), tx.From().Hex()) {
+					return NoStake, errors.New("Stake not found")
+				}
+
+				if validator == "" {
+					validator = out.Node().Hex()
+				} else if validator != out.Node().Hex() {
+					return NoStake, errors.New("Different validators stake in one tx")
+				}
+			}
+
+			hasStaking = true
+		}
+	}
+
+	if hasValidatorStaking && validator != "" {
+		return NoStake, errors.New("Different stake types in one tx")
+	}
+
+	if !hasStaking {
+		return NoStake, nil
+	}
+
+	if hasValidatorStaking {
+		return ValidatorStake, nil
+	} else {
+		return ElectorStake, nil
+	}
 }

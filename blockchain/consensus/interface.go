@@ -41,6 +41,9 @@ type BlockchainReader interface{
 	// FindStakeDeposits find all block stake deposits
 	FindStakeDeposits() ([]*types.UTxO, error)
 
+	// FindValidatorStakeDeposits find all stake validator deposits
+	FindValidatorStakeDeposits() ([]*types.UTxO, error)
+
 	// FindStakeDepositsOfAddress returns all address stake outputs.
 	FindStakeDepositsOfAddress(string) ([]*types.UTxO, error)
 
@@ -103,8 +106,8 @@ type TxJournal interface {
 
 // StakePool regulates stake slots condition.
 type StakePool interface {
-	// CanStake shows stake slots is filled or not.
-	CanStake(bool) bool
+	// CanValidatorStake shows stake slots is filled or not.
+	CanValidatorStake(bool) bool
 
 	// ReserveSlots mark validator slots as filled until block will be forged.
 	ReserveSlots(uint64) error
@@ -112,14 +115,19 @@ type StakePool interface {
 	// GetRewardOutputs return array of reward outputs
 	GetRewardOutputs() []*prototype.TxOutput
 
-	// LoadData load initial pool data
-	LoadData() error
+	GetRewardMap() map[string]uint64
+
+	// Init load initial pool data
+	Init() error
 
 	// FinalizeStaking complete all staking pool updates
 	FinalizeStaking([]*types.Transaction) error
 
 	// GetRewardPerSlot return reward per slot
 	GetRewardPerSlot(uint64) uint64
+
+	// HasElector checks if validator has elector
+	HasElector(validator, elector string) bool
 }
 
 // AttestationPool control block and transaction validation and staking

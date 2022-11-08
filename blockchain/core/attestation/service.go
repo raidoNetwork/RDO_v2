@@ -173,7 +173,7 @@ func (s *Service) waitSyncing() error {
 
 	for st := range s.stateEvent {
 		if st == state.Synced {
-			return s.stakePool.LoadData()
+			return s.stakePool.Init()
 		}
 	}
 

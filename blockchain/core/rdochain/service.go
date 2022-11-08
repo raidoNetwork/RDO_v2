@@ -89,6 +89,7 @@ func (s *Service) Status() error {
 }
 
 func (s *Service) Stop() error {
+	log.Info("Stop Chain service")
 	return nil
 }
 
@@ -304,4 +305,8 @@ func (s *Service) GetBlocksRange(ctx context.Context, start uint64, end uint64) 
 	}
 
 	return blocks, nil
+}
+
+func (s *Service) FindValidatorStakeDeposits() ([]*types.UTxO, error) {
+	return s.outm.FindValidatorStakeDeposits()
 }
