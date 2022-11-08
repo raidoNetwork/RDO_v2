@@ -115,6 +115,8 @@ type StakePool interface {
 	// GetRewardOutputs return array of reward outputs
 	GetRewardOutputs() []*prototype.TxOutput
 
+	GetRewardMap() map[string]uint64
+
 	// Init load initial pool data
 	Init() error
 

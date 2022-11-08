@@ -23,6 +23,7 @@ type ValidatorStakeData struct {
 
 type StakingPool struct {
 	validators map[string]*ValidatorStakeData
+	electors map[string]map[string]struct{}
 	cumulativeStake uint64
 	rewardPerBlock uint64
 	stakeAmountPerSlot uint64
@@ -41,6 +42,10 @@ func (p *StakingPool) Init() error {
 	}
 
 	for _, uo := range deposits {
+		if len(uo.Node) != common.AddressLength {
+			continue
+		}
+
 		if uo.Node.Hex() == common.BlackHoleAddress {
 			err = p.registerValidatorStake(uo.To.Hex(), uo.Amount)
 		} else {
@@ -131,6 +136,11 @@ func (p *StakingPool) registerElectorStake(elector, validator string, amount uin
 	validatorData.CumulativeStake += amount
 	validatorData.Electors[elector] += amount
 
+	if _, exists := p.electors[elector]; !exists {
+		p.electors[elector] = map[string]struct{}{}
+	}
+
+	p.electors[elector][validator] = struct{}{}
 	p.cumulativeStake += amount
 
 	return nil
@@ -314,12 +324,12 @@ func (p *StakingPool) FinalizeStaking(batch []*types.Transaction) error {
 	return nil
 }
 
-func (p *StakingPool) GetRewardOutputs() []*prototype.TxOutput {
+func (p *StakingPool) GetRewardMap() map[string]uint64 {
 	p.mu.Lock()
 
 	if p.slotsFilled == 0 {
 		p.mu.Unlock()
-		return nil
+		return map[string]uint64{}
 	}
 
 	// divide rewards among all validator slots
@@ -333,8 +343,6 @@ func (p *StakingPool) GetRewardOutputs() []*prototype.TxOutput {
 			validatorPercent = params.RaidoConfig().ChosenValidatorRewardPercent
 		}
 
-		// todo rework rewards mechanism
-
 		// validator takes more percent of reward if he has electors
 		validatorReward := fullValidatorReward * validatorPercent / 100
 		rewards[validator] += validatorReward
@@ -347,6 +355,11 @@ func (p *StakingPool) GetRewardOutputs() []*prototype.TxOutput {
 		}
 	}
 	p.mu.Unlock()
+	return rewards
+}
+
+func (p *StakingPool) GetRewardOutputs() []*prototype.TxOutput {
+	rewards := p.GetRewardMap()
 
 	outs := make([]*prototype.TxOutput, 0, len(rewards))
 	for addr, amount := range rewards {
@@ -377,6 +390,7 @@ func (p *StakingPool) HasElector(validator, elector string) bool {
 func NewPool(blockchain consensus.BlockchainReader, slotsLimit int, reward uint64, stakeAmount uint64) consensus.StakePool {
 	return &StakingPool{
 		validators: map[string]*ValidatorStakeData{},
+		electors: map[string]map[string]struct{}{},
 		blockchain: blockchain,
 		slotsLimit: slotsLimit,
 		stakeAmountPerSlot: stakeAmount,
