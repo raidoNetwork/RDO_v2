@@ -209,6 +209,7 @@ message TxOptionsStakeRequest {
   uint64 fee = 1;
   string key = 2 [(validate.rules).string.len = 66];
   uint64 amount = 3 [(validate.rules).uint64.gt = 0];
+  string node = 4 [(validate.rules).string.ignore_empty = true];
 }
 
 message TxBodyResponse {

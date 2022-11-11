@@ -449,9 +449,9 @@ func (om *OutputManager) FindValidatorStakeDeposits() ([]*types.UTxO, error) {
 }
 
 // FindStakeDepositsOfAddress return list of stake deposits actual to the moment of block with given num.
-func (om *OutputManager) FindStakeDepositsOfAddress(address string) ([]*types.UTxO, error) {
+func (om *OutputManager) FindStakeDepositsOfAddress(address string, node string) ([]*types.UTxO, error) {
 	om.finalizeLock.WaitLock()
-	return om.db.FindStakeDepositsOfAddress(address)
+	return om.db.FindStakeDepositsOfAddress(address, node)
 }
 
 // IsSyncing return true if OutputManager is syncing with KV.

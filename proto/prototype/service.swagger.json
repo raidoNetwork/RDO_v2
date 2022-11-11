@@ -699,6 +699,9 @@
         "amount": {
           "type": "string",
           "format": "uint64"
+        },
+        "node": {
+          "type": "string"
         }
       }
     },
@@ -717,6 +720,10 @@
       "type": "object",
       "properties": {
         "num": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "slot": {
           "type": "string",
           "format": "uint64"
         },

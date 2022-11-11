@@ -422,12 +422,15 @@ func (cv *CryspValidator) validateTxStructBase(tx *types.Transaction) error {
 		}
 
 		// check stake outputs in the stake transaction
-		if tx.Type() == common.StakeTxType && out.Node().Hex() == common.BlackHoleAddress {
-			if out.Amount()%cv.cfg.StakeUnit != 0 {
-				return errors.Wrap(consensus.ErrLowStakeAmount, "Stake error")
-			}
+		if tx.Type() == common.StakeTxType {
+			node := out.Node().Hex()
+			if len(node) == 0 {
+				if (node == common.BlackHoleAddress && out.Amount()%cv.cfg.StakeUnit != 0) || out.Amount() == 0 {
+					return errors.Wrap(consensus.ErrLowStakeAmount, "Stake error")
+				}
 
-			stakeOutputs++
+				stakeOutputs++
+			}
 		}
 
 		var overflow bool
@@ -469,7 +472,7 @@ func (cv *CryspValidator) getTxInputsFromDB(tx *types.Transaction) ([]*types.UTx
 	var err error
 
 	if tx.Type() == common.UnstakeTxType {
-		utxo, err = cv.bc.FindStakeDepositsOfAddress(from)
+		utxo, err = cv.bc.FindStakeDepositsOfAddress(from, "all")
 	} else {
 		// get user inputs from DB
 		utxo, err = cv.bc.FindAllUTxO(from)
@@ -564,8 +567,8 @@ func (cv *CryspValidator) checkStakeType(tx *types.Transaction) (StakeType, erro
 			if out.Node().Hex() == common.BlackHoleAddress {
 				hasValidatorStaking = true
 			} else {
-				if !cv.stakeValidator.HasElector(out.Node().Hex(), tx.From().Hex()) {
-					return NoStake, errors.New("Stake not found")
+				if !cv.stakeValidator.HasValidator(out.Node().Hex()) {
+					return NoStake, errors.New("Validator not found")
 				}
 
 				if validator == "" {

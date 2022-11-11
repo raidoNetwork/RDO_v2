@@ -9,6 +9,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
+	"github.com/sirupsen/logrus"
 )
 
 func NewService(chain api.ChainAPI) *Service {
@@ -21,6 +22,8 @@ func NewService(chain api.ChainAPI) *Service {
 		blackHole:   common.HexToAddress(common.BlackHoleAddress).Bytes(),
 	}
 }
+
+var log = logrus.WithField("prefix", "generator")
 
 type Service struct {
 	chain       api.ChainAPI
@@ -38,8 +41,8 @@ func (s *Service) GenerateTx(outputs []*prototype.TxOutput, fee uint64, hexKey s
 	return s.createTx(address, key, outputs, fee, common.NormalTxType)
 }
 
-func (s *Service) GenerateStakeTx(fee uint64, hexKey string, amount uint64) (*prototype.Transaction, error) {
-	if amount%s.stakeAmount != 0 {
+func (s *Service) GenerateStakeTx(fee uint64, hexKey string, amount uint64, node string) (*prototype.Transaction, error) {
+	if amount%s.stakeAmount != 0 && (node == "" || node == common.BlackHoleAddress) {
 		return nil, errors.New("Wrong stake amount given.")
 	}
 
@@ -49,18 +52,23 @@ func (s *Service) GenerateStakeTx(fee uint64, hexKey string, amount uint64) (*pr
 		return nil, err
 	}
 
+	nodeAddress := s.blackHole
+	if node != "" {
+		nodeAddress = common.HexToAddress(node).Bytes()
+	}
+
 	outputs := []*prototype.TxOutput{
 		types.NewOutput(
 			address.Bytes(),
 			amount,
-			s.blackHole,
+			nodeAddress,
 		),
 	}
 
 	return s.createTx(address, key, outputs, fee, common.StakeTxType)
 }
 
-func (s *Service) GenerateUnstakeTx(fee uint64, hexKey string, amount uint64) (*prototype.Transaction, error) {
+func (s *Service) GenerateUnstakeTx(fee uint64, hexKey string, amount uint64, node string) (*prototype.Transaction, error) {
 	if amount%s.stakeAmount != 0 {
 		return nil, errors.New("Wrong unstake amount given.")
 	}
@@ -72,7 +80,7 @@ func (s *Service) GenerateUnstakeTx(fee uint64, hexKey string, amount uint64) (*
 	}
 
 	// get stake deposits of address
-	utxo, err := s.chain.GetStakeDeposits(address.Hex())
+	utxo, err := s.chain.GetStakeDeposits(address.Hex(), node)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +113,12 @@ func (s *Service) GenerateUnstakeTx(fee uint64, hexKey string, amount uint64) (*
 	}
 
 	if stakeLeft > 0 {
-		outputs = append(outputs, types.NewOutput(address.Bytes(), stakeLeft, s.blackHole)) // stake deposits
+		nodeAddress := s.blackHole
+		if node != "" {
+			nodeAddress = common.HexToAddress(node).Bytes()
+		}
+
+		outputs = append(outputs, types.NewOutput(address.Bytes(), stakeLeft, nodeAddress)) // stake deposits
 	}
 
 	nonce, err := s.chain.GetTransactionsCountHex(address.Hex())

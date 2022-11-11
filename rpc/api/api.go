@@ -15,13 +15,13 @@ type ChainAPI interface {
 	FindAllUTxO(string) ([]*types.UTxO, error)
 
 	// GetStakeDeposits returns address stake deposits.
-	GetStakeDeposits(string) ([]*types.UTxO, error)
+	GetStakeDeposits(string, string) ([]*types.UTxO, error)
 
 	// GetTransactionsCountHex returns number of transactions
 	// sent by given address.
 	GetTransactionsCountHex(string) (uint64, error)
 
-	/* Block data */
+	/* Blockdata */
 
 	// GetBlockByHashHex return block with given hash.
 	GetBlockByHashHex(string) (*prototype.Block, error)
@@ -63,7 +63,7 @@ type AttestationAPI interface {
 type GeneratorAPI interface {
 	GenerateTx([]*prototype.TxOutput, uint64, string) (*prototype.Transaction, error)
 
-	GenerateStakeTx(uint64, string, uint64) (*prototype.Transaction, error)
+	GenerateStakeTx(uint64, string, uint64, string) (*prototype.Transaction, error)
 
-	GenerateUnstakeTx(uint64, string, uint64) (*prototype.Transaction, error)
+	GenerateUnstakeTx(uint64, string, uint64, string) (*prototype.Transaction, error)
 }

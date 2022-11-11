@@ -67,9 +67,9 @@ func (s *Server) createTxStruct(method string, req *prototype.TxOptionsStakeRequ
 	var tx *prototype.Transaction
 
 	if method == "stake" {
-		tx, err = s.Backend.GenerateStakeTx(req.Fee, req.Key, req.Amount)
+		tx, err = s.Backend.GenerateStakeTx(req.Fee, req.Key, req.Amount, req.Node)
 	} else {
-		tx, err = s.Backend.GenerateUnstakeTx(req.Fee, req.Key, req.Amount)
+		tx, err = s.Backend.GenerateUnstakeTx(req.Fee, req.Key, req.Amount, req.Node)
 	}
 
 	if err != nil {

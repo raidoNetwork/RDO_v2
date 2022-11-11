@@ -156,9 +156,19 @@ func (s *Store) FindValidatorStakeDeposits() (uoArr []*types.UTxO, err error) {
 
 // FindStakeDepositsOfAddress shows actual stake deposits of given address
 // and return list of deposit outputs.
-func (s *Store) FindStakeDepositsOfAddress(address string) ([]*types.UTxO, error) {
-	query := "WHERE (tx_type = ? OR tx_type = ? ) AND address_node = ? AND address_to = ?"
-	return s.getOutputsList(query, common.StakeTxType, common.UnstakeTxType, common.BlackHoleAddress, address)
+func (s *Store) FindStakeDepositsOfAddress(address string, node string) ([]*types.UTxO, error) {
+	nodeAddress := common.BlackHoleAddress
+	if node != "" {
+		nodeAddress = node
+	}
+	if node == "all" {
+		nodeAddress = "IS NOT NULL"
+	} else {
+		nodeAddress = "= ? " + nodeAddress
+	}
+
+	query := "WHERE (tx_type = ? OR tx_type = ? ) AND address_node " + nodeAddress + " AND address_to = ?"
+	return s.getOutputsList(query, common.StakeTxType, common.UnstakeTxType, nodeAddress, address)
 }
 
 // getOutputsList return outputs list with given query and params.

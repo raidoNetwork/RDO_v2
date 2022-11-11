@@ -196,7 +196,7 @@ func (s *Server) GetStakeDeposits(ctx context.Context, request *prototype.Addres
 
 	log.Infof("ChainAPI.GetStakeDeposits(%s)", addr)
 
-	arr, err := s.Backend.GetStakeDeposits(addr)
+	arr, err := s.Backend.GetStakeDeposits(addr, "all")
 	if err != nil {
 		return nil, err
 	}

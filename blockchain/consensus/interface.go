@@ -45,7 +45,7 @@ type BlockchainReader interface{
 	FindValidatorStakeDeposits() ([]*types.UTxO, error)
 
 	// FindStakeDepositsOfAddress returns all address stake outputs.
-	FindStakeDepositsOfAddress(string) ([]*types.UTxO, error)
+	FindStakeDepositsOfAddress(string, string) ([]*types.UTxO, error)
 
 	// GetBlockByHash return block with given hash from blockchain
 	// if block not found return nil
@@ -126,8 +126,7 @@ type StakePool interface {
 	// GetRewardPerSlot return reward per slot
 	GetRewardPerSlot(uint64) uint64
 
-	// HasElector checks if validator has elector
-	HasElector(validator, elector string) bool
+	HasValidator(validator string) bool
 }
 
 // AttestationPool control block and transaction validation and staking

@@ -1525,6 +1525,10 @@ func (m *TxOptionsStakeRequest) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
+	if m.GetNode() != "" {
+
+	}
+
 	if len(errors) > 0 {
 		return TxOptionsStakeRequestMultiError(errors)
 	}

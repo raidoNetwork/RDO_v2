@@ -98,7 +98,7 @@ type StakeStorage interface {
 	FindStakeDeposits() ([]*types.UTxO, error)
 
 	// FindStakeDepositsOfAddress returns list of given address actual stake deposits.
-	FindStakeDepositsOfAddress(string) ([]*types.UTxO, error)
+	FindStakeDepositsOfAddress(string, string) ([]*types.UTxO, error)
 
 	// FindValidatorStakeDeposits returns list of all validators stake deposits
 	FindValidatorStakeDeposits() ([]*types.UTxO, error)

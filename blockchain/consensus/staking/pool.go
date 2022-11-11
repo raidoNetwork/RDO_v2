@@ -387,6 +387,14 @@ func (p *StakingPool) HasElector(validator, elector string) bool {
 	return exists
 }
 
+func (p *StakingPool) HasValidator(validator string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	_, exists := p.validators[validator]
+	return exists
+}
+
 func NewPool(blockchain consensus.BlockchainReader, slotsLimit int, reward uint64, stakeAmount uint64) consensus.StakePool {
 	return &StakingPool{
 		validators: map[string]*ValidatorStakeData{},

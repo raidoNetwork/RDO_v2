@@ -205,8 +205,8 @@ func (s *Service) GetTransaction(hash string) (*prototype.Transaction, error) {
 }
 
 // GetStakeDeposits returns all address stake deposits.
-func (s *Service) GetStakeDeposits(addr string) ([]*types.UTxO, error) {
-	return s.outm.FindStakeDepositsOfAddress(addr)
+func (s *Service) GetStakeDeposits(addr string, node string) ([]*types.UTxO, error) {
+	return s.outm.FindStakeDepositsOfAddress(addr, node)
 }
 
 func (s *Service) GetTransactionsCountHex(addr string) (uint64, error) {
@@ -228,8 +228,8 @@ func (s *Service) FindStakeDeposits() ([]*types.UTxO, error) {
 }
 
 // FindStakeDepositsOfAddress return list of stake deposits actual to the moment of block with given num.
-func (s *Service) FindStakeDepositsOfAddress(address string) ([]*types.UTxO, error) {
-	return s.outm.FindStakeDepositsOfAddress(address)
+func (s *Service) FindStakeDepositsOfAddress(address string, node string) ([]*types.UTxO, error) {
+	return s.outm.FindStakeDepositsOfAddress(address, node)
 }
 
 func (s *Service) GetBlockCount() uint64 {
