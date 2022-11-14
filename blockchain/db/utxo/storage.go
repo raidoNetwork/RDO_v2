@@ -11,6 +11,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/utxo/dbshared"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
+	"github.com/raidoNetwork/RDO_v2/utils/slice"
 	"github.com/sirupsen/logrus"
 	"os"
 	"sync"
@@ -161,14 +162,20 @@ func (s *Store) FindStakeDepositsOfAddress(address string, node string) ([]*type
 	if node != "" {
 		nodeAddress = node
 	}
+	nodePlaceholder := "= ?"
+	arguments := []interface{}{
+		common.StakeTxType,
+		common.UnstakeTxType,
+		address,
+	}
 	if node == "all" {
-		nodeAddress = "IS NOT NULL"
+		nodePlaceholder = "IS NOT NULL"
 	} else {
-		nodeAddress = "= ? " + nodeAddress
+		arguments = slice.Insert(arguments, nodeAddress, 2)
 	}
 
-	query := "WHERE (tx_type = ? OR tx_type = ? ) AND address_node " + nodeAddress + " AND address_to = ?"
-	return s.getOutputsList(query, common.StakeTxType, common.UnstakeTxType, nodeAddress, address)
+	query := "WHERE (tx_type = ? OR tx_type = ? ) AND address_node " + nodePlaceholder + " AND address_to = ?"
+	return s.getOutputsList(query, arguments...)
 }
 
 // getOutputsList return outputs list with given query and params.
