@@ -146,7 +146,7 @@ func (s *Store) GetTotalAmount() (uint64, error) {
 
 // FindStakeDeposits shows all actual stake deposits and return list of deposit outputs.
 func (s *Store) FindStakeDeposits() (uoArr []*types.UTxO, err error) {
-	query := "WHERE (tx_type = ? OR tx_type = ?) AND address_node IS NOT NULL"
+	query := `WHERE (tx_type = ? OR tx_type = ?) AND address_node != ""`
 	return s.getOutputsList(query, common.StakeTxType, common.UnstakeTxType)
 }
 
@@ -169,7 +169,7 @@ func (s *Store) FindStakeDepositsOfAddress(address string, node string) ([]*type
 		address,
 	}
 	if node == "all" {
-		nodePlaceholder = "IS NOT NULL"
+		nodePlaceholder = `!= ""`
 	} else {
 		arguments = slice.Insert(arguments, nodeAddress, 2)
 	}
