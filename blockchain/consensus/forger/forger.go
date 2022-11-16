@@ -61,7 +61,7 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 	pendingTxCounter.Set(float64(txQueueLen))
 
 	// create reward transaction for current block
-	txBatch, collapseBatch, totalSize, err := m.addRewardTxToBatch(txBatch, collapseBatch, totalSize, bn)
+	txBatch, collapseBatch, totalSize, err := m.addRewardTxToBatch(m.cfg.Proposer.Addr().Hex(), txBatch, collapseBatch, totalSize, bn)
 	if err != nil {
 		return nil, err
 	}
@@ -101,14 +101,22 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 		// check if empty validator slots exists and skip stake tx if not exist
 		if tx.Type() == common.StakeTxType {
 			var amount uint64
+			hasStake := false
 			for _, out := range tx.Outputs() {
+				if len(out.Node()) == common.AddressLength {
+					hasStake = true
+				}
+
 				if out.Node().Hex() == common.BlackHoleAddress {
 					amount += out.Amount()
 				}
 			}
 
-			err = m.att.StakePool().ReserveSlots(amount)
-			if err != nil {
+			if amount > 0 {
+				err = m.att.StakePool().ReserveSlots(amount)
+			}
+
+			if err != nil || !hasStake {
 				totalSize -= size // return size of current tx
 
 				// Delete stake tx from pool
@@ -184,8 +192,8 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 	return block, nil
 }
 
-func (m *Forger) addRewardTxToBatch(txBatch []*prototype.Transaction, collapseBatch []*prototype.Transaction, totalSize int, bn int64) ([]*prototype.Transaction, []*prototype.Transaction, int, error) {
-	rewardTx, err := m.createRewardTx(m.bf.GetBlockCount())
+func (m *Forger) addRewardTxToBatch(proposer string, txBatch []*prototype.Transaction, collapseBatch []*prototype.Transaction, totalSize int, bn int64) ([]*prototype.Transaction, []*prototype.Transaction, int, error) {
+	rewardTx, err := m.createRewardTx(m.bf.GetBlockCount(), proposer)
 	if err != nil {
 		if errors.Is(err, consensus.ErrNoStakers) {
 			log.Debug(err)
@@ -248,8 +256,8 @@ func (m *Forger) createFeeTx(txarr []*prototype.Transaction) (*prototype.Transac
 	return ntx, nil
 }
 
-func (m *Forger) createRewardTx(blockNum uint64) (*prototype.Transaction, error) {
-	outs := m.att.StakePool().GetRewardOutputs()
+func (m *Forger) createRewardTx(blockNum uint64, proposer string) (*prototype.Transaction, error) {
+	outs := m.att.StakePool().GetRewardOutputs(proposer)
 	if len(outs) == 0 {
 		return nil, consensus.ErrNoStakers
 	}

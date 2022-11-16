@@ -324,7 +324,7 @@ func (p *StakingPool) FinalizeStaking(batch []*types.Transaction) error {
 	return nil
 }
 
-func (p *StakingPool) GetRewardMap() map[string]uint64 {
+func (p *StakingPool) GetRewardMap(proposer string) map[string]uint64 {
 	p.mu.Lock()
 
 	if p.slotsFilled == 0 {
@@ -332,34 +332,36 @@ func (p *StakingPool) GetRewardMap() map[string]uint64 {
 		return map[string]uint64{}
 	}
 
+	rewards := map[string]uint64{}
+	if _, exists := p.validators[proposer]; exists {
+		blockReward := params.RaidoConfig().ProposerReward
+		stakeData := p.validators[proposer]
+
+		validatorReward := blockReward
+		if len(stakeData.Electors) > 0 {
+			validatorReward = blockReward * params.RaidoConfig().ChosenValidatorRewardPercent / 100
+			electorsReward := blockReward - validatorReward
+			electorsStake := stakeData.CumulativeStake - stakeData.SelfStake
+			for elector, stakeAmount := range stakeData.Electors {
+				rewards[elector] += electorsStake / stakeAmount * electorsReward
+			}
+		}
+
+		rewards[proposer] += validatorReward
+	}
+
 	// divide rewards among all validator slots
 	rewardPerSlot := p.rewardPerBlock / uint64(p.slotsFilled)
-	rewards := map[string]uint64{}
 	for validator, stakeData := range p.validators {
-		fullValidatorReward := rewardPerSlot * uint64(stakeData.SlotsFilled)
-
-		validatorPercent := params.RaidoConfig().ValidatorRewardPercent
-		if len(stakeData.Electors) > 0 {
-			validatorPercent = params.RaidoConfig().ChosenValidatorRewardPercent
-		}
-
-		// validator takes more percent of reward if he has electors
-		validatorReward := fullValidatorReward * validatorPercent / 100
+		validatorReward := rewardPerSlot * uint64(stakeData.SlotsFilled)
 		rewards[validator] += validatorReward
-
-		// each elector will receive a reward in proportion to the bet on the validator
-		electorsReward := fullValidatorReward - validatorReward
-		electorsStake := stakeData.CumulativeStake - stakeData.SelfStake
-		for elector, stakeAmount := range stakeData.Electors {
-			rewards[elector] += electorsStake / stakeAmount * electorsReward
-		}
 	}
 	p.mu.Unlock()
 	return rewards
 }
 
-func (p *StakingPool) GetRewardOutputs() []*prototype.TxOutput {
-	rewards := p.GetRewardMap()
+func (p *StakingPool) GetRewardOutputs(proposer string) []*prototype.TxOutput {
+	rewards := p.GetRewardMap(proposer)
 
 	outs := make([]*prototype.TxOutput, 0, len(rewards))
 	for addr, amount := range rewards {

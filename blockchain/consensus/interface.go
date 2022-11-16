@@ -113,9 +113,9 @@ type StakePool interface {
 	ReserveSlots(uint64) error
 
 	// GetRewardOutputs return array of reward outputs
-	GetRewardOutputs() []*prototype.TxOutput
+	GetRewardOutputs(string) []*prototype.TxOutput
 
-	GetRewardMap() map[string]uint64
+	GetRewardMap(string) map[string]uint64
 
 	// Init load initial pool data
 	Init() error

@@ -342,7 +342,7 @@ func (cv *CryspValidator) validateRewardTx(tx *types.Transaction, block *prototy
 	}
 
 	rewardSize := len(tx.Outputs())
-	rewardMap := cv.stakeValidator.GetRewardMap()
+	rewardMap := cv.stakeValidator.GetRewardMap(common.Encode(block.Proposer.Address))
 	if rewardSize != len(rewardMap) {
 		return errors.Errorf("Wrong outputs size. Given: %d. Expected: %d.", rewardSize, len(rewardMap))
 	}
