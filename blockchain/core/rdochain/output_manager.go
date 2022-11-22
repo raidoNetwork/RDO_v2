@@ -53,7 +53,7 @@ func (om *OutputManager) FindAllUTxO(from string) ([]*types.UTxO, error) {
 }
 
 // ProcessBlock update SQL data according to changes in the given block.
-func (om *OutputManager) ProcessBlock(block *prototype.Block) error {
+func (om *OutputManager) ProcessBlock(block *prototype.Block, failedTx []*types.Transaction) error {
 	start := time.Now()
 
 	blockTx, err := om.db.CreateTx(true)
@@ -74,12 +74,22 @@ func (om *OutputManager) ProcessBlock(block *prototype.Block) error {
 
 	var queryBuilder strings.Builder
 
+	failedTxMap := map[string]struct{}{}
+	for _, tx := range failedTx {
+		failedTxMap[tx.Hash().Hex()] = struct{}{}
+	}
+
 	// update SQL
 	for _, tx := range block.Transactions {
 		// update outputs section
 		startInner = time.Now()
 
 		txHash = common.BytesToHash(tx.Hash)
+		// skip failed tx processing
+		if _, exists := failedTxMap[txHash.Hex()]; exists {
+			continue
+		}
+
 		if common.HasInputs(tx) {
 			from = common.BytesToAddress(tx.Inputs[0].Address)
 
