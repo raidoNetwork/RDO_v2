@@ -220,15 +220,26 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal con
 			continue
 		}
 
+		err := cv.ValidateTransactionStruct(tx)
+		if err != nil {
+			log.Error(err)
+			failedTx = append(failedTx, tx)
+			tx.SetStatus(types.TxFailed)
+			continue
+		}
+
 		if journal.IsKnown(tx) {
 			continue
 		}
 
-		err := cv.commitTx(tx)
+		err = cv.ValidateTransaction(tx)
 		if err != nil {
 			log.Error(err)
 			failedTx = append(failedTx, tx)
+			tx.SetStatus(types.TxFailed)
 		}
+
+		tx.SetStatus(types.TxSuccess)
 	}
 
 	if len(failedTx) > 0 {
@@ -236,15 +247,6 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal con
 	}
 
 	return nil, nil
-}
-
-func (cv *CryspValidator) commitTx(tx *types.Transaction) error {
-	err := cv.ValidateTransactionStruct(tx)
-	if err != nil {
-		return err
-	}
-
-	return cv.ValidateTransaction(tx)
 }
 
 func (cv *CryspValidator) verifyBlockSign(block *prototype.Block, sign *prototype.Sign) error {
