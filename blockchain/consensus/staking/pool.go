@@ -49,7 +49,7 @@ func (p *StakingPool) Init() error {
 		if uo.Node.Hex() == common.BlackHoleAddress {
 			err = p.registerValidatorStake(uo.To.Hex(), uo.Amount)
 		} else {
-			err = p.registerElectorStake(uo.From.Hex(), uo.To.Hex(), uo.Amount)
+			err = p.registerElectorStake(uo.From.Hex(), uo.Node.Hex(), uo.Amount)
 		}
 
 		if err != nil {
@@ -227,16 +227,17 @@ func (p *StakingPool) ReserveSlots(amount uint64) error {
 
 func (p *StakingPool) processStakeTx(tx *types.Transaction) error {
 	var validatorAmount uint64
-	var electorAmount uint64
+	electorStaking := map[string]uint64{}
 	for _, out := range tx.Outputs() {
 		if len(out.Node()) != common.AddressLength {
 			continue
 		}
 
-		if out.Node().Hex() == common.BlackHoleAddress {
+		node := out.Node().Hex()
+		if node == common.BlackHoleAddress {
 			validatorAmount += out.Amount()
 		} else {
-			electorAmount += out.Amount()
+			electorStaking[node] += out.Amount()
 		}
 	}
 
@@ -249,11 +250,13 @@ func (p *StakingPool) processStakeTx(tx *types.Transaction) error {
 		}
 	}
 
-	if electorAmount > 0 {
-		err := p.registerValidatorStake(sender, electorAmount)
-		if err != nil {
-			log.Errorf("Error proccessing stake transaction: %s", err)
-			return err
+	if len(electorStaking) > 0 {
+		for validator, amount := range electorStaking {
+			err := p.registerElectorStake(sender, validator, amount)
+			if err != nil {
+				log.Errorf("Error proccessing stake transaction: %s", err)
+				return err
+			}
 		}
 	}
 
