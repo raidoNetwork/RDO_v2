@@ -202,6 +202,11 @@ func (om *OutputManager) syncBlock(block *prototype.Block, blockTx int) error {
 	var hash common.Hash
 
 	for _, tx := range block.Transactions {
+		if types.ExecutionStatus(tx.Status) == types.TxFailed {
+			continue
+		}
+
+
 		for _, in := range tx.Inputs {
 			hash = common.BytesToHash(in.Hash)
 
