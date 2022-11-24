@@ -37,6 +37,7 @@ message Transaction{
   repeated TxInput inputs = 7 [(rdo.ext.opts.ssz_max) = "2000"];
   repeated TxOutput outputs = 8 [(rdo.ext.opts.ssz_max) = "2000"];
   bytes signature = 9 [(rdo.ext.opts.ssz_size) = "65", (validate.rules).bytes.len = 65];
+  uint32 status = 10;
 }
 
 message TxInput {

@@ -12,6 +12,13 @@ import (
 	"time"
 )
 
+type ExecutionStatus uint32
+
+const (
+	TxSuccess ExecutionStatus = iota + 1
+	TxFailed
+)
+
 var log = logrus.WithField("prefix", "types")
 
 var txSigner TxSigner
@@ -129,8 +136,8 @@ func NewTransaction(pbtx *prototype.Transaction) *Transaction {
 		num:       pbtx.Num,
 		timestamp: pbtx.Timestamp,
 		doubles:   make([]*Transaction, 0),
-		inputs:    newInputSlice(pbtx.Inputs),
-		outputs:   newOutputSlice(pbtx.Outputs),
+		inputs:    inputSlice(pbtx.Inputs),
+		outputs:   outputSlice(pbtx.Outputs),
 	}
 }
 
@@ -267,6 +274,19 @@ func (tx *Transaction) IsDropped() bool {
 	return tx.dropped
 }
 
+func (tx *Transaction) SetStatus(status ExecutionStatus) {
+	tx.lock.Lock()
+	tx.tx.Status = uint32(status)
+	tx.lock.Unlock()
+}
+
+func (tx *Transaction) Status() ExecutionStatus {
+	tx.lock.Lock()
+	defer tx.lock.Unlock()
+
+	return ExecutionStatus(tx.tx.Status)
+}
+
 type Input struct {
 	hash common.Hash
 	address common.Address
@@ -299,7 +319,7 @@ func newInput(inpb *prototype.TxInput) *Input {
 	}
 }
 
-func newInputSlice(inpbarr []*prototype.TxInput) []*Input {
+func inputSlice(inpbarr []*prototype.TxInput) []*Input {
 	res := make([]*Input, 0, len(inpbarr))
 	for _, inpb := range inpbarr {
 		res = append(res, newInput(inpb))
@@ -333,7 +353,7 @@ func newOutput(outpb *prototype.TxOutput) *Output {
 	}
 }
 
-func newOutputSlice(outpbarr []*prototype.TxOutput) []*Output {
+func outputSlice(outpbarr []*prototype.TxOutput) []*Output {
 	res := make([]*Output, 0, len(outpbarr))
 	for _, outpb := range outpbarr {
 		res = append(res, newOutput(outpb))

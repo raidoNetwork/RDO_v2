@@ -129,23 +129,23 @@ func (s *Service) Status() error {
 }
 
 func (s *Service) waitInitialized() {
-	for {
-		select{
-		case <-s.ctx.Done():
-			return
-		case st := <-s.stateEvent:
-			switch st {
-			case state.LocalSynced:
-				// start slot ticker
-				err := s.ticker.StartFromTimestamp(s.bc.GetGenesis().Timestamp)
-				if err != nil {
-					panic("Zero Genesis time")
-				}
-			case state.Synced:
+   for {
+   		select{
+			case <-s.ctx.Done():
 				return
-			}
+			case st := <-s.stateEvent:
+				switch st {
+				case state.LocalSynced:
+					// start slot ticker
+					err := s.ticker.StartFromTimestamp(s.bc.GetGenesis().Timestamp)
+					if err != nil {
+						panic("Zero Genesis time")
+					}
+				case state.Synced:
+					return
+				}
 		}
-	}
+   }
 }
 
 func (s *Service) subscribeOnEvents() {
@@ -171,7 +171,7 @@ func (s *Service) FinalizeBlock(block *prototype.Block) error {
 	}
 
 	// save block
-	err = s.bc.FinalizeBlock(block)
+	err = s.bc.FinalizeBlock(block, failedTx)
 	if err != nil {
 		return errors.Wrap(err, "FinalizeBlockError")
 	}
