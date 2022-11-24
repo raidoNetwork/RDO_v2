@@ -171,6 +171,15 @@ func (s *Service) FinalizeBlock(block *prototype.Block) error {
 		return errors.Wrap(err, "ValidateBlockError")
 	}
 
+	// if block has no valid non-system transactions, invalidate it and remove transactions from mempool
+	nsTxs := s.att.Validator().CountNsTxs(block)
+	if nsTxs != 0 && nsTxs == len(failedTx) {
+		// Clear from the mempool
+		s.att.TxPool().Finalize(failedTx, true)
+
+		return errors.Wrap(err, "NoValidTransactionsError")
+	}
+
 	// save block
 	err = s.bc.FinalizeBlock(block, failedTx)
 	if err != nil {

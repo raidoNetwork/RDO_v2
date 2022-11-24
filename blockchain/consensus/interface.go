@@ -21,6 +21,9 @@ type BlockValidator interface {
 
 	// ValidateGenesis compare given Genesis with local
 	ValidateGenesis(*prototype.Block) error
+
+	// CountNsTxs returns the number of non-system transactions in a block
+	CountNsTxs(*prototype.Block) int
 }
 
 // Validator checks if block or transaction is correct according to the engine rules

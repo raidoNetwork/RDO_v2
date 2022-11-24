@@ -2,6 +2,9 @@ package attestation
 
 import (
 	"bytes"
+	"strconv"
+	"time"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -10,8 +13,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/utils/hash"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	vtypes "github.com/raidoNetwork/RDO_v2/validator/types"
-	"strconv"
-	"time"
 )
 
 // checkBlockBalance count block inputs and outputs sum and check that all inputs in block are unique.
@@ -214,7 +215,7 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal con
 			}
 
 			if err != nil {
-				return nil, errors.Wrap(err, "Error validation " + txType)
+				return nil, errors.Wrap(err, "Error validation "+txType)
 			}
 
 			continue
@@ -247,6 +248,18 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal con
 	}
 
 	return nil, nil
+}
+
+// Returns number of non-system transactions in a block
+func (cv *CryspValidator) CountNsTxs(b *prototype.Block) int {
+	var count int
+	for _, tx := range b.Transactions {
+		if !common.IsSystemTx(tx) {
+			count++
+		}
+	}
+
+	return count
 }
 
 func (cv *CryspValidator) verifyBlockSign(block *prototype.Block, sign *prototype.Sign) error {
