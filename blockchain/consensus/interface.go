@@ -34,7 +34,7 @@ type GenesisReader interface {
 	GetGenesis() *prototype.Block
 }
 
-type BlockchainReader interface{
+type BlockchainReader interface {
 	// FindAllUTxO find all address unspent outputs
 	FindAllUTxO(string) ([]*types.UTxO, error)
 
@@ -89,7 +89,7 @@ type TxPool interface {
 	GetQueue() []*types.Transaction
 
 	// Finalize remove from pool given transactions.
-	Finalize([]*types.Transaction)
+	Finalize([]*types.Transaction, bool)
 
 	// DeleteTransaction remove given transaction from the pool
 	DeleteTransaction(*types.Transaction) error
@@ -130,7 +130,7 @@ type StakePool interface {
 }
 
 // AttestationPool control block and transaction validation and staking
-type AttestationPool interface{
+type AttestationPool interface {
 	StakePool() StakePool
 
 	TxPool() TxPool

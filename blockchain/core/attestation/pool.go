@@ -2,43 +2,44 @@ package attestation
 
 import (
 	"bytes"
+	"sort"
+	"sync"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	utypes "github.com/raidoNetwork/RDO_v2/utils/types"
 	"github.com/sirupsen/logrus"
-	"sort"
-	"sync"
 )
 
 const (
 	maxTxCount = 1000
-	minFee = 1
+	minFee     = 1
 )
 
 var log = logrus.WithField("prefix", "attestation")
 
 type PoolSettings struct {
-	Validator consensus.TxValidator
+	Validator  consensus.TxValidator
 	MinimalFee uint64
 }
 
 func NewPool(cfg *PoolSettings) *Pool {
 	return &Pool{
 		txSenderMap: map[string]*types.Transaction{},
-		txHashMap: map[string]*types.Transaction{},
-		pending: make(Transactions, 0),
-		cfg: cfg,
+		txHashMap:   map[string]*types.Transaction{},
+		pending:     make(Transactions, 0),
+		cfg:         cfg,
 	}
 }
 
 type Pool struct {
 	txSenderMap map[string]*types.Transaction
-	txHashMap map[string]*types.Transaction
+	txHashMap   map[string]*types.Transaction
 
 	pending Transactions
-	cfg *PoolSettings
+	cfg     *PoolSettings
 
 	mu        sync.Mutex
 	queueLock sync.Mutex
@@ -74,7 +75,7 @@ func (p *Pool) Insert(tx *types.Transaction) error {
 	p.finalizeInsert(tx)
 	log.Debugf("Insert tx %s", tx.Hash().Hex())
 
-	if len(p.txHashMap) + 1 == maxTxCount {
+	if len(p.txHashMap)+1 == maxTxCount {
 		p.cleanWorst()
 	}
 
@@ -218,11 +219,11 @@ func (p *Pool) GetFeePrice() uint64 {
 	} else if size == 1 {
 		return queue[0].FeePrice()
 	} else {
-		return (queue[0].FeePrice() + queue[size - 1].FeePrice()) / 2
+		return (queue[0].FeePrice() + queue[size-1].FeePrice()) / 2
 	}
 }
 
-func (p *Pool) Finalize(txarr []*types.Transaction) {
+func (p *Pool) Finalize(txarr []*types.Transaction, failedTxs bool) {
 	p.mu.Lock()
 
 	for _, tx := range txarr {
@@ -230,7 +231,7 @@ func (p *Pool) Finalize(txarr []*types.Transaction) {
 			continue
 		}
 
-		rtx, index, err := p.findPoolTransaction(tx)
+		rtx, index, err := p.findPoolTransaction(tx, failedTxs)
 		if err != nil {
 			continue
 		}
@@ -245,7 +246,7 @@ func (p *Pool) Finalize(txarr []*types.Transaction) {
 	p.mu.Unlock()
 }
 
-func (p *Pool) findPoolTransaction(tx *types.Transaction) (*types.Transaction, int, error) {
+func (p *Pool) findPoolTransaction(tx *types.Transaction, failedTxs bool) (*types.Transaction, int, error) {
 	_, exists := p.txHashMap[tx.Hash().Hex()]
 	senderTx, senderExists := p.txSenderMap[tx.From().Hex()]
 
@@ -255,9 +256,11 @@ func (p *Pool) findPoolTransaction(tx *types.Transaction) (*types.Transaction, i
 		return nil, -1, errors.New("Undefined sender and transaction")
 	}
 
-	isDouble := senderTx.HasDouble(tx.Hash())
-	if !isDouble && !exists {
-		return nil, -1, errors.New("Undefined transaction")
+	if failedTxs {
+		isDouble := senderTx.HasDouble(tx.Hash())
+		if !isDouble && !exists {
+			return nil, -1, errors.New("Undefined transaction")
+		}
 	}
 
 	// now tx can be one of several cases:

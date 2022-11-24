@@ -2,6 +2,9 @@ package core
 
 import (
 	"context"
+	"sync"
+	"time"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
@@ -12,19 +15,17 @@ import (
 	utypes "github.com/raidoNetwork/RDO_v2/utils/types"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
-	"sync"
-	"time"
 )
 
 var log = logrus.WithField("prefix", "core")
 var _ shared.Service = (*Service)(nil)
 
-type Config struct{
+type Config struct {
 	BlockFinalizer  consensus.BlockFinalizer
 	AttestationPool consensus.AttestationPool
-	StateFeed events.Feed
-	BlockFeed events.Feed
-	Context context.Context
+	StateFeed       events.Feed
+	BlockFeed       events.Feed
+	Context         context.Context
 }
 
 // NewService creates new CoreService
@@ -35,9 +36,9 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		cliCtx:     cliCtx,
 		ctx:        ctx,
 		cancelFunc: finish,
-		att:	    cfg.AttestationPool,
+		att:        cfg.AttestationPool,
 
-		ticker:     slot.Ticker(),
+		ticker: slot.Ticker(),
 
 		// events
 		blockEvent: make(chan *prototype.Block, 5),
@@ -55,12 +56,12 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 
 // Service implements blockchain service for blockchain update, read and creating new blocks.
 type Service struct {
-	cliCtx       *cli.Context
-	ctx          context.Context
-	cancelFunc   context.CancelFunc
-	statusErr    error
-	att			 consensus.AttestationPool
-	bc			 consensus.BlockFinalizer
+	cliCtx     *cli.Context
+	ctx        context.Context
+	cancelFunc context.CancelFunc
+	statusErr  error
+	att        consensus.AttestationPool
+	bc         consensus.BlockFinalizer
 
 	ticker *slot.SlotTicker
 
@@ -117,7 +118,7 @@ func (s *Service) mainLoop() {
 // Stop stops tx generator service
 func (s *Service) Stop() error {
 	log.Info("Stop Core service")
-	s.cancelFunc()  // finish context
+	s.cancelFunc() // finish context
 	return nil
 }
 
@@ -129,23 +130,23 @@ func (s *Service) Status() error {
 }
 
 func (s *Service) waitInitialized() {
-   for {
-   		select{
-			case <-s.ctx.Done():
-				return
-			case st := <-s.stateEvent:
-				switch st {
-				case state.LocalSynced:
-					// start slot ticker
-					err := s.ticker.StartFromTimestamp(s.bc.GetGenesis().Timestamp)
-					if err != nil {
-						panic("Zero Genesis time")
-					}
-				case state.Synced:
-					return
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case st := <-s.stateEvent:
+			switch st {
+			case state.LocalSynced:
+				// start slot ticker
+				err := s.ticker.StartFromTimestamp(s.bc.GetGenesis().Timestamp)
+				if err != nil {
+					panic("Zero Genesis time")
 				}
+			case state.Synced:
+				return
+			}
 		}
-   }
+	}
 }
 
 func (s *Service) subscribeOnEvents() {
@@ -165,7 +166,7 @@ func (s *Service) FinalizeBlock(block *prototype.Block) error {
 	failedTx, err := s.att.Validator().ValidateBlock(block, s.att.TxPool(), true)
 	if err != nil {
 		if failedTx != nil {
-			s.att.TxPool().Finalize(failedTx)
+			s.att.TxPool().Finalize(failedTx, true)
 		}
 		return errors.Wrap(err, "ValidateBlockError")
 	}
@@ -179,7 +180,7 @@ func (s *Service) FinalizeBlock(block *prototype.Block) error {
 	typedBatch := utypes.PbTxBatchToTyped(block.Transactions)
 
 	// clear pool
-	s.att.TxPool().Finalize(typedBatch)
+	s.att.TxPool().Finalize(typedBatch, false)
 
 	// update stake pool data
 	err = s.att.StakePool().FinalizeStaking(typedBatch)
@@ -195,4 +196,3 @@ func (s *Service) FinalizeBlock(block *prototype.Block) error {
 	finalizeBlockTime.Observe(float64(time.Since(start).Milliseconds()))
 	return nil
 }
-
