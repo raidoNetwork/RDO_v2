@@ -97,6 +97,12 @@ type TxPool interface {
 	// InsertCollapseTx insert collapse tx to the pool
 	InsertCollapseTx(*types.Transaction) error
 
+	// LockPool locks pool operations
+	LockPool()
+
+	// UnlockPool unlocks pool operations
+	UnlockPool()
+
 	TxJournal
 }
 
