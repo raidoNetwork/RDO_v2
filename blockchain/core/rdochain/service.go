@@ -253,16 +253,22 @@ func (s *Service) FinalizeBlock(block *prototype.Block, failedTx []*types.Transa
 	s.outm.FinalizeLock()
 	defer s.outm.FinalizeUnlock()
 
-	// save block
-	err := s.bc.SaveBlock(block)
-	if err != nil {
-		return errors.Wrap(err, "KV error")
-	}
-
 	// update SQL
-	err = s.outm.ProcessBlock(block, failedTx)
+	err := s.outm.ProcessBlock(block, failedTx)
 	if err != nil {
 		return errors.Wrap(err, "SQL error")
+	}
+
+	// save block
+	err = s.bc.SaveBlock(block)
+	if err != nil {
+		log.Debug("Resync database on fail")
+		syncErr := s.outm.SyncData()
+		if syncErr != nil {
+			log.Errorf("Error syncing databases %s", syncErr)
+		}
+
+		return errors.Wrap(err, "KV error")
 	}
 
 	return nil
@@ -290,18 +296,18 @@ func (s *Service) GetBlocksRange(ctx context.Context, start uint64, end uint64) 
 
 	for num := start; num <= end; num++ {
 		select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			default:
-				// todo get block by slot in future
-				block, err := s.bc.GetBlockByNum(num)
-				if errors.Is(err, ErrNotForgedBlock) {
-					continue
-				} else if err != nil {
-					return nil, err
-				}
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+			// todo get block by slot in future
+			block, err := s.bc.GetBlockByNum(num)
+			if errors.Is(err, ErrNotForgedBlock) {
+				continue
+			} else if err != nil {
+				return nil, err
+			}
 
-				blocks = append(blocks, block)
+			blocks = append(blocks, block)
 		}
 	}
 

@@ -6,6 +6,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
+	"github.com/raidoNetwork/RDO_v2/utils/async"
 	utypes "github.com/raidoNetwork/RDO_v2/utils/types"
 	"github.com/sirupsen/logrus"
 	"sort"
@@ -42,13 +43,14 @@ type Pool struct {
 
 	mu        sync.Mutex
 	queueLock sync.Mutex
+
+	swapLock async.Mutex
 }
 
 func (p *Pool) Insert(tx *types.Transaction) error {
 	p.mu.Lock()
 
 	hash := tx.Hash().Hex()
-
 	if _, exists := p.txHashMap[hash]; exists {
 		p.mu.Unlock()
 		return errors.New("Already exists")
@@ -110,6 +112,8 @@ func (p *Pool) processDoubleSpend(oldTx, newTx *types.Transaction) error {
 }
 
 func (p *Pool) swap(oldTx, newTx *types.Transaction) error {
+	p.swapLock.WaitLock()
+
 	p.queueLock.Lock()
 	err := p.pending.SwapByHash(oldTx, newTx)
 	if err != nil {
@@ -327,6 +331,14 @@ func (p *Pool) IsKnown(tx *types.Transaction) bool {
 	}
 
 	return oldTx.HasDouble(tx.Hash())
+}
+
+func (p *Pool) LockPool() {
+	p.swapLock.Lock()
+}
+
+func (p *Pool) UnlockPool() {
+	p.swapLock.Unlock()
 }
 
 type Transactions []*types.Transaction

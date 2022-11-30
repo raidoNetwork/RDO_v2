@@ -50,6 +50,10 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 	bn := start.Unix()
 	totalSize := 0 // current size of block in bytes
 
+	// lock pool
+	m.att.TxPool().LockPool()
+	defer m.att.TxPool().UnlockPool()
+
 	txQueueOrigin := m.att.TxPool().GetQueue()
 	txQueue := make([]*types.Transaction, len(txQueueOrigin))
 	copy(txQueue, txQueueOrigin)
@@ -58,7 +62,7 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 	txBatch := make([]*prototype.Transaction, 0, txQueueLen)
 	collapseBatch := make([]*prototype.Transaction, 0, txQueueLen)
 
-	pendingTxCounter.Set(float64(txQueueLen))
+	pendingTxCounter.Set(float64(txQueueLen)) // todo remove metrics to the core service
 
 	// create reward transaction for current block
 	txBatch, collapseBatch, totalSize, err := m.addRewardTxToBatch(m.cfg.Proposer.Addr().Hex(), txBatch, collapseBatch, totalSize, bn)
