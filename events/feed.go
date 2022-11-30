@@ -28,12 +28,12 @@ func (es *eventSubscription) Unsubscribe() {
 
 type Bus struct{
 	once sync.Once
-	cases []reflect.SelectCase
+	cases cases
 	lock sync.Mutex
 }
 
 func (b *Bus) init(){
-	b.cases = make([]reflect.SelectCase, 0)
+	b.cases = make(cases, 0)
 }
 
 func (b *Bus) Subscribe(ch interface{}) Subscription {
@@ -43,6 +43,12 @@ func (b *Bus) Subscribe(ch interface{}) Subscription {
 	defer b.lock.Unlock()
 
 	cval := reflect.ValueOf(ch)
+	ctype := cval.Type()
+
+	if ctype.Kind() != reflect.Chan || ctype.ChanDir() == reflect.SendDir {
+		panic("Bad events feed subscriber")
+	}
+
 	esub := &eventSubscription{ch: cval, bus: b}
 	b.cases = append(b.cases, reflect.SelectCase{Dir: reflect.SelectSend, Chan: cval})
 
@@ -57,7 +63,7 @@ func (b *Bus) unsubscribe(ch reflect.Value){
 
 	for i, c := range b.cases {
 		if c.Chan == ch {
-			b.deleteCase(i)
+			b.cases = b.cases.delete(i)
 		}
 	}
 }
@@ -65,38 +71,35 @@ func (b *Bus) unsubscribe(ch reflect.Value){
 func (b *Bus) Send(data interface{}) int {
 	b.once.Do(b.init)
 
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
-	cases := b.cases
+	sendCases := b.cases
 
 	dval := reflect.ValueOf(data)
 	sent := 0
 
 	// setup value for all send cases
-	for i := range cases {
-		cases[i].Send = dval
+	for i := 0; i < len(sendCases); i++ {
+		sendCases[i].Send = dval
 	}
 
 	for {
 		// try to send data
-		for i := 0;i < len(cases);i++ {
-			if cases[i].Chan.TrySend(dval) {
-				cases = deleteItem(cases, i)
+		for i := 0;i < len(sendCases);i++ {
+			if sendCases[i].Chan.TrySend(dval) {
+				sendCases = sendCases.delete(i)
 				sent++
 				i--
-			} else {
-				log.Errorf("Can't send event %v", cases[i].Chan.Type().String())
 			}
 		}
 
-		if 0 == len(cases){
+		if 0 == len(sendCases){
 			break
 		}
 
+		log.Errorf("Can't send event %v. Waiting subscribers %d", sendCases[0].Chan.Type().String(), len(sendCases))
+
 		// Select on all the receivers, waiting for them to unblock.
-		chosen, _, _ := reflect.Select(cases)
-		cases = deleteItem(cases, chosen)
+		chosen, _, _ := reflect.Select(sendCases)
+		sendCases = sendCases.delete(chosen)
 		sent++
 	}
 
@@ -108,16 +111,26 @@ func (b *Bus) Send(data interface{}) int {
 	return sent
 }
 
-func (b *Bus) deleteCase(index int){
-	if index < 0 || index >= len(b.cases) {
-		return
+type cases []reflect.SelectCase
+
+func (c cases) delete(i int) cases {
+	if i < 0 || i >= len(c) {
+		return c
 	}
 
-	b.cases = deleteItem(b.cases, index)
+	last := len(c) - 1
+	if i != last {
+		c[i], c[last] = c[last], c[i]
+	}
+
+	return c[:last]
 }
 
-func deleteItem(cases []reflect.SelectCase, index int) []reflect.SelectCase {
-	last := len(cases) - 1
-	cases[index], cases[last] = cases[last], cases[index]
-	return cases[:last]
+func (c cases) find(channel interface{}) int {
+	for i, cas := range c {
+		if cas.Chan.Interface() == channel {
+			return i
+		}
+	}
+	return -1
 }
