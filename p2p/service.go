@@ -352,6 +352,10 @@ func (s *Service) Publish(topicName string, message []byte) error {
 	s.topicLock.Lock()
 	defer s.topicLock.Unlock()
 
+	if len(s.peerStore.Connected()) == 0 {
+		return nil
+	}
+
 	topic, exists := s.topics[topicName]
 	if !exists {
 		return errors.New("undefined topic")
@@ -363,6 +367,7 @@ func (s *Service) Publish(topicName string, message []byte) error {
 			return topic.Publish(s.ctx, message)
 		}
 
+		// avoid blocking
 		// todo fix events, create unblocking send
 		if failCounter == failPublishLimit {
 			return errors.New("no topic subscribers")
