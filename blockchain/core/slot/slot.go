@@ -154,6 +154,10 @@ func (st *SlotTicker) currentSlot(genesisTime time.Time) uint64 {
 	return uint64(int64(roundedSeconds) / st.slotSec)
 }
 
+func (st *SlotTicker) SlotSinceGenesis() uint64 {
+	return st.currentSlot(st.GenesisTime())
+}
+
 func (st *SlotTicker) currentEpoch() uint64 {
 	return st.slot / params.RaidoConfig().SlotsPerEpoch
 }

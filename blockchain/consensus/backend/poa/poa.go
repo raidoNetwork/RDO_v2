@@ -3,7 +3,6 @@ package poa
 import (
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
@@ -36,11 +35,9 @@ func (b *Backend) IsLeader(validator common.Address) bool {
 }
 
 func (b *Backend) leaderIndex() int {
-	validatorsCount := int64(len(b.validators))
-	slotSeconds := params.RaidoConfig().SlotTime
-	slotDuration := time.Duration(slotSeconds) * time.Second
-	roundedSeconds := int64(time.Since(slot.Ticker().GenesisTime()).Round(slotDuration).Seconds())
-	ind := roundedSeconds / slotSeconds % validatorsCount
+	validatorsCount := uint64(len(b.validators))
+	slot := slot.Ticker().SlotSinceGenesis()
+	ind := slot % validatorsCount
 	return int(ind)
 }
 
