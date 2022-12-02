@@ -112,6 +112,7 @@ func (st *SlotTicker) Start(genesisTime time.Time) error {
 					st.epoch++
 					st.startEpochSlot = st.slot
 					st.lastEpochSlot = st.slot + slotsPerEpoch
+					go checkClockDrift()
 				}
 				st.mu.Unlock()
 
