@@ -1,15 +1,16 @@
 package slot
 
 import (
-	"github.com/pkg/errors"
-	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/raidoNetwork/RDO_v2/shared/params"
 )
 
 var mainTicker *SlotTicker
 
-func CreateSlotTicker(){
+func CreateSlotTicker() {
 	mainTicker = NewSlotTicker()
 }
 
@@ -17,12 +18,12 @@ func NewSlotTicker() *SlotTicker {
 	slotDuration := params.RaidoConfig().SlotTime
 
 	return &SlotTicker{
-		slot: 0,
-		epoch: 0,
-		done: make(chan struct{}),
-		c: make(chan uint64),
+		slot:         0,
+		epoch:        0,
+		done:         make(chan struct{}),
+		c:            make(chan uint64),
 		slotDuration: time.Duration(slotDuration) * time.Second,
-		slotSec: slotDuration,
+		slotSec:      slotDuration,
 	}
 }
 
@@ -30,17 +31,17 @@ func Ticker() *SlotTicker {
 	return mainTicker
 }
 
-type SlotTicker struct{
-	slot uint64
-	epoch uint64
+type SlotTicker struct {
+	slot           uint64
+	epoch          uint64
 	startEpochSlot uint64
-	lastEpochSlot uint64
+	lastEpochSlot  uint64
 
 	slotDuration time.Duration
-	slotSec int64
+	slotSec      int64
 
 	done chan struct{}
-	c chan uint64
+	c    chan uint64
 
 	mu sync.Mutex
 
@@ -51,8 +52,8 @@ func (st *SlotTicker) C() <-chan uint64 {
 	return st.c
 }
 
-func (st *SlotTicker) Stop(){
-	go func(){
+func (st *SlotTicker) Stop() {
+	go func() {
 		st.done <- struct{}{}
 	}()
 }
@@ -76,7 +77,7 @@ func (st *SlotTicker) Start(genesisTime time.Time) error {
 	if timePassed < st.slotDuration {
 		nextTickTime = genesisTime
 	} else {
-		nextTick := timePassed.Truncate(st.slotDuration) + st.slotDuration
+		nextTick := timePassed.Round(st.slotDuration) + st.slotDuration
 		nextTickTime = genesisTime.Add(nextTick)
 	}
 
@@ -108,7 +109,7 @@ func (st *SlotTicker) Start(genesisTime time.Time) error {
 				st.mu.Lock()
 				st.slot++
 
-				if st.slot % slotsPerEpoch == 0 && st.slot > 0 {
+				if st.slot%slotsPerEpoch == 0 && st.slot > 0 {
 					st.epoch++
 					st.startEpochSlot = st.slot
 					st.lastEpochSlot = st.slot + slotsPerEpoch
@@ -121,7 +122,6 @@ func (st *SlotTicker) Start(genesisTime time.Time) error {
 			}
 		}
 	}()
-
 
 	return nil
 }
@@ -141,14 +141,16 @@ func (st *SlotTicker) Epoch() uint64 {
 }
 
 func (st *SlotTicker) currentSlot(genesisTime time.Time) uint64 {
-	now := time.Now().Unix()
-	genesisSec := genesisTime.Unix()
+	now := time.Now()
 
-	if now < genesisSec {
+	if now.Before(genesisTime) {
 		return 0
 	}
 
-	return uint64((now - genesisSec) / st.slotSec)
+	elapsed := now.Sub(genesisTime)
+	roundedSeconds := elapsed.Round(st.slotDuration).Seconds()
+
+	return uint64(int64(roundedSeconds) / st.slotSec)
 }
 
 func (st *SlotTicker) currentEpoch() uint64 {
