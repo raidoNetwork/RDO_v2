@@ -1,6 +1,9 @@
 package staking
 
 import (
+	"sync"
+	"unicode/utf8"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -8,8 +11,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/sirupsen/logrus"
-	"sync"
-	"unicode/utf8"
 )
 
 var log = logrus.WithField("prefix", "StakePool")
@@ -22,15 +23,15 @@ type ValidatorStakeData struct {
 }
 
 type StakingPool struct {
-	validators map[string]*ValidatorStakeData
-	electors map[string]map[string]struct{}
-	cumulativeStake uint64
-	rewardPerBlock uint64
+	validators         map[string]*ValidatorStakeData
+	electors           map[string]map[string]struct{}
+	cumulativeStake    uint64
+	rewardPerBlock     uint64
 	stakeAmountPerSlot uint64
-	slotsLimit int
-	slotsFilled int
-	slotsReserved int
-	blockchain consensus.BlockchainReader
+	slotsLimit         int
+	slotsFilled        int
+	slotsReserved      int
+	blockchain         consensus.BlockchainReader
 
 	mu sync.Mutex
 }
@@ -95,7 +96,7 @@ func (p *StakingPool) registerValidatorStake(validator string, amount uint64) er
 	return nil
 }
 
-func (p *StakingPool) cancelValidatorStake(validator string, amount uint64) error  {
+func (p *StakingPool) cancelValidatorStake(validator string, amount uint64) error {
 	slotsCount := int(amount / p.stakeAmountPerSlot)
 	if slotsCount == 0 {
 		return errors.Errorf("Bad unstake amount given: %d.", amount)
@@ -213,7 +214,7 @@ func (p *StakingPool) ReserveSlots(amount uint64) error {
 		return errors.New("Too low amount for staking.")
 	}
 
-	emptySlots := p.slotsLimit-p.filledSlots(true)
+	emptySlots := p.slotsLimit - p.filledSlots(true)
 	if emptySlots < count {
 		return errors.New("Can't reserve all slots with given amount.")
 	}
@@ -346,7 +347,7 @@ func (p *StakingPool) GetRewardMap(proposer string) map[string]uint64 {
 			electorsReward := blockReward - validatorReward
 			electorsStake := stakeData.CumulativeStake - stakeData.SelfStake
 			for elector, stakeAmount := range stakeData.Electors {
-				rewards[elector] += electorsStake / stakeAmount * electorsReward
+				rewards[elector] += stakeAmount * electorsReward / electorsStake
 			}
 		}
 
@@ -402,11 +403,11 @@ func (p *StakingPool) HasValidator(validator string) bool {
 
 func NewPool(blockchain consensus.BlockchainReader, slotsLimit int, reward uint64, stakeAmount uint64) consensus.StakePool {
 	return &StakingPool{
-		validators: map[string]*ValidatorStakeData{},
-		electors: map[string]map[string]struct{}{},
-		blockchain: blockchain,
-		slotsLimit: slotsLimit,
+		validators:         map[string]*ValidatorStakeData{},
+		electors:           map[string]map[string]struct{}{},
+		blockchain:         blockchain,
+		slotsLimit:         slotsLimit,
 		stakeAmountPerSlot: stakeAmount,
-		rewardPerBlock: reward,
+		rewardPerBlock:     reward,
 	}
 }
