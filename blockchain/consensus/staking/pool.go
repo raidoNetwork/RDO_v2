@@ -346,7 +346,12 @@ func (p *StakingPool) GetRewardMap(proposer string) map[string]uint64 {
 			electorsReward := blockReward - validatorReward
 			electorsStake := stakeData.CumulativeStake - stakeData.SelfStake
 			for elector, stakeAmount := range stakeData.Electors {
-				rewards[elector] += electorsStake / stakeAmount * electorsReward
+				reward := stakeAmount / electorsStake * electorsReward
+				if reward == 0 {
+					continue
+				}
+
+				rewards[elector] += reward
 			}
 		}
 
@@ -398,6 +403,17 @@ func (p *StakingPool) HasValidator(validator string) bool {
 
 	_, exists := p.validators[validator]
 	return exists
+}
+
+func (p *StakingPool) ValidatorStakeMap() map[string]uint64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	stakeMap := map[string]uint64{}
+	for v, data := range p.validators {
+		stakeMap[v] = data.CumulativeStake
+	}
+	return stakeMap
 }
 
 func NewPool(blockchain consensus.BlockchainReader, slotsLimit int, reward uint64, stakeAmount uint64) consensus.StakePool {

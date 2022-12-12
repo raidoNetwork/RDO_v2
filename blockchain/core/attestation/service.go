@@ -118,9 +118,10 @@ func (s *Service) Status() error {
 }
 
 func (s *Service) Stop() error {
+	log.Info("Stop Attestation service")
+
 	s.cancel()
 
-	log.Info("Stop Attestation service")
 	return nil
 }
 

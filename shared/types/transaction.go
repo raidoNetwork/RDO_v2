@@ -155,7 +155,10 @@ type Transaction struct {
 	inputs    []*Input
 	outputs   []*Output
 	lock      sync.Mutex
+
+	// tx state
 	dropped   bool
+	swapped bool
 }
 
 func (tx *Transaction) GetTx() *prototype.Transaction {
@@ -285,6 +288,18 @@ func (tx *Transaction) Status() ExecutionStatus {
 	defer tx.lock.Unlock()
 
 	return ExecutionStatus(tx.tx.Status)
+}
+
+func (tx *Transaction) SetSwap() {
+	tx.lock.Lock()
+	tx.swapped = true
+	tx.lock.Unlock()
+}
+
+func (tx *Transaction) Swapped() bool {
+	tx.lock.Lock()
+	defer tx.lock.Unlock()
+	return tx.swapped
 }
 
 type Input struct {
