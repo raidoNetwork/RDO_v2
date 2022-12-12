@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
+	"github.com/raidoNetwork/RDO_v2/blockchain/core/rdochain"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
@@ -12,6 +13,10 @@ import (
 	vtypes "github.com/raidoNetwork/RDO_v2/validator/types"
 	"strconv"
 	"time"
+)
+
+var (
+	ErrReadingBlock = errors.New("Error reading block from database")
 )
 
 // checkBlockBalance count block inputs and outputs sum and check that all inputs in block are unique.
@@ -128,22 +133,27 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensu
 		return nil, errors.New("Wrong block proposer signature")
 	}
 
-	start = time.Now()
-
 	// check if block is already exists in the database
 	b, err := cv.bc.GetBlockByHash(block.Hash)
 	if err != nil {
-		return nil, errors.New("Error reading block from database.")
-	}
-
-	if cv.cfg.EnableMetrics {
-		end := time.Since(start)
-		log.Debugf("ValidateBlock: Get block by hash in %s", common.StatFmt(end))
+		log.Debugf("Error reading block by hash %s", err)
+		return nil, ErrReadingBlock
 	}
 
 	if b != nil {
-		log.Debugf("ValidateBlock: Block #%d is already exists in blockchain!", block.Num)
+		log.Debugf("ValidateBlock: GetBlockByHash: Block #%d is already exists in blockchain!", block.Num)
 		return nil, consensus.ErrKnownBlock
+	} else {
+		b, err = cv.bc.GetBlockByNum(block.Num)
+		if err != nil && !errors.Is(err, rdochain.ErrNotForgedBlock) {
+			log.Debugf("Error reading block by num %s", err)
+			return nil, ErrReadingBlock
+		}
+
+		if b != nil {
+			log.Debugf("ValidateBlock: GetBlockByNum: Block #%d is already exists in blockchain!", block.Num)
+			return nil, consensus.ErrKnownBlock
+		}
 	}
 
 	start = time.Now()
@@ -228,7 +238,7 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal con
 			continue
 		}
 
-		if journal.IsKnown(tx) {
+		if journal.IsKnown(tx) && !journal.IsSwapped(tx) {
 			continue
 		}
 
