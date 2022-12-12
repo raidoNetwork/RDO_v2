@@ -38,7 +38,7 @@ type SlotTicker struct {
 	lastEpochSlot  uint64
 
 	slotDuration time.Duration
-	slotSec      int64
+	slotSec      uint64
 
 	done chan struct{}
 	c    chan uint64
@@ -151,7 +151,7 @@ func (st *SlotTicker) currentSlot(genesisTime time.Time) uint64 {
 	elapsed := now.Sub(genesisTime)
 	roundedSeconds := elapsed.Round(st.slotDuration).Seconds()
 
-	return uint64(int64(roundedSeconds) / st.slotSec)
+	return uint64(roundedSeconds) / st.slotSec
 }
 
 func (st *SlotTicker) SlotSinceGenesis() uint64 {
