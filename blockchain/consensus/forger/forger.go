@@ -136,6 +136,7 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 		}
 
 		txBatch = append(txBatch, tx.GetTx())
+		tx.Forge()
 		log.Debugf("Add %s %s to the block %d", txType, hash, bn)
 		txType = "StandardTx"
 

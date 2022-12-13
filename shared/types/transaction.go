@@ -158,7 +158,7 @@ type Transaction struct {
 
 	// tx state
 	dropped   bool
-	swapped bool
+	forged 	  bool
 }
 
 func (tx *Transaction) GetTx() *prototype.Transaction {
@@ -277,6 +277,27 @@ func (tx *Transaction) IsDropped() bool {
 	return tx.dropped
 }
 
+func (tx *Transaction) Forge() {
+	tx.lock.Lock()
+	defer tx.lock.Unlock()
+
+	tx.forged = true
+}
+
+func (tx *Transaction) IsForged() bool {
+	tx.lock.Lock()
+	defer tx.lock.Unlock()
+
+	return tx.forged
+}
+
+func (tx *Transaction) DiscardForge() {
+	tx.lock.Lock()
+	defer tx.lock.Unlock()
+
+	tx.forged = false
+}
+
 func (tx *Transaction) SetStatus(status ExecutionStatus) {
 	tx.lock.Lock()
 	tx.tx.Status = uint32(status)
@@ -288,18 +309,6 @@ func (tx *Transaction) Status() ExecutionStatus {
 	defer tx.lock.Unlock()
 
 	return ExecutionStatus(tx.tx.Status)
-}
-
-func (tx *Transaction) SetSwap() {
-	tx.lock.Lock()
-	tx.swapped = true
-	tx.lock.Unlock()
-}
-
-func (tx *Transaction) Swapped() bool {
-	tx.lock.Lock()
-	defer tx.lock.Unlock()
-	return tx.swapped
 }
 
 type Input struct {

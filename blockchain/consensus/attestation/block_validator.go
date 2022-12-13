@@ -7,6 +7,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/rdochain"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/shared/math"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/hash"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
@@ -18,6 +19,8 @@ import (
 var (
 	ErrReadingBlock = errors.New("Error reading block from database")
 )
+
+const failedTxLimitPercent = 50
 
 // checkBlockBalance count block inputs and outputs sum and check that all inputs in block are unique.
 func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
@@ -205,6 +208,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensu
 
 func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal consensus.TxJournal) ([]*types.Transaction, error) {
 	failedTx := make([]*types.Transaction, 0)
+	standardTxCount := 0
 	for _, txpb := range block.Transactions {
 		tx := types.NewTransaction(txpb)
 
@@ -230,6 +234,7 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal con
 			continue
 		}
 
+		standardTxCount++
 		err := cv.ValidateTransactionStruct(tx)
 		if err != nil {
 			log.Error(err)
@@ -238,7 +243,7 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal con
 			continue
 		}
 
-		if journal.IsKnown(tx) && !journal.IsSwapped(tx) {
+		if journal.IsKnown(tx) {
 			continue
 		}
 
@@ -252,8 +257,8 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal con
 		tx.SetStatus(types.TxSuccess)
 	}
 
-	if len(failedTx) > 0 {
-		return failedTx, errors.New("Failed tx validation")
+	if math.IsGEPercentLimit(len(failedTx), standardTxCount, failedTxLimitPercent) {
+		return failedTx, errors.New("too much failed tx")
 	}
 
 	return nil, nil
