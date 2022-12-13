@@ -105,13 +105,14 @@ type TxPool interface {
 	// UnlockPool unlocks pool operations
 	UnlockPool()
 
+	// ClearForged mark all forged tx as not forged
+	ClearForged()
+
 	TxJournal
 }
 
 type TxJournal interface {
 	IsKnown(*types.Transaction) bool
-
-	IsSwapped(*types.Transaction) bool
 }
 
 // StakePool regulates stake slots condition.

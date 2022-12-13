@@ -113,6 +113,9 @@ func (p *Pool) processDoubleSpend(oldTx, newTx *types.Transaction) error {
 
 func (p *Pool) swap(oldTx, newTx *types.Transaction) error {
 	p.swapLock.WaitLock()
+	if oldTx.IsForged() {
+		return nil
+	}
 
 	p.queueLock.Lock()
 	err := p.pending.SwapByHash(oldTx, newTx)
@@ -126,7 +129,6 @@ func (p *Pool) swap(oldTx, newTx *types.Transaction) error {
 	delete(p.txHashMap, oldTx.Hash().Hex())
 	p.txHashMap[newTx.Hash().Hex()] = newTx
 	p.txSenderMap[newTx.From().Hex()] = newTx
-	newTx.SetSwap()
 	p.mu.Unlock()
 
 	log.Debugf("Swap %s with %s", oldTx.Hash().Hex(), newTx.Hash().Hex())
@@ -342,21 +344,16 @@ func (p *Pool) UnlockPool() {
 	p.swapLock.Unlock()
 }
 
-func (p *Pool) IsSwapped(tx *types.Transaction) bool {
+func (p *Pool) ClearForged() {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	ptx, exists := p.txHashMap[tx.Hash().Hex()]
-	if !exists {
-		ptx, exists := p.txSenderMap[tx.From().Hex()]
-		if !exists {
-			return false
+	p.queueLock.Lock()
+	for _, tx := range p.txHashMap {
+		if tx.IsForged() {
+			tx.DiscardForge()
 		}
-
-		return ptx.Swapped()
 	}
-
-	return ptx.Swapped()
+	p.queueLock.Unlock()
+	p.mu.Unlock()
 }
 
 type Transactions []*types.Transaction
