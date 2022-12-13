@@ -24,12 +24,9 @@ type RDOBlockChainConfig struct {
 
 	CommitteeSize int `yaml:"COMMITTEE_SIZE"`
 
-	// NTP pool to check the clock drift
-	NTPPool string `yaml:"NTP_POOL"`
+	NTPPool string `yaml:"NTP_POOL"` // NTP pool to check the clock drift
 
-	// number of NTP checks to perform
-	NTPChecks int `yaml:"NTP_CHECKS"`
+	NTPChecks int `yaml:"NTP_CHECKS"` // number of NTP checks to perform
 
-	// Specifies what clock drift is considered within boundaries (in ms)
-	NTPThreshold int `yaml:"NTP_THRESHOLD"`
+	NTPThreshold int `yaml:"NTP_THRESHOLD"` // Specifies what clock drift is considered within boundaries (in ms)
 }
