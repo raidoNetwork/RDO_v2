@@ -2,6 +2,9 @@ package attestation
 
 import (
 	"bytes"
+	"sort"
+	"sync"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -10,37 +13,35 @@ import (
 	"github.com/raidoNetwork/RDO_v2/utils/async"
 	utypes "github.com/raidoNetwork/RDO_v2/utils/types"
 	"github.com/sirupsen/logrus"
-	"sort"
-	"sync"
 )
 
 const (
 	maxTxCount = 1000
-	minFee = 1
+	minFee     = 1
 )
 
 var log = logrus.WithField("prefix", "attestation")
 
 type PoolSettings struct {
-	Validator consensus.TxValidator
+	Validator  consensus.TxValidator
 	MinimalFee uint64
 }
 
 func NewPool(cfg *PoolSettings) *Pool {
 	return &Pool{
 		txSenderMap: map[string]*types.Transaction{},
-		txHashMap: map[string]*types.Transaction{},
-		pending: make(Transactions, 0),
-		cfg: cfg,
+		txHashMap:   map[string]*types.Transaction{},
+		pending:     make(Transactions, 0),
+		cfg:         cfg,
 	}
 }
 
 type Pool struct {
 	txSenderMap map[string]*types.Transaction
-	txHashMap map[string]*types.Transaction
+	txHashMap   map[string]*types.Transaction
 
 	pending Transactions
-	cfg *PoolSettings
+	cfg     *PoolSettings
 
 	mu        sync.Mutex
 	queueLock sync.Mutex
@@ -77,7 +78,7 @@ func (p *Pool) Insert(tx *types.Transaction) error {
 	p.finalizeInsert(tx)
 	log.Debugf("Insert tx %s", tx.Hash().Hex())
 
-	if len(p.txHashMap) + 1 == maxTxCount {
+	if len(p.txHashMap)+1 == maxTxCount {
 		p.cleanWorst()
 	}
 
@@ -226,7 +227,7 @@ func (p *Pool) GetFeePrice() uint64 {
 	} else if size == 1 {
 		return queue[0].FeePrice()
 	} else {
-		return (queue[0].FeePrice() + queue[size - 1].FeePrice()) / 2
+		return (queue[0].FeePrice() + queue[size-1].FeePrice()) / 2
 	}
 }
 
@@ -264,13 +265,15 @@ func (p *Pool) findPoolTransaction(tx *types.Transaction) (*types.Transaction, i
 	}
 
 	isDouble := senderTx.HasDouble(tx.Hash())
-	if !isDouble && !exists {
+	if !isDouble && !exists && tx.Status() == types.TxFailed {
 		return nil, -1, errors.New("Undefined transaction")
 	}
 
 	// now tx can be one of several cases:
 	//  1. tx exists in pool
 	//  2. tx is double of previous sender tx
+	// 	3. tx is the first swapped transaction so it does exist in the pool
+	// 	AND it is not marked as double
 	var poolTx *types.Transaction
 	if exists {
 		poolTx = tx
