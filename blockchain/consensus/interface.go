@@ -106,7 +106,7 @@ type TxPool interface {
 	UnlockPool()
 
 	// ClearForged mark all forged tx as not forged
-	ClearForged()
+	ClearForged(*prototype.Block)
 
 	TxJournal
 }

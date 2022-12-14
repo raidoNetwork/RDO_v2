@@ -167,7 +167,7 @@ func (s *Service) FinalizeBlock(block *prototype.Block) error {
 		if failedTx != nil {
 			s.att.TxPool().Finalize(failedTx)
 		}
-		s.att.TxPool().ClearForged()
+		s.att.TxPool().ClearForged(block)
 		return errors.Wrap(err, "ValidateBlockError")
 	}
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
+	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/async"
@@ -344,10 +345,16 @@ func (p *Pool) UnlockPool() {
 	p.swapLock.Unlock()
 }
 
-func (p *Pool) ClearForged() {
+func (p *Pool) ClearForged(block *prototype.Block) {
 	p.mu.Lock()
 	p.queueLock.Lock()
-	for _, tx := range p.txHashMap {
+	for _, ptx := range block.Transactions {
+		hash := common.Encode(ptx.Hash)
+		tx, exists := p.txHashMap[hash]
+		if !exists {
+			continue
+		}
+
 		if tx.IsForged() {
 			tx.DiscardForge()
 		}
