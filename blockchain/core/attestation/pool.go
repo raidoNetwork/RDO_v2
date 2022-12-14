@@ -264,8 +264,7 @@ func (p *Pool) findPoolTransaction(tx *types.Transaction) (*types.Transaction, i
 		return nil, -1, errors.New("Undefined sender and transaction")
 	}
 
-	isDouble := senderTx.HasDouble(tx.Hash())
-	if !isDouble && !exists && tx.Status() == types.TxFailed {
+	if !exists && tx.Status() == types.TxFailed {
 		return nil, -1, errors.New("Undefined transaction")
 	}
 
