@@ -1,12 +1,13 @@
 package poa
 
 import (
-	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
-	"github.com/raidoNetwork/RDO_v2/shared/common"
-	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
+	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/shared/params"
 )
 
 type Backend struct {
@@ -37,8 +38,9 @@ func (b *Backend) IsLeader(validator common.Address) bool {
 func (b *Backend) leaderIndex() int {
 	validatorsCount := int64(len(b.validators))
 	slotSeconds := params.RaidoConfig().SlotTime
-	sinceGenesis := time.Since(slot.Ticker().GenesisTime()) / time.Second
-	ind := int64(sinceGenesis) / slotSeconds % validatorsCount
+	sinceGenesis := time.Since(slot.Ticker().GenesisTime())
+	sinceRounded := sinceGenesis.Round(time.Second * time.Duration(slotSeconds)).Seconds()
+	ind := int64(sinceRounded) / slotSeconds % validatorsCount
 	return int(ind)
 }
 
@@ -62,4 +64,3 @@ func (b *Backend) IsValidator(user common.Address) bool {
 
 	return false
 }
-
