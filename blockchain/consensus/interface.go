@@ -47,9 +47,11 @@ type BlockchainReader interface{
 	// FindStakeDepositsOfAddress returns all address stake outputs.
 	FindStakeDepositsOfAddress(string, string) ([]*types.UTxO, error)
 
-	// GetBlockByHash return block with given hash from blockchain
-	// if block not found return nil
+	// GetBlockByHash return block with given hash from blockchain if exists
 	GetBlockByHash([]byte) (*prototype.Block, error)
+
+	// GetBlockByNum return block with given num from blockchain if exists
+	GetBlockByNum(n uint64) (*prototype.Block, error)
 
 	// GetBlockCount return block count in the blockchain
 	GetBlockCount() uint64
@@ -103,6 +105,9 @@ type TxPool interface {
 	// UnlockPool unlocks pool operations
 	UnlockPool()
 
+	// ClearForged mark all forged tx as not forged
+	ClearForged(*prototype.Block)
+
 	TxJournal
 }
 
@@ -133,6 +138,12 @@ type StakePool interface {
 	GetRewardPerSlot(uint64) uint64
 
 	HasValidator(validator string) bool
+
+	StakeDataReader
+}
+
+type StakeDataReader interface {
+	ValidatorStakeMap() map[string]uint64
 }
 
 // AttestationPool control block and transaction validation and staking

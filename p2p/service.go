@@ -29,19 +29,19 @@ var maxDialTimeout = time.Duration(params.RaidoConfig().ResponseTimeout) * time.
 
 const (
 	messageQueueSize = 256
-	MaxChunkSize = 1 << 20
+	MaxChunkSize     = 1 << 20
 	failPublishLimit = 10
 )
 
 type ConnectionHandler func(context.Context, peer.ID) error
 
 type Config struct {
-	Host           string
-	Port           int
-	BootstrapNodes []string
-	DataDir        string
-	StateFeed	   events.Feed
-	EnableNAT	   bool
+	Host                string
+	Port                int
+	BootstrapNodes      []string
+	DataDir             string
+	StateFeed           events.Feed
+	EnableNAT           bool
 	ListenValidatorData bool
 }
 
@@ -66,13 +66,13 @@ func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
 
 	ctx, cancel := context.WithCancel(ctx)
 	srv = &Service{
-		nodeKey: nodePrivKey,
-		ctx:     ctx,
-		cancel:  cancel,
-		cfg:     cfg,
-		topics:  map[string]*pubsub.Topic{},
-		subs:	 map[string]*pubsub.Subscription{},
-		stateEvent: make(chan state.State, 1),
+		nodeKey:     nodePrivKey,
+		ctx:         ctx,
+		cancel:      cancel,
+		cfg:         cfg,
+		topics:      map[string]*pubsub.Topic{},
+		subs:        map[string]*pubsub.Subscription{},
+		stateEvent:  make(chan state.State, 1),
 		initialized: make(chan struct{}),
 	}
 
@@ -113,23 +113,23 @@ func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
 }
 
 type Service struct {
-	nodeKey *nodeKey
-	host    phost.Host
-	id      peer.ID
-	pubsub  *pubsub.PubSub
-	topics map[string]*pubsub.Topic
-	subs   map[string]*pubsub.Subscription
+	nodeKey    *nodeKey
+	host       phost.Host
+	id         peer.ID
+	pubsub     *pubsub.PubSub
+	topics     map[string]*pubsub.Topic
+	subs       map[string]*pubsub.Subscription
 	stateEvent chan state.State
 
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx       context.Context
+	cancel    context.CancelFunc
 	topicLock sync.Mutex
 
 	cfg *Config
 
 	startFail error
 
-	notifier events.Bus
+	notifier          events.Bus
 	validatorNotifier events.Bus
 
 	// discovery
@@ -158,7 +158,7 @@ func (s *Service) Start() {
 	// connect to bootstrap nodes
 	s.connectPeers()
 
-	async.WithInterval(s.ctx, 5 * time.Second, func() {
+	async.WithInterval(s.ctx, 5*time.Second, func() {
 		s.updateMetrics()
 	})
 
@@ -260,7 +260,7 @@ func (s *Service) connectPeer(info peer.AddrInfo) error {
 	return nil
 }
 
-func (s *Service) readMessages(){
+func (s *Service) readMessages() {
 	for t := range topicMap {
 		go s.listenTopic(t)
 	}
@@ -272,7 +272,7 @@ func (s *Service) readMessages(){
 	}
 }
 
-func (s *Service) listenTopic(topic string){
+func (s *Service) listenTopic(topic string) {
 	s.topicLock.Lock()
 	sub, exists := s.subs[topic]
 	id := s.id
@@ -385,7 +385,7 @@ func (s *Service) Publish(topicName string, message []byte) error {
 	}
 }
 
-func (s *Service) logID(){
+func (s *Service) logID() {
 	if len(s.host.Addrs()) == 0 {
 		return
 	}
@@ -393,11 +393,11 @@ func (s *Service) logID(){
 	log.Infof("Start listen on %s/p2p/%s", s.host.Addrs()[0].String(), s.id.Pretty())
 }
 
-func (s *Service) receiveMessage(msg *pubsub.Message, isValidatorMessage bool){
+func (s *Service) receiveMessage(msg *pubsub.Message, isValidatorMessage bool) {
 	n := Notty{
-		Data: msg.Data,
+		Data:  msg.Data,
 		Topic: *msg.Topic,
-		From: msg.ReceivedFrom.String(),
+		From:  msg.ReceivedFrom.String(),
 	}
 
 	// send event
@@ -429,7 +429,7 @@ func (s *Service) AddConnectionHandlers(connectHandler, disconnectHandler Connec
 				if err := connectHandler(s.ctx, remotePeer); err != nil {
 					log.Errorf("Can't exec connect handler with %s: %s", remotePeer, err)
 				}
-			} ()
+			}()
 
 		},
 		DisconnectedF: func(n network.Network, conn network.Conn) {
@@ -441,7 +441,7 @@ func (s *Service) AddConnectionHandlers(connectHandler, disconnectHandler Connec
 				if err := disconnectHandler(s.ctx, remotePeer); err != nil {
 					log.Errorf("Can't exec disconnect handler with %s: %s", remotePeer, err)
 				}
-			} ()
+			}()
 		},
 	})
 }
@@ -536,17 +536,17 @@ func (s *Service) CreateStream(ctx context.Context, msg ssz.Marshaler, topic str
 	return stream, nil
 }
 
-func (s *Service) stateListener(){
+func (s *Service) stateListener() {
 	sub := s.cfg.StateFeed.Subscribe(s.stateEvent)
 	defer sub.Unsubscribe()
 
 	for {
-		select{
+		select {
 		case <-s.ctx.Done():
 			return
 		case st := <-s.stateEvent:
 			switch st {
-			case state.LocalSynced:
+			case state.ConnectionHandlersReady:
 				s.initialized <- struct{}{}
 			case state.Synced:
 				close(s.initialized)

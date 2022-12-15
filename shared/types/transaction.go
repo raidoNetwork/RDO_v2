@@ -155,7 +155,10 @@ type Transaction struct {
 	inputs    []*Input
 	outputs   []*Output
 	lock      sync.Mutex
+
+	// tx state
 	dropped   bool
+	forged 	  bool
 }
 
 func (tx *Transaction) GetTx() *prototype.Transaction {
@@ -272,6 +275,27 @@ func (tx *Transaction) IsDropped() bool {
 	defer tx.lock.Unlock()
 
 	return tx.dropped
+}
+
+func (tx *Transaction) Forge() {
+	tx.lock.Lock()
+	defer tx.lock.Unlock()
+
+	tx.forged = true
+}
+
+func (tx *Transaction) IsForged() bool {
+	tx.lock.Lock()
+	defer tx.lock.Unlock()
+
+	return tx.forged
+}
+
+func (tx *Transaction) DiscardForge() {
+	tx.lock.Lock()
+	defer tx.lock.Unlock()
+
+	tx.forged = false
 }
 
 func (tx *Transaction) SetStatus(status ExecutionStatus) {

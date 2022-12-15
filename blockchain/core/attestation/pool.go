@@ -2,44 +2,46 @@ package attestation
 
 import (
 	"bytes"
+	"sort"
+	"sync"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
+	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/async"
 	utypes "github.com/raidoNetwork/RDO_v2/utils/types"
 	"github.com/sirupsen/logrus"
-	"sort"
-	"sync"
 )
 
 const (
 	maxTxCount = 1000
-	minFee = 1
+	minFee     = 1
 )
 
 var log = logrus.WithField("prefix", "attestation")
 
 type PoolSettings struct {
-	Validator consensus.TxValidator
+	Validator  consensus.TxValidator
 	MinimalFee uint64
 }
 
 func NewPool(cfg *PoolSettings) *Pool {
 	return &Pool{
 		txSenderMap: map[string]*types.Transaction{},
-		txHashMap: map[string]*types.Transaction{},
-		pending: make(Transactions, 0),
-		cfg: cfg,
+		txHashMap:   map[string]*types.Transaction{},
+		pending:     make(Transactions, 0),
+		cfg:         cfg,
 	}
 }
 
 type Pool struct {
 	txSenderMap map[string]*types.Transaction
-	txHashMap map[string]*types.Transaction
+	txHashMap   map[string]*types.Transaction
 
 	pending Transactions
-	cfg *PoolSettings
+	cfg     *PoolSettings
 
 	mu        sync.Mutex
 	queueLock sync.Mutex
@@ -76,7 +78,7 @@ func (p *Pool) Insert(tx *types.Transaction) error {
 	p.finalizeInsert(tx)
 	log.Debugf("Insert tx %s", tx.Hash().Hex())
 
-	if len(p.txHashMap) + 1 == maxTxCount {
+	if len(p.txHashMap)+1 == maxTxCount {
 		p.cleanWorst()
 	}
 
@@ -113,6 +115,9 @@ func (p *Pool) processDoubleSpend(oldTx, newTx *types.Transaction) error {
 
 func (p *Pool) swap(oldTx, newTx *types.Transaction) error {
 	p.swapLock.WaitLock()
+	if oldTx.IsForged() {
+		return nil
+	}
 
 	p.queueLock.Lock()
 	err := p.pending.SwapByHash(oldTx, newTx)
@@ -222,7 +227,7 @@ func (p *Pool) GetFeePrice() uint64 {
 	} else if size == 1 {
 		return queue[0].FeePrice()
 	} else {
-		return (queue[0].FeePrice() + queue[size - 1].FeePrice()) / 2
+		return (queue[0].FeePrice() + queue[size-1].FeePrice()) / 2
 	}
 }
 
@@ -259,14 +264,15 @@ func (p *Pool) findPoolTransaction(tx *types.Transaction) (*types.Transaction, i
 		return nil, -1, errors.New("Undefined sender and transaction")
 	}
 
-	isDouble := senderTx.HasDouble(tx.Hash())
-	if !isDouble && !exists {
+	if !exists && tx.Status() == types.TxFailed {
 		return nil, -1, errors.New("Undefined transaction")
 	}
 
 	// now tx can be one of several cases:
 	//  1. tx exists in pool
 	//  2. tx is double of previous sender tx
+	// 	3. tx is the first swapped transaction so it does exist in the pool
+	// 	AND it is not marked as double
 	var poolTx *types.Transaction
 	if exists {
 		poolTx = tx
@@ -339,6 +345,24 @@ func (p *Pool) LockPool() {
 
 func (p *Pool) UnlockPool() {
 	p.swapLock.Unlock()
+}
+
+func (p *Pool) ClearForged(block *prototype.Block) {
+	p.mu.Lock()
+	p.queueLock.Lock()
+	for _, ptx := range block.Transactions {
+		hash := common.Encode(ptx.Hash)
+		tx, exists := p.txHashMap[hash]
+		if !exists {
+			continue
+		}
+
+		if tx.IsForged() {
+			tx.DiscardForge()
+		}
+	}
+	p.queueLock.Unlock()
+	p.mu.Unlock()
 }
 
 type Transactions []*types.Transaction

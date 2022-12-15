@@ -1,15 +1,16 @@
 package slot
 
 import (
-	"github.com/pkg/errors"
-	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/raidoNetwork/RDO_v2/shared/params"
 )
 
 var mainTicker *SlotTicker
 
-func CreateSlotTicker(){
+func CreateSlotTicker() {
 	mainTicker = NewSlotTicker()
 }
 
@@ -17,12 +18,12 @@ func NewSlotTicker() *SlotTicker {
 	slotDuration := params.RaidoConfig().SlotTime
 
 	return &SlotTicker{
-		slot: 0,
-		epoch: 0,
-		done: make(chan struct{}),
-		c: make(chan uint64),
+		slot:         0,
+		epoch:        0,
+		done:         make(chan struct{}),
+		c:            make(chan uint64),
 		slotDuration: time.Duration(slotDuration) * time.Second,
-		slotSec: slotDuration,
+		slotSec:      slotDuration,
 	}
 }
 
@@ -30,17 +31,17 @@ func Ticker() *SlotTicker {
 	return mainTicker
 }
 
-type SlotTicker struct{
-	slot uint64
-	epoch uint64
+type SlotTicker struct {
+	slot           uint64
+	epoch          uint64
 	startEpochSlot uint64
-	lastEpochSlot uint64
+	lastEpochSlot  uint64
 
 	slotDuration time.Duration
-	slotSec int64
+	slotSec      int64
 
 	done chan struct{}
-	c chan uint64
+	c    chan uint64
 
 	mu sync.Mutex
 
@@ -51,8 +52,8 @@ func (st *SlotTicker) C() <-chan uint64 {
 	return st.c
 }
 
-func (st *SlotTicker) Stop(){
-	go func(){
+func (st *SlotTicker) Stop() {
+	go func() {
 		st.done <- struct{}{}
 	}()
 }
@@ -72,7 +73,8 @@ func (st *SlotTicker) Start(genesisTime time.Time) error {
 	st.mu.Unlock()
 
 	var nextTickTime time.Time
-	timePassed := time.Since(genesisTime)
+	// calculate time since genesis time and wait for the right slot zone
+	timePassed := st.calculateTimeSince(genesisTime)
 	if timePassed < st.slotDuration {
 		nextTickTime = genesisTime
 	} else {
@@ -108,10 +110,11 @@ func (st *SlotTicker) Start(genesisTime time.Time) error {
 				st.mu.Lock()
 				st.slot++
 
-				if st.slot % slotsPerEpoch == 0 && st.slot > 0 {
+				if st.slot%slotsPerEpoch == 0 && st.slot > 0 {
 					st.epoch++
 					st.startEpochSlot = st.slot
 					st.lastEpochSlot = st.slot + slotsPerEpoch
+					go checkClockDrift()
 				}
 				st.mu.Unlock()
 
@@ -122,8 +125,32 @@ func (st *SlotTicker) Start(genesisTime time.Time) error {
 		}
 	}()
 
-
 	return nil
+}
+
+// calculateTimeSince waits for the unproblematic slot and returns time since genesisTime
+func (st *SlotTicker) calculateTimeSince(genesisTime time.Time) time.Duration {
+	// zones 1, 2 and 3 is where we want to calculate nextTickTime
+	// zones 0 and 4 are problematic
+	// Check if the zone is problematic; if so, wait for the unproblematic one
+	timePassed := time.Since(genesisTime)
+
+	passed := timePassed.Nanoseconds()
+	slotTimeNano := st.slotDuration.Nanoseconds()
+	interval := slotTimeNano / 5
+	zone := (passed / interval) % 5
+	switch zone {
+	case 0:
+		// Want to wait for one interval
+		<-time.After(time.Duration(interval*1) * time.Nanosecond)
+		timePassed = time.Since(genesisTime)
+	case 4:
+		// Want to wait for two intervals
+		<-time.After(time.Duration(interval*2) * time.Nanosecond)
+		timePassed = time.Since(genesisTime)
+	}
+
+	return timePassed
 }
 
 func (st *SlotTicker) Slot() uint64 {
