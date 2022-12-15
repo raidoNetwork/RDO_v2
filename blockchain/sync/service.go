@@ -23,9 +23,9 @@ var log = logrus.WithField("prefix", "syncBlocks")
 var _ shared.Service = (*Service)(nil)
 
 const (
-	txGossipCount = 200
-	blockGossipCount = 100
-	stateCount = 1
+	txGossipCount            = 200
+	blockGossipCount         = 100
+	stateCount               = 1
 	notificationsGossipCount = txGossipCount + blockGossipCount
 
 	ttfbTimeout = 5 * time.Second
@@ -34,34 +34,34 @@ const (
 )
 
 type ValidatorCfg struct {
-	ProposeFeed events.Feed
+	ProposeFeed     events.Feed
 	AttestationFeed events.Feed
-	Enabled bool
+	Enabled         bool
 }
 
-type Config struct{
-	BlockFeed events.Feed
-	TxFeed	  events.Feed
-	StateFeed events.Feed
-	Blockchain BlockchainInfo
-	Storage    BlockStorage
+type Config struct {
+	BlockFeed    events.Feed
+	TxFeed       events.Feed
+	StateFeed    events.Feed
+	Blockchain   BlockchainInfo
+	Storage      BlockStorage
 	P2P          P2P
 	DisableSync  bool
 	MinSyncPeers int
-	Validator ValidatorCfg
+	Validator    ValidatorCfg
 }
 
 func NewService(ctx context.Context, cfg *Config) *Service {
 	ctx, cancel := context.WithCancel(ctx)
 	srv := &Service{
-		cfg: cfg,
-		txEvent: make(chan *types.Transaction, txGossipCount),
-		blockEvent: make(chan *prototype.Block, blockGossipCount),
-		stateEvent: make(chan state.State, stateCount),
+		cfg:          cfg,
+		txEvent:      make(chan *types.Transaction, txGossipCount),
+		blockEvent:   make(chan *prototype.Block, blockGossipCount),
+		stateEvent:   make(chan state.State, stateCount),
 		notification: make(chan p2p.Notty, notificationsGossipCount),
-		ctx: ctx,
-		cancel: cancel,
-		initialized: make(chan struct{}),
+		ctx:          ctx,
+		cancel:       cancel,
+		initialized:  make(chan struct{}),
 	}
 
 	// subscribe on new events
@@ -70,21 +70,21 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 	return srv
 }
 
-type Service struct{
+type Service struct {
 	cfg *Config
 
-	txEvent chan *types.Transaction
-	blockEvent chan *prototype.Block
-	stateEvent chan state.State
+	txEvent      chan *types.Transaction
+	blockEvent   chan *prototype.Block
+	stateEvent   chan state.State
 	notification chan p2p.Notty
 
-	ctx 	context.Context
-	cancel  context.CancelFunc
+	ctx    context.Context
+	cancel context.CancelFunc
 
-	initialized	chan struct{}
+	initialized chan struct{}
 }
 
-func (s *Service) Start(){
+func (s *Service) Start() {
 	go s.stateListener()
 
 	<-s.initialized
@@ -111,6 +111,8 @@ func (s *Service) Start(){
 			}
 		}
 	})
+
+	s.pushStateEvent(state.ConnectionHandlersReady)
 
 	// wait for local database syncing
 	<-s.initialized
@@ -140,9 +142,9 @@ func (s *Service) Start(){
 	}
 }
 
-func (s *Service) gossipEvents(){
-	for{
-		select{
+func (s *Service) gossipEvents() {
+	for {
+		select {
 		case block := <-s.blockEvent:
 			raw, err := serialize.MarshalBlock(block)
 			if err != nil {
@@ -177,6 +179,8 @@ func (s *Service) Stop() error {
 	// cancel context
 	s.cancel()
 
+	// todo update logic
+
 	return nil
 }
 
@@ -184,12 +188,12 @@ func (s *Service) Status() error {
 	return nil
 }
 
-func (s *Service) stateListener(){
+func (s *Service) stateListener() {
 	sub := s.cfg.StateFeed.Subscribe(s.stateEvent)
 	defer sub.Unsubscribe()
 
 	for {
-		select{
+		select {
 		case <-s.ctx.Done():
 			return
 		case st := <-s.stateEvent:
@@ -200,8 +204,10 @@ func (s *Service) stateListener(){
 			case state.LocalSynced:
 				close(s.initialized)
 				return
+			case state.ConnectionHandlersReady:
+				// do nothing
 			default:
-				log.Infof("Unknown state event %d", st)
+				log.Errorf("Unknown state event %d", st)
 				return
 			}
 		}
@@ -209,8 +215,8 @@ func (s *Service) stateListener(){
 }
 
 func (s *Service) listenIncoming() {
-	for{
-		select{
+	for {
+		select {
 		case <-s.ctx.Done():
 			return
 		case notty := <-s.notification:
@@ -249,14 +255,14 @@ func (s *Service) pushStateEvent(st state.State) {
 }
 
 // subscribeEvents on updates
-func (s *Service) subscribeEvents(){
+func (s *Service) subscribeEvents() {
 	s.cfg.P2P.Notifier().Subscribe(s.notification)
 	s.cfg.TxFeed.Subscribe(s.txEvent)
 	s.cfg.BlockFeed.Subscribe(s.blockEvent)
 }
 
 func (s *Service) addStreamHandler(topic string, handle streamHandler) {
-	s.cfg.P2P.SetStreamHandler(topic, func (stream network.Stream) {
+	s.cfg.P2P.SetStreamHandler(topic, func(stream network.Stream) {
 		defer func() {
 			if r := recover(); r != nil {
 				log.WithField("error", r).Error("Panic occurred")
