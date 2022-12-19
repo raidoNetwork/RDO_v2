@@ -1,11 +1,11 @@
 package slot
 
 import (
+	"fmt"
 	"net"
 	"sort"
 	"time"
 
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/raidoNetwork/RDO_v2/shared/params"
@@ -25,14 +25,13 @@ func checkClockDrift() {
 	config := params.MainnetConfig()
 	drift, err := sntpDrift(config.NTPChecks)
 	if err != nil {
-		log.Warnf("Error occured when measuring drift: %s", err)
-		return
+		log.Warn("Error occured when measuring drift: %s", err)
 	}
 
 	driftThreshold := time.Millisecond * time.Duration(config.NTPThreshold)
 
 	if drift < -driftThreshold || drift > driftThreshold {
-		log.Warnf("System clock seems off by %v, which can prevent network connectivity", drift)
+		log.Warn(fmt.Sprintf("System clock seems off by %v, which can prevent network connectivity", drift))
 		log.Warn("Please synchronize with the network's time.")
 	} else {
 		log.Debugf("NTP sanity check done, drift: %v", drift)
@@ -50,7 +49,7 @@ func sntpDrift(measurements int) (time.Duration, error) {
 	// Resolve the address of the NTP server
 	addr, err := net.ResolveUDPAddr("udp", config.NTPPool+":123")
 	if err != nil {
-		return 0, errors.Wrap(err, "Error when resolving NTP server address")
+		return 0, err
 	}
 	// Construct the time request (empty package with only 2 fields set):
 	//   Bits 3-5: Protocol version, 3
@@ -64,20 +63,20 @@ func sntpDrift(measurements int) (time.Duration, error) {
 		// Dial the NTP server and send the time retrieval request
 		conn, err := net.DialUDP("udp", nil, addr)
 		if err != nil {
-			return 0, errors.Wrap(err, "Error when dialing and requesting time retrieval")
+			return 0, err
 		}
 		defer conn.Close()
 
 		sent := time.Now()
 		if _, err = conn.Write(request); err != nil {
-			return 0, errors.Wrap(err, "Error when writing")
+			return 0, err
 		}
 		// Retrieve the reply and calculate the elapsed time
-		conn.SetDeadline(time.Now().Add(7 * time.Second))
+		conn.SetDeadline(time.Now().Add(5 * time.Second))
 
 		reply := make([]byte, 48)
 		if _, err = conn.Read(reply); err != nil {
-			return 0, errors.Wrap(err, "Error when reading")
+			return 0, err
 		}
 		elapsed := time.Since(sent)
 
