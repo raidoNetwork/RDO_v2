@@ -47,7 +47,7 @@ func (s *Service) syncWithNetwork() error {
 
 func (s *Service) filterPeers(peers []peer.ID) {
 	store := s.cfg.P2P.PeerStore()
-	sort.Slice(peers, func (i, j int) bool {
+	sort.Slice(peers, func(i, j int) bool {
 		return store.BlockRequestCounter(peers[i]) < store.BlockRequestCounter(peers[j]) && !store.IsBad(peers[i])
 	})
 }
@@ -126,12 +126,12 @@ func (s *Service) findPeersForSyncWithMaxBlock() ([]peer.ID, uint64) {
 
 func (s *Service) syncToBestKnownBlock() error {
 	startBlockNum := s.cfg.Blockchain.GetHeadBlockNum()
-	scorer :=  s.cfg.P2P.PeerStore().Scorers().PeerHeadBlock
+	scorer := s.cfg.P2P.PeerStore().Scorers().PeerHeadBlock
 	remoteHeadBlockNum := scorer.Get()
 
-	for !scorer.Initialized() {
-		log.Debug("Wait for PeerHeadBlock scorer initialization")
-		time.Sleep(500 * time.Millisecond)
+	for i := 0; i < 5 && !scorer.Initialized(); i++ {
+		log.Debug("Wait for fair meta update")
+		time.Sleep(5000 * time.Millisecond)
 	}
 
 	if startBlockNum >= remoteHeadBlockNum {
@@ -139,7 +139,7 @@ func (s *Service) syncToBestKnownBlock() error {
 		return nil
 	}
 
-	// wait for peers to syncing
+	// wait for peers to synced
 	s.waitMinimumPeersForSync(false)
 
 	peers, targetBlockNum := s.findPeersForSync(startBlockNum)
@@ -153,7 +153,7 @@ func (s *Service) syncToBestKnownBlock() error {
 }
 
 func (s *Service) syncToMaxBlock() error {
-	// wait for peers to syncing
+	// wait for peers to synced
 	s.waitMinimumPeersForSync(true)
 
 	startBlockNum := s.cfg.Blockchain.GetHeadBlockNum()
