@@ -16,6 +16,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	"github.com/sirupsen/logrus"
 	"runtime/debug"
+	"sync/atomic"
 	"time"
 )
 
@@ -62,6 +63,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ctx:          ctx,
 		cancel:       cancel,
 		initialized:  make(chan struct{}),
+		synced:       0,
 	}
 
 	// subscribe on new events
@@ -82,6 +84,11 @@ type Service struct {
 	cancel context.CancelFunc
 
 	initialized chan struct{}
+
+	synced int32
+
+	forkBlockEvent chan *prototype.Block
+	bq *blockQueue
 }
 
 func (s *Service) Start() {
@@ -89,15 +96,15 @@ func (s *Service) Start() {
 
 	<-s.initialized
 
-	// set stream handler for block receiving
-	s.addStreamHandler(p2p.MetaProtocol, s.metaHandler)
-	s.addStreamHandler(p2p.BlockRangeProtocol, s.blockRangeHandler)
-
 	s.cfg.P2P.AddConnectionHandlers(func(ctx context.Context, id peer.ID) error {
 		return s.metaRequest(ctx, id)
 	}, func(_ context.Context, _ peer.ID) error {
 		return nil
 	})
+
+	// set stream handler for block receiving
+	s.addStreamHandler(p2p.MetaProtocol, s.metaHandler)
+	s.addStreamHandler(p2p.BlockRangeProtocol, s.blockRangeHandler)
 
 	async.WithInterval(s.ctx, p2p.PeerMetaUpdateInterval, func() {
 		peers := s.cfg.P2P.PeerStore().Connected()
@@ -114,10 +121,16 @@ func (s *Service) Start() {
 
 	s.pushStateEvent(state.ConnectionHandlersReady)
 
-	// wait for local database syncing
+	// wait for local database synced
 	<-s.initialized
 
-	log.Info("Start blockchain syncing...")
+	// start block queue watcher
+	go s.forkWatcher()
+
+	// listen incoming data
+	go s.listenIncoming()
+
+	log.Info("Start blockchain synced...")
 
 	// sync state with network
 	if !s.cfg.DisableSync && !slot.Ticker().GenesisAfter() {
@@ -126,15 +139,13 @@ func (s *Service) Start() {
 			panic(err)
 		}
 	}
+	atomic.AddInt32(&s.synced, 1)
 
 	log.Warnf("Node synced with network")
 	s.pushSyncedState()
 
 	// gossip new blocks and transactions
 	go s.gossipEvents()
-
-	// listen incoming data
-	go s.listenIncoming()
 
 	if s.cfg.Validator.Enabled {
 		go s.listenValidatorTopics()
@@ -200,7 +211,6 @@ func (s *Service) stateListener() {
 			switch st {
 			case state.Initialized:
 				s.initialized <- struct{}{}
-				time.Sleep(500 * time.Millisecond)
 			case state.LocalSynced:
 				close(s.initialized)
 				return
@@ -228,9 +238,24 @@ func (s *Service) listenIncoming() {
 					break
 				}
 
-				s.cfg.BlockFeed.Send(block)
+				if atomic.LoadInt32(&s.synced) == 0 {
+					s.forkBlockEvent <- block
+				} else {
+					bQueue := s.freeQueue()
+					for b := range bQueue {
+						s.cfg.BlockFeed.Send(b)
+					}
+
+					s.cfg.BlockFeed.Send(block)
+				}
+
 				receivedMessages.WithLabelValues(p2p.BlockTopic).Inc()
 			case p2p.TxTopic:
+				// skip tx processing while synscing
+				if atomic.LoadInt32(&s.synced) == 0 {
+					continue
+				}
+
 				tx, err := serialize.UnmarshalTx(notty.Data)
 				if err != nil {
 					log.Errorf("Error unmarshaling transaction: %s", err)
