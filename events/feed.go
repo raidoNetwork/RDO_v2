@@ -8,31 +8,31 @@ import (
 
 var log = logrus.WithField("prefix", "events")
 
-type Feed interface{
+type Feed interface {
 	Send(interface{}) int
 	Subscribe(interface{}) Subscription
 }
 
-type Subscription interface{
+type Subscription interface {
 	Unsubscribe()
 }
 
-type eventSubscription struct{
+type eventSubscription struct {
 	bus *Bus
-	ch reflect.Value
+	ch  reflect.Value
 }
 
 func (es *eventSubscription) Unsubscribe() {
 	es.bus.unsubscribe(es.ch)
 }
 
-type Bus struct{
-	once sync.Once
+type Bus struct {
+	once  sync.Once
 	cases cases
-	lock sync.Mutex
+	lock  sync.Mutex
 }
 
-func (b *Bus) init(){
+func (b *Bus) init() {
 	b.cases = make(cases, 0)
 }
 
@@ -55,7 +55,7 @@ func (b *Bus) Subscribe(ch interface{}) Subscription {
 	return esub
 }
 
-func (b *Bus) unsubscribe(ch reflect.Value){
+func (b *Bus) unsubscribe(ch reflect.Value) {
 	b.once.Do(b.init)
 
 	b.lock.Lock()
@@ -71,6 +71,7 @@ func (b *Bus) unsubscribe(ch reflect.Value){
 func (b *Bus) Send(data interface{}) int {
 	b.once.Do(b.init)
 
+	b.lock.Lock()
 	sendCases := b.cases
 
 	dval := reflect.ValueOf(data)
@@ -80,10 +81,11 @@ func (b *Bus) Send(data interface{}) int {
 	for i := 0; i < len(sendCases); i++ {
 		sendCases[i].Send = dval
 	}
+	b.lock.Unlock()
 
 	for {
 		// try to send data
-		for i := 0;i < len(sendCases);i++ {
+		for i := 0; i < len(sendCases); i++ {
 			if sendCases[i].Chan.TrySend(dval) {
 				sendCases = sendCases.delete(i)
 				sent++
@@ -91,7 +93,7 @@ func (b *Bus) Send(data interface{}) int {
 			}
 		}
 
-		if 0 == len(sendCases){
+		if 0 == len(sendCases) {
 			break
 		}
 
@@ -105,7 +107,9 @@ func (b *Bus) Send(data interface{}) int {
 
 	// reset value of all send cases
 	for i := range b.cases {
+		b.lock.Lock()
 		b.cases[i].Send = reflect.Value{}
+		b.lock.Unlock()
 	}
 
 	return sent

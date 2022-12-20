@@ -40,7 +40,7 @@ type OutputManager struct {
 	minBlockNum uint64
 	maxBlockNum uint64
 
-	mu sync.Mutex
+	mu           sync.Mutex
 	finalizeLock async.Mutex
 
 	syncing bool
@@ -201,11 +201,18 @@ func (om *OutputManager) syncBlock(block *prototype.Block, blockTx int) error {
 	var from []byte
 	var hash common.Hash
 
+	if block.Num == GenesisBlockNum {
+		log.Debugf("Clear outputs for block %d", block.Num)
+		err := om.db.DeleteOutputs(blockTx, block.Num)
+		if err != nil {
+			return err
+		}
+	}
+
 	for _, tx := range block.Transactions {
 		if types.ExecutionStatus(tx.Status) == types.TxFailed {
 			continue
 		}
-
 
 		for _, in := range tx.Inputs {
 			hash = common.BytesToHash(in.Hash)
@@ -492,4 +499,3 @@ func (om *OutputManager) WaitFinalizeLock() {
 func (om *OutputManager) FinalizeUnlock() {
 	om.finalizeLock.Unlock()
 }
-
