@@ -2,6 +2,9 @@ package attestation
 
 import (
 	"bytes"
+	"strconv"
+	"time"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/rdochain"
@@ -12,8 +15,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/utils/hash"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	vtypes "github.com/raidoNetwork/RDO_v2/validator/types"
-	"strconv"
-	"time"
 )
 
 var (
@@ -228,7 +229,7 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal con
 			}
 
 			if err != nil {
-				return nil, errors.Wrap(err, "Error validation " + txType)
+				return nil, errors.Wrap(err, "Error validation "+txType)
 			}
 
 			continue
@@ -252,13 +253,14 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal con
 			log.Error(err)
 			failedTx = append(failedTx, tx)
 			tx.SetStatus(types.TxFailed)
+			continue
 		}
 
 		tx.SetStatus(types.TxSuccess)
 	}
 
 	if math.IsGEPercentLimit(len(failedTx), standardTxCount, failedTxLimitPercent) {
-		return failedTx, errors.New("too much failed tx")
+		return failedTx, errors.New("too many failed tx")
 	}
 
 	return nil, nil
