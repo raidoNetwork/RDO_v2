@@ -115,7 +115,7 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 				}
 
 				if out.Node().Hex() == common.BlackHoleAddress {
-					if m.cfg.Engine.IsLeader(tx.From()) {
+					if m.cfg.Engine.IsValidator(tx.From()) {
 						amount += out.Amount()
 					} else {
 						err = errors.New("Unauthorized slot reservation")
