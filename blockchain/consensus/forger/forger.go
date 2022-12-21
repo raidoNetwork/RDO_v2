@@ -119,7 +119,14 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 						amount += out.Amount()
 					} else {
 						err = errors.New("Unauthorized slot reservation")
+						break
 					}
+				}
+
+				// a validator cannot stake on any validator (including itself)
+				if m.cfg.Engine.IsValidator(out.Node()) && m.cfg.Engine.IsValidator(tx.From()) {
+					err = errors.New("A validator can only stake on the BlackHoleAddress")
+					break
 				}
 			}
 
