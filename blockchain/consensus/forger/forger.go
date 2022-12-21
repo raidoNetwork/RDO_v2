@@ -1,15 +1,17 @@
 package forger
 
 import (
+	"time"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
+	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/backend/poa"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/keystore"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/sirupsen/logrus"
-	"time"
 )
 
 var log = logrus.WithField("prefix", "Forger")
@@ -23,7 +25,8 @@ const txBatchLimit = 1000
 type Config struct {
 	EnableMetrics bool
 	BlockSize     int
-	Proposer 	 *keystore.ValidatorAccount
+	Proposer      *keystore.ValidatorAccount
+	Engine        *poa.Backend
 }
 
 func New(bc consensus.BlockFinalizer, att consensus.AttestationPool, cfg *Config) *Forger {
@@ -38,8 +41,8 @@ func New(bc consensus.BlockFinalizer, att consensus.AttestationPool, cfg *Config
 }
 
 type Forger struct {
-	bf  consensus.BlockFinalizer
-	att consensus.AttestationPool
+	bf       consensus.BlockFinalizer
+	att      consensus.AttestationPool
 	cfg      *Config
 	skipAddr map[string]struct{}
 }
@@ -82,7 +85,7 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 	var size int
 	txType := "StandardTx"
 	for _, tx := range txQueue {
-		if len(txBatch) + len(collapseBatch) == txCountPerBlock {
+		if len(txBatch)+len(collapseBatch) == txCountPerBlock {
 			break
 		}
 
@@ -112,11 +115,15 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 				}
 
 				if out.Node().Hex() == common.BlackHoleAddress {
-					amount += out.Amount()
+					if m.cfg.Engine.IsLeader(tx.From()) {
+						amount += out.Amount()
+					} else {
+						err = errors.New("Unauthorized slot reservation")
+					}
 				}
 			}
 
-			if amount > 0 {
+			if amount > 0 && err == nil {
 				err = m.att.StakePool().ReserveSlots(amount)
 			}
 
@@ -287,11 +294,11 @@ func (m *Forger) createCollapseTx(tx *types.Transaction, blockNum uint64) (*type
 	const InputsPerTxLimit = 2000
 
 	opts := types.TxOptions{
-		Inputs: make([]*prototype.TxInput, 0, len(tx.Inputs())),
-		Outputs: make([]*prototype.TxOutput, 0, len(tx.Outputs()) - 1),
-		Fee: 0,
-		Num: blockNum,
-		Type: common.CollapseTxType,
+		Inputs:  make([]*prototype.TxInput, 0, len(tx.Inputs())),
+		Outputs: make([]*prototype.TxOutput, 0, len(tx.Outputs())-1),
+		Fee:     0,
+		Num:     blockNum,
+		Type:    common.CollapseTxType,
 	}
 
 	from := ""
@@ -331,7 +338,7 @@ func (m *Forger) createCollapseTx(tx *types.Transaction, blockNum uint64) (*type
 			balance += uo.Amount
 			userInputs = append(userInputs, input)
 
-			if len(opts.Inputs) + len(userInputs) == InputsPerTxLimit {
+			if len(opts.Inputs)+len(userInputs) == InputsPerTxLimit {
 				inputsLimitReached = true
 				break
 			}

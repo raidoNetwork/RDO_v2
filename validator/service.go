@@ -2,6 +2,10 @@ package validator
 
 import (
 	"context"
+	"path/filepath"
+	"sync"
+	"time"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/backend/poa"
@@ -20,9 +24,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/validator/types"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
-	"path/filepath"
-	"sync"
-	"time"
 )
 
 var log = logrus.WithField("prefix", "validator")
@@ -335,6 +336,7 @@ func New(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		EnableMetrics: cliCtx.Bool(flags.EnableMetrics.Name),
 		BlockSize:     netCfg.BlockSize,
 		Proposer:      proposer,
+		Engine:        engine,
 	}
 
 	// new block miner
