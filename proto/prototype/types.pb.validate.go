@@ -444,10 +444,10 @@ func (m *Transaction) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
-	if m.GetFee() <= 0 {
+	if m.GetFee() < 0 {
 		err := TransactionValidationError{
 			field:  "Fee",
-			reason: "value must be greater than 0",
+			reason: "value must be greater than or equal to 0",
 		}
 		if !all {
 			return err

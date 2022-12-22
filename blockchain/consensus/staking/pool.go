@@ -1,9 +1,7 @@
 package staking
 
 import (
-	"sync"
-	"unicode/utf8"
-
+	"fmt"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -11,9 +9,13 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/sirupsen/logrus"
+	"sync"
+	"unicode/utf8"
 )
 
 var log = logrus.WithField("prefix", "StakePool")
+
+var ErrNoStake = errors.New("no stake from address")
 
 type ValidatorStakeData struct {
 	SlotsFilled     int
@@ -265,36 +267,52 @@ func (p *StakingPool) processStakeTx(tx *types.Transaction) error {
 }
 
 func (p *StakingPool) processUnstakeTx(tx *types.Transaction) error {
-	// count tx stake amount
-	var amount uint64
+	utxo, err := p.blockchain.FindStakeDepositsOfAddress(tx.From().Hex(), "all")
+	if err != nil {
+		return errors.Wrap(err, "Error fetching tx sender stake deposits")
+	}
+
+	// get node map sender staked
+	nodeMap := map[string]string{}
+	for _, uo := range utxo {
+		key := fmt.Sprintf("%s_%d", uo.Hash.Hex(), uo.Index)
+		nodeMap[key] = uo.Node.Hex()
+	}
+
+	stakeNode := ""
+	var amount uint64 // count tx stake amount
 	for _, in := range tx.Inputs() {
+		key := fmt.Sprintf("%s_%d", in.Hash().Hex(), in.Index())
+		node, exists := nodeMap[key]
+		if !exists {
+			return errors.Errorf("Undefined stake output given %s", key)
+		}
+
+		if stakeNode == "" {
+			stakeNode = node
+		} else if stakeNode != node {
+			return errors.Errorf("Unstake from different nodes is not allowed. Given %s, %s", stakeNode, node)
+		}
+
 		amount += in.Amount()
 	}
 
 	// find amount to unstake
-	isValidatorUnstake := false
-	var validator string
+	isValidatorUnstake := stakeNode == common.BlackHoleAddress
 	for _, out := range tx.Outputs() {
 		if len(out.Node()) == common.AddressLength {
-			if out.Node().Hex() == common.BlackHoleAddress {
-				isValidatorUnstake = true
-			} else {
-				validator = out.Node().Hex()
-			}
-
 			amount -= out.Amount()
 		}
 	}
 
-	if !isValidatorUnstake && utf8.RuneCountInString(validator) != 42 {
+	if !isValidatorUnstake && utf8.RuneCountInString(stakeNode) != 42 {
 		return errors.New("Incorrect unstake tx")
 	}
 
-	var err error
 	if isValidatorUnstake {
 		err = p.cancelValidatorStake(tx.From().Hex(), amount)
 	} else {
-		err = p.cancelElectorStake(tx.From().Hex(), validator, amount)
+		err = p.cancelElectorStake(tx.From().Hex(), stakeNode, amount)
 	}
 
 	if err != nil {
@@ -341,8 +359,9 @@ func (p *StakingPool) GetRewardMap(proposer string) map[string]uint64 {
 		blockReward := params.RaidoConfig().ProposerReward
 		stakeData := p.validators[proposer]
 
+		validatorReward := blockReward
 		if len(stakeData.Electors) > 0 {
-			validatorReward := blockReward * params.RaidoConfig().ChosenValidatorRewardPercent / 100
+			validatorReward = blockReward * params.RaidoConfig().ChosenValidatorRewardPercent / 100
 			electorsReward := blockReward - validatorReward
 			electorsStake := stakeData.CumulativeStake - stakeData.SelfStake
 			for elector, stakeAmount := range stakeData.Electors {
@@ -353,8 +372,9 @@ func (p *StakingPool) GetRewardMap(proposer string) map[string]uint64 {
 
 				rewards[elector] += reward
 			}
-			rewards[proposer] += validatorReward
 		}
+
+		rewards[proposer] += validatorReward
 	}
 
 	// divide rewards among all validator slots

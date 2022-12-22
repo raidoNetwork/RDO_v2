@@ -2,6 +2,7 @@ package attestation
 
 import (
 	"bytes"
+	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"sort"
 	"sync"
 
@@ -17,7 +18,6 @@ import (
 
 const (
 	maxTxCount = 1000
-	minFee     = 1
 )
 
 var log = logrus.WithField("prefix", "attestation")
@@ -223,7 +223,7 @@ func (p *Pool) GetFeePrice() uint64 {
 	queue := p.GetQueue()
 	size := len(queue)
 	if size == 0 {
-		return minFee // todo change with config value
+		return params.RaidoConfig().MinimalFee
 	} else if size == 1 {
 		return queue[0].FeePrice()
 	} else {

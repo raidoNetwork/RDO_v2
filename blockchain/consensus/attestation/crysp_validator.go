@@ -2,6 +2,7 @@ package attestation
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -40,29 +41,24 @@ type CryspValidatorConfig struct {
 
 func NewCryspValidator(bc consensus.BlockchainReader, stakeValidator consensus.StakePool, cfg *CryspValidatorConfig) *CryspValidator {
 	v := CryspValidator{
-		bc: bc,
-		stakeValidator:  stakeValidator,
-		cfg:             cfg,
+		bc:             bc,
+		stakeValidator: stakeValidator,
+		cfg:            cfg,
 	}
 
 	return &v
 }
 
 type CryspValidator struct {
-	bc consensus.BlockchainReader
-	stakeValidator  consensus.StakePool
-	cfg             *CryspValidatorConfig
+	bc             consensus.BlockchainReader
+	stakeValidator consensus.StakePool
+	cfg            *CryspValidatorConfig
 }
 
 // ValidateTransaction validate transaction and return an error if something is wrong
 func (cv *CryspValidator) ValidateTransaction(tx *types.Transaction) error {
 	switch tx.Type() {
 	case common.UnstakeTxType:
-		_, err := cv.checkStakeType(tx)
-		if err != nil {
-			return err
-		}
-
 		return cv.validateUnstakeTx(tx)
 	case common.StakeTxType:
 		st, err := cv.checkStakeType(tx)
@@ -424,7 +420,7 @@ func (cv *CryspValidator) validateTxStructBase(tx *types.Transaction) error {
 		// check stake outputs in the stake transaction
 		if tx.Type() == common.StakeTxType {
 			node := out.Node().Hex()
-			if len(node) == 0 {
+			if len(out.Node()) == common.AddressLength {
 				if (node == common.BlackHoleAddress && out.Amount()%cv.cfg.StakeUnit != 0) || out.Amount() == 0 {
 					return errors.Wrap(consensus.ErrLowStakeAmount, "Stake error")
 				}
@@ -452,7 +448,7 @@ func (cv *CryspValidator) validateTxStructBase(tx *types.Transaction) error {
 
 	if inputsBalance != outputsBalance {
 		diff, underflow := math.Sub64(inputsBalance, outputsBalance)
-		if outputsBalance > inputsBalance{
+		if outputsBalance > inputsBalance {
 			diff, _ = math.Sub64(outputsBalance, inputsBalance)
 		}
 
@@ -547,6 +543,33 @@ func (cv *CryspValidator) checkHash(tx *types.Transaction) error {
 
 // validateUnstakeTx check unstake tx
 func (cv *CryspValidator) validateUnstakeTx(tx *types.Transaction) error {
+	utxo, err := cv.bc.FindStakeDepositsOfAddress(tx.From().Hex(), "all")
+	if err != nil {
+		return errors.Wrap(err, "Error fetching tx sender stake deposits")
+	}
+
+	// get node map sender staked
+	nodeMap := map[string]string{}
+	for _, uo := range utxo {
+		key := fmt.Sprintf("%s_%d", uo.Hash.Hex(), uo.Index)
+		nodeMap[key] = uo.Node.Hex()
+	}
+
+	stakeNode := ""
+	for _, in := range tx.Inputs() {
+		key := fmt.Sprintf("%s_%d", in.Hash().Hex(), in.Index())
+		node, exists := nodeMap[key]
+		if !exists {
+			return errors.Errorf("Undefined stake output given %s", key)
+		}
+
+		if stakeNode == "" {
+			stakeNode = node
+		} else if stakeNode != node {
+			return errors.Errorf("Unstake from different nodes is not allowed. Given %s, %s", stakeNode, node)
+		}
+	}
+
 	// validate unstake outputs are valid
 	for _, out := range tx.Outputs() {
 		if out.Node().Hex() == common.BlackHoleAddress && (out.Amount()%cv.cfg.StakeUnit) != 0 {
