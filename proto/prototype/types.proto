@@ -32,7 +32,7 @@ message Transaction{
   uint32 type = 2 [(validate.rules).uint32 = {in: [1, 5, 6]}];
   uint64 timestamp = 3 [(validate.rules).uint64.gt = 0];
   bytes hash = 4 [(rdo.ext.opts.ssz_size) = "32", (validate.rules).bytes.len = 32];
-  uint64 fee = 5 [(validate.rules).uint64.gt = 0];
+  uint64 fee = 5 [(validate.rules).uint64.gte = 0];
   bytes data = 6 [(rdo.ext.opts.ssz_max) = "10000", (validate.rules).bytes.max_len = 10000]; // external byte data
   repeated TxInput inputs = 7 [(rdo.ext.opts.ssz_max) = "2000"];
   repeated TxOutput outputs = 8 [(rdo.ext.opts.ssz_max) = "2000"];
