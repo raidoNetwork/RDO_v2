@@ -685,6 +685,21 @@ func (m *TxInput) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
+	if len(m.GetNode()) > 0 {
+
+		if len(m.GetNode()) != 20 {
+			err := TxInputValidationError{
+				field:  "Node",
+				reason: "value length must be 20 bytes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
+	}
+
 	if len(errors) > 0 {
 		return TxInputMultiError(errors)
 	}

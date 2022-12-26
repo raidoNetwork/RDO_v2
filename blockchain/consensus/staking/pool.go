@@ -1,7 +1,6 @@
 package staking
 
 import (
-	"fmt"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -266,28 +265,11 @@ func (p *StakingPool) processStakeTx(tx *types.Transaction) error {
 	return nil
 }
 
-func (p *StakingPool) processUnstakeTx(tx *types.Transaction) error {
-	utxo, err := p.blockchain.FindStakeDepositsOfAddress(tx.From().Hex(), "all")
-	if err != nil {
-		return errors.Wrap(err, "Error fetching tx sender stake deposits")
-	}
-
-	// get node map sender staked
-	nodeMap := map[string]string{}
-	for _, uo := range utxo {
-		key := fmt.Sprintf("%s_%d", uo.Hash.Hex(), uo.Index)
-		nodeMap[key] = uo.Node.Hex()
-	}
-
+func (p *StakingPool) processUnstakeTx(tx *types.Transaction) (err error) {
 	stakeNode := ""
 	var amount uint64 // count tx stake amount
 	for _, in := range tx.Inputs() {
-		key := fmt.Sprintf("%s_%d", in.Hash().Hex(), in.Index())
-		node, exists := nodeMap[key]
-		if !exists {
-			return errors.Errorf("Undefined stake output given %s", key)
-		}
-
+		node := in.Node().Hex()
 		if stakeNode == "" {
 			stakeNode = node
 		} else if stakeNode != node {
