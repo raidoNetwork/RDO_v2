@@ -1,6 +1,9 @@
 package staking
 
 import (
+	"sync"
+	"unicode/utf8"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -8,8 +11,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/sirupsen/logrus"
-	"sync"
-	"unicode/utf8"
 )
 
 var log = logrus.WithField("prefix", "StakePool")
@@ -341,9 +342,8 @@ func (p *StakingPool) GetRewardMap(proposer string) map[string]uint64 {
 		blockReward := params.RaidoConfig().ProposerReward
 		stakeData := p.validators[proposer]
 
-		validatorReward := blockReward
 		if len(stakeData.Electors) > 0 {
-			validatorReward = blockReward * params.RaidoConfig().ChosenValidatorRewardPercent / 100
+			validatorReward := blockReward * params.RaidoConfig().ChosenValidatorRewardPercent / 100
 			electorsReward := blockReward - validatorReward
 			electorsStake := stakeData.CumulativeStake - stakeData.SelfStake
 			for elector, stakeAmount := range stakeData.Electors {
@@ -354,9 +354,8 @@ func (p *StakingPool) GetRewardMap(proposer string) map[string]uint64 {
 
 				rewards[elector] += reward
 			}
+			rewards[proposer] += validatorReward
 		}
-
-		rewards[proposer] += validatorReward
 	}
 
 	// divide rewards among all validator slots
