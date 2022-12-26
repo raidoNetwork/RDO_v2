@@ -45,6 +45,7 @@ message TxInput {
   uint32 index = 2;
   bytes address = 3 [(rdo.ext.opts.ssz_size) = "20", (validate.rules).bytes.len = 20];
   uint64 amount = 4 [(validate.rules).uint64.gt = 0];
+  bytes node = 5 [(rdo.ext.opts.ssz_max) = "20", (validate.rules).bytes.len = 20, (validate.rules).bytes.ignore_empty=true];
 }
 
 message TxOutput{

@@ -36,22 +36,22 @@ import (
 
 var log = logrus.WithField("prefix", "node")
 
-const maxMsgSize =  1 << 22
+const maxMsgSize = 1 << 22
 
 type RDONode struct {
-	cliCtx   *cli.Context
-	ctx      context.Context
-	cancel   context.CancelFunc
-	services *shared.ServiceRegistry
-	lock     sync.RWMutex
-	stop     chan struct{} // Channel to wait for termination notifications.
-	kvStore  db.Database
-	outDB    db.OutputDatabase
+	cliCtx    *cli.Context
+	ctx       context.Context
+	cancel    context.CancelFunc
+	services  *shared.ServiceRegistry
+	lock      sync.RWMutex
+	stop      chan struct{} // Channel to wait for termination notifications.
+	kvStore   db.Database
+	outDB     db.OutputDatabase
 	stateFeed events.Bus
 	blockFeed events.Bus
-	txFeed	  events.Bus
+	txFeed    events.Bus
 	// validator events
-	proposeFeed events.Bus
+	proposeFeed     events.Bus
 	attestationFeed events.Bus
 }
 
@@ -133,7 +133,6 @@ func New(cliCtx *cli.Context) (*RDONode, error) {
 		}
 	}
 
-
 	return rdo, nil
 }
 
@@ -173,8 +172,8 @@ func (r *RDONode) InitValidatorService() error {
 		AttestationPool: attestationService,
 		ProposeFeed:     &r.proposeFeed,
 		AttestationFeed: &r.attestationFeed,
-		BlockFeed: 		 &r.blockFeed,
-		StateFeed:  	 &r.stateFeed,
+		BlockFeed:       &r.blockFeed,
+		StateFeed:       &r.stateFeed,
 		Context:         r.ctx,
 	}
 
@@ -265,7 +264,8 @@ func (r *RDONode) registerGatewayService() error {
 }
 
 func (r *RDONode) registerBlockchainService() error {
-	srv, err := rdochain.NewService(r.kvStore, r.outDB, r.StateFeed())
+	needRepairDB := r.cliCtx.Bool(cmd.RepairDB.Name)
+	srv, err := rdochain.NewService(r.kvStore, r.outDB, r.StateFeed(), needRepairDB)
 	if err != nil {
 		return err
 	}
@@ -297,12 +297,12 @@ func (r *RDONode) registerAttestationService() error {
 
 func (r *RDONode) registerP2P() error {
 	cfg := p2p.Config{
-		Host: r.cliCtx.String(flags.P2PHost.Name),
-		Port: r.cliCtx.Int(flags.P2PPort.Name),
+		Host:           r.cliCtx.String(flags.P2PHost.Name),
+		Port:           r.cliCtx.Int(flags.P2PPort.Name),
 		BootstrapNodes: r.cliCtx.StringSlice(flags.P2PBootstrapNodes.Name),
-		DataDir: r.cliCtx.String(cmd.DataDirFlag.Name),
-		StateFeed: r.StateFeed(),
-		EnableNAT: r.cliCtx.Bool(flags.P2PEnableNat.Name),
+		DataDir:        r.cliCtx.String(cmd.DataDirFlag.Name),
+		StateFeed:      r.StateFeed(),
+		EnableNAT:      r.cliCtx.Bool(flags.P2PEnableNat.Name),
 	}
 	srv, err := p2p.NewService(r.ctx, &cfg)
 	if err != nil {
@@ -332,16 +332,16 @@ func (r *RDONode) registerSyncService() error {
 	}
 
 	cfg := rsync.Config{
-		BlockFeed: r.BlockFeed(),
-		TxFeed: r.TxFeed(),
-		StateFeed: r.StateFeed(),
-		P2P: p2pSrv,
-		Storage: coreService,
-		Blockchain: blockchainService,
-		DisableSync: r.cliCtx.Bool(flags.DisableSync.Name),
+		BlockFeed:    r.BlockFeed(),
+		TxFeed:       r.TxFeed(),
+		StateFeed:    r.StateFeed(),
+		P2P:          p2pSrv,
+		Storage:      coreService,
+		Blockchain:   blockchainService,
+		DisableSync:  r.cliCtx.Bool(flags.DisableSync.Name),
 		MinSyncPeers: r.cliCtx.Int(flags.MinSyncPeers.Name),
 		Validator: rsync.ValidatorCfg{
-			ProposeFeed: &r.proposeFeed,
+			ProposeFeed:     &r.proposeFeed,
 			AttestationFeed: &r.attestationFeed,
 		},
 	}
@@ -433,8 +433,8 @@ func (r *RDONode) startDB(cliCtx *cli.Context) error {
 
 	// Prepare SQL database config
 	SQLCfg := db.SQLConfig{
-		ConfigPath:   cliCtx.String(cmd.SQLConfigPath.Name),
-		DataDir:      dbPath,
+		ConfigPath: cliCtx.String(cmd.SQLConfigPath.Name),
+		DataDir:    dbPath,
 	}
 
 	// Init SQL database

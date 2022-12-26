@@ -4,7 +4,10 @@ import (
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
+	"github.com/sirupsen/logrus"
 )
+
+var log = logrus.WithField("prefix", "cast")
 
 func ProtoUTxO(uo *types.UTxO) *prototype.UTxO {
 	uopb := new(prototype.UTxO)
@@ -102,6 +105,7 @@ func TxInputValue(in *prototype.TxInput) *prototype.TxInputValue {
 	inv.Index = in.Index
 	inv.Address = AddressString(in.Address)
 	inv.Amount = in.Amount
+	inv.Node = AddressString(in.Node)
 
 	return inv
 }
@@ -133,6 +137,7 @@ func TxInput(inv *prototype.TxInputValue) *prototype.TxInput {
 	in.Amount = inv.Amount
 	in.Hash = common.HexToHash(inv.Hash).Bytes()
 	in.Address = common.HexToAddress(inv.Address).Bytes()
+	in.Node = common.HexToAddress(inv.Node).Bytes()
 
 	return in
 }

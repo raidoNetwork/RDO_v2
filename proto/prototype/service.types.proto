@@ -34,6 +34,7 @@ message TxInputValue{
   uint32 index = 2;
   string address = 3 [(validate.rules).string.len = 42];
   uint64 amount = 4;
+  string node = 5 [(validate.rules).string.max_len = 42];
 }
 
 message TxOutputValue{

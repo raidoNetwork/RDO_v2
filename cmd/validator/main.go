@@ -38,6 +38,7 @@ var appFlags = []cli.Flag{
 	// db flags
 	cmd.ClearDB,
 	cmd.ForceClearDB,
+	cmd.RepairDB,
 
 	// SQL config
 	cmd.SQLConfigPath,

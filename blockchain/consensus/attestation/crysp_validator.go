@@ -2,7 +2,6 @@ package attestation
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -520,6 +519,10 @@ func (cv *CryspValidator) checkInputsData(tx *types.Transaction, spentOutputsMap
 			return nil, errors.Errorf("Amount mismatch with key: %s. Given %d. Expected %d. Tx %s", key, in.Amount(), dbInput.Amount(), txHash)
 		}
 
+		if !bytes.Equal(dbInput.Node(), in.Node()) {
+			return nil, errors.Errorf("Node mismatch with key %s. Given %s. Expected %s. Tx %s", key, in.Node().Hex(), dbInput.Node().Hex(), txHash)
+		}
+
 		// mark output as already spent
 		alreadySpent[key] = struct{}{}
 	}
@@ -543,26 +546,9 @@ func (cv *CryspValidator) checkHash(tx *types.Transaction) error {
 
 // validateUnstakeTx check unstake tx
 func (cv *CryspValidator) validateUnstakeTx(tx *types.Transaction) error {
-	utxo, err := cv.bc.FindStakeDepositsOfAddress(tx.From().Hex(), "all")
-	if err != nil {
-		return errors.Wrap(err, "Error fetching tx sender stake deposits")
-	}
-
-	// get node map sender staked
-	nodeMap := map[string]string{}
-	for _, uo := range utxo {
-		key := fmt.Sprintf("%s_%d", uo.Hash.Hex(), uo.Index)
-		nodeMap[key] = uo.Node.Hex()
-	}
-
 	stakeNode := ""
 	for _, in := range tx.Inputs() {
-		key := fmt.Sprintf("%s_%d", in.Hash().Hex(), in.Index())
-		node, exists := nodeMap[key]
-		if !exists {
-			return errors.Errorf("Undefined stake output given %s", key)
-		}
-
+		node := in.Node().Hex()
 		if stakeNode == "" {
 			stakeNode = node
 		} else if stakeNode != node {

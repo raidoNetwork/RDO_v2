@@ -34,12 +34,12 @@ func getTxSigner() TxSigner {
 }
 
 type TxOptions struct {
-	Inputs  []*prototype.TxInput
-	Outputs []*prototype.TxOutput
-	Fee     uint64
-	Data    []byte
-	Num     uint64
-	Type    uint32
+	Inputs    []*prototype.TxInput
+	Outputs   []*prototype.TxOutput
+	Fee       uint64
+	Data      []byte
+	Num       uint64
+	Type      uint32
 	Timestamp uint64
 }
 
@@ -143,8 +143,8 @@ func NewTransaction(pbtx *prototype.Transaction) *Transaction {
 
 type Transaction struct {
 	tx        *prototype.Transaction
-	hash 	  common.Hash
-	from	  common.Address
+	hash      common.Hash
+	from      common.Address
 	txType    uint32
 	size      int
 	feePrice  uint64
@@ -157,8 +157,8 @@ type Transaction struct {
 	lock      sync.Mutex
 
 	// tx state
-	dropped   bool
-	forged 	  bool
+	dropped bool
+	forged  bool
 }
 
 func (tx *Transaction) GetTx() *prototype.Transaction {
@@ -312,10 +312,11 @@ func (tx *Transaction) Status() ExecutionStatus {
 }
 
 type Input struct {
-	hash common.Hash
+	hash    common.Hash
 	address common.Address
-	index uint32
-	amount uint64
+	index   uint32
+	amount  uint64
+	node    common.Address
 }
 
 func (in *Input) Hash() common.Hash {
@@ -334,12 +335,17 @@ func (in *Input) Amount() uint64 {
 	return in.amount
 }
 
+func (in *Input) Node() common.Address {
+	return in.node
+}
+
 func newInput(inpb *prototype.TxInput) *Input {
 	return &Input{
-		hash: common.BytesToHash(inpb.Hash),
+		hash:    common.BytesToHash(inpb.Hash),
 		address: common.BytesToAddress(inpb.Address),
-		index: inpb.Index,
-		amount: inpb.Amount,
+		index:   inpb.Index,
+		amount:  inpb.Amount,
+		node:    common.BytesToAddress(inpb.Node),
 	}
 }
 
@@ -353,8 +359,8 @@ func inputSlice(inpbarr []*prototype.TxInput) []*Input {
 
 type Output struct {
 	address common.Address
-	node common.Address
-	amount uint64
+	node    common.Address
+	amount  uint64
 }
 
 func (out *Output) Address() common.Address {
@@ -372,8 +378,8 @@ func (out *Output) Amount() uint64 {
 func newOutput(outpb *prototype.TxOutput) *Output {
 	return &Output{
 		address: common.BytesToAddress(outpb.Address),
-		node: common.BytesToAddress(outpb.Node),
-		amount: outpb.Amount,
+		node:    common.BytesToAddress(outpb.Node),
+		amount:  outpb.Amount,
 	}
 }
 
