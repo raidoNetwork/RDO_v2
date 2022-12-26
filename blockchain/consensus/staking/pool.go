@@ -354,7 +354,7 @@ func (p *StakingPool) GetRewardMap(proposer string) map[string]uint64 {
 
 				rewards[elector] += reward
 			}
-			rewards[proposer] += validatorReward
+			// rewards[proposer] += validatorReward
 		}
 	}
 
