@@ -306,6 +306,34 @@ func (p *StakingPool) processUnstakeTx(tx *types.Transaction) (err error) {
 	return nil
 }
 
+func (p *StakingPool) processSystemUnstakeTx(tx *types.Transaction) error {
+	// Calculate the inputs amounts for each address
+	// record the corresponding node address
+	unstakeAmounts := make(map[string]uint64)
+	unstakeNodes := make(map[string]string)
+	for _, in := range tx.Inputs() {
+		address := in.Address().Hex()
+		if b, exists := unstakeAmounts[address]; exists {
+			unstakeAmounts[address] += b
+		} else {
+			unstakeAmounts[address] = b
+		}
+
+		unstakeNodes[address] = in.Node().Hex()
+	}
+
+	// For each address, cancel the stake
+	for address, amount := range unstakeAmounts {
+		node := unstakeNodes[address]
+		err := p.cancelElectorStake(address, node, amount)
+		if err != nil {
+			log.Errorf("Error processing SystemUnstakeTx: %s", err)
+			return err
+		}
+	}
+	return nil
+}
+
 func (p *StakingPool) FinalizeStaking(batch []*types.Transaction) error {
 	p.mu.Lock()
 	p.slotsReserved = 0
@@ -319,6 +347,8 @@ func (p *StakingPool) FinalizeStaking(batch []*types.Transaction) error {
 			err = p.processStakeTx(tx)
 		case common.UnstakeTxType:
 			err = p.processUnstakeTx(tx)
+		case common.SystemUnstakeTxType:
+			err = p.processSystemUnstakeTx(tx)
 		}
 
 		if err != nil {
@@ -425,4 +455,14 @@ func NewPool(blockchain consensus.BlockchainReader, slotsLimit int, reward uint6
 		stakeAmountPerSlot: stakeAmount,
 		rewardPerBlock:     reward,
 	}
+}
+
+func (s *StakingPool) GetElectorsOfValidator(validator string) (map[string]uint64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stakeData, exists := s.validators[validator]
+	if !exists {
+		return nil, errors.Errorf("Such validator does not exists")
+	}
+	return stakeData.Electors, nil
 }

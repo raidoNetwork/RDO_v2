@@ -34,7 +34,7 @@ type GenesisReader interface {
 	GetGenesis() *prototype.Block
 }
 
-type BlockchainReader interface{
+type BlockchainReader interface {
 	// FindAllUTxO find all address unspent outputs
 	FindAllUTxO(string) ([]*types.UTxO, error)
 
@@ -72,6 +72,9 @@ type BlockFinalizer interface {
 
 	// FindAllUTxO find all address unspent outputs
 	FindAllUTxO(string) ([]*types.UTxO, error)
+
+	// FindStakeDepositsOfAddress returns all stake deposits of an address on a specified node
+	FindStakeDepositsOfAddress(address string, node string) ([]*types.UTxO, error)
 
 	// ParentHash return parent block hash for current block
 	ParentHash() []byte
@@ -128,6 +131,9 @@ type StakePool interface {
 
 	GetRewardMap(string) map[string]uint64
 
+	// GetElectorsOfValidator returns electors' data of a validator
+	GetElectorsOfValidator(string) (map[string]uint64, error)
+
 	// Init load initial pool data
 	Init() error
 
@@ -147,7 +153,7 @@ type StakeDataReader interface {
 }
 
 // AttestationPool control block and transaction validation and staking
-type AttestationPool interface{
+type AttestationPool interface {
 	StakePool() StakePool
 
 	TxPool() TxPool

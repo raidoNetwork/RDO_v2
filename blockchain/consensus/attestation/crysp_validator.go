@@ -2,6 +2,8 @@ package attestation
 
 import (
 	"bytes"
+	"time"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -12,7 +14,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	utypes "github.com/raidoNetwork/RDO_v2/utils/types"
 	"github.com/sirupsen/logrus"
-	"time"
 )
 
 var (
@@ -383,7 +384,7 @@ func (cv *CryspValidator) validateTxStructBase(tx *types.Transaction) error {
 	}
 
 	// verify tx signature
-	if tx.Type() != common.CollapseTxType {
+	if tx.Type() != common.CollapseTxType && tx.Type() != common.SystemUnstakeTxType {
 		signer := types.MakeTxSigner("keccak256")
 		err := signer.Verify(tx.GetTx())
 		if err != nil {
@@ -564,6 +565,88 @@ func (cv *CryspValidator) validateUnstakeTx(tx *types.Transaction) error {
 	}
 
 	return cv.validateTxInputs(tx)
+}
+
+// checkSystemUnstakeTx verifies SystemUnstake transactions
+func (cv *CryspValidator) validateSystemUnstakeTx(tx *types.Transaction, block *prototype.Block) error {
+	// Num of SystemUnstake should be equal to the block num
+	if tx.Num() != block.Num {
+		return errors.New("Wrong system unstake tx num")
+	}
+	err := cv.validateTxStructBase(tx)
+	if err != nil {
+		return err
+	}
+
+	// Collect senders balances
+	senderBalances := make(map[string]uint64)
+	for _, in := range tx.Inputs() {
+		key := in.Address().Hex()
+		if b, exists := senderBalances[key]; exists {
+			result, overflow := math.Add64(senderBalances[key], b)
+			if overflow {
+				return errors.Errorf("Balance overflow for %s", in.Address().Hex())
+			}
+			senderBalances[key] = result
+		} else {
+			senderBalances[key] = in.Amount()
+		}
+	}
+
+	// We have one output per staker. We want to make sure
+	// that the sum of inputs for a particular staker is
+	// equal to the amount in the output
+	seenOuts := make(map[string]struct{})
+	for _, out := range tx.Outputs() {
+		// the node parameter should be nil
+		if out.Node().Bytes() != nil {
+			return errors.Errorf("Node should be nil in SystemUnstakeTx's outputs")
+		}
+
+		address := out.Address().Hex()
+		if _, exists := seenOuts[address]; exists {
+			return errors.Errorf("More than one output for a staker")
+		}
+		seenOuts[address] = struct{}{}
+		amountOut := out.Amount()
+		sumIn, exists := senderBalances[address]
+		if !exists {
+			// Recipient without sender
+			return errors.Errorf("Recipient without sender")
+		}
+		if amountOut != sumIn {
+			return errors.Errorf("Balance inconsistency in transaction: %s", tx.Hash().Hex())
+		}
+	}
+
+	// Finally, check that the utxos correspond to the inputs
+	// get all utxo
+	spentOutputsMap := map[string]*types.Input{}
+	for addr := range senderBalances {
+		utxo, err := cv.bc.FindStakeDepositsOfAddress(addr, "all")
+		if err != nil {
+			return err
+		}
+
+		for _, uo := range utxo {
+			input := uo.ToInput()
+			inputKey := serialize.GenKeyFromInput(input)
+			spentOutputsMap[inputKey] = input
+		}
+	}
+
+	// validate each input
+	alreadySpent, err := cv.checkInputsData(tx, spentOutputsMap)
+	if err != nil {
+		log.Errorf("ValidateSystemUnstakeTx: Error checking inputs: %s.", err)
+		return err
+	}
+	if len(alreadySpent) != len(tx.Inputs()) {
+		err = errors.New("ValidateSystemUnstakeTx: Inputs do not correspond to utxos")
+		log.Error(err)
+		return err
+	}
+	return nil
 }
 
 // checkStakeType check stake tx type
