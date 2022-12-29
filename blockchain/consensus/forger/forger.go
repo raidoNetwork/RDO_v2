@@ -512,7 +512,7 @@ func isBadTransaction(tx *prototype.Transaction, fullUnstakes map[string]struct{
 	// scanning through outputs, checking if node is in fullUnstakes
 	if tx.Type == common.StakeTxType || tx.Type == common.UnstakeTxType {
 		for _, out := range tx.Outputs {
-			if _, exists := fullUnstakes[string(out.Node)]; exists {
+			if _, exists := fullUnstakes[common.Encode(out.Node)]; exists {
 				return true
 			}
 		}
