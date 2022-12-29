@@ -93,7 +93,7 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 	txType := "StandardTx"
 MAINLOOP:
 	for _, tx := range txQueue {
-		if len(txBatch)+len(collapseBatch) == txCountPerBlock {
+		if len(txBatch)+len(collapseBatch)+len(systemUnstakes) == txCountPerBlock {
 			break
 		}
 
@@ -182,6 +182,12 @@ MAINLOOP:
 					delete(fullUnstakes, node)
 					continue MAINLOOP
 				}
+
+				if len(txBatch)+len(collapseBatch)+len(systemUnstakes) > txCountPerBlock {
+					continue MAINLOOP
+				}
+
+				totalSize += txsSize
 
 				systemUnstakes = append(systemUnstakes, txs...)
 			}
