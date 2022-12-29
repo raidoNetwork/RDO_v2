@@ -226,7 +226,7 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal con
 			case common.RewardTxType:
 				err = cv.validateRewardTx(tx, block)
 				txType = "RewardTx"
-			case common.SystemUnstakeTxType:
+			case common.ValidatorsUnstakeTxType:
 				err = cv.validateSystemUnstakeTx(tx, block)
 				txType = "SystemUnstakeTx"
 			}

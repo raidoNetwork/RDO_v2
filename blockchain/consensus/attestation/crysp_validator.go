@@ -384,7 +384,7 @@ func (cv *CryspValidator) validateTxStructBase(tx *types.Transaction) error {
 	}
 
 	// verify tx signature
-	if tx.Type() != common.CollapseTxType && tx.Type() != common.SystemUnstakeTxType {
+	if tx.Type() != common.CollapseTxType && tx.Type() != common.ValidatorsUnstakeTxType {
 		signer := types.MakeTxSigner("keccak256")
 		err := signer.Verify(tx.GetTx())
 		if err != nil {

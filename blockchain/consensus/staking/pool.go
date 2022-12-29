@@ -266,7 +266,7 @@ func (p *StakingPool) processStakeTx(tx *types.Transaction) error {
 	return nil
 }
 
-func (p *StakingPool) processUnstakeTx(tx *types.Transaction) (err error) {
+func (p *StakingPool) processValidatorsUnstakeTx(tx *types.Transaction) (err error) {
 	stakeNode := ""
 	var amount uint64 // count tx stake amount
 	for _, in := range tx.Inputs() {
@@ -309,26 +309,21 @@ func (p *StakingPool) processUnstakeTx(tx *types.Transaction) (err error) {
 func (p *StakingPool) processSystemUnstakeTx(tx *types.Transaction) error {
 	// Calculate the inputs amounts for each address
 	// record the corresponding node address
-	unstakeAmounts := make(map[string]uint64)
-	unstakeNodes := make(map[string]string)
+	unstakeNodes := make(map[string][]string)
 	for _, in := range tx.Inputs() {
 		address := in.Address().Hex()
-		if b, exists := unstakeAmounts[address]; exists {
-			unstakeAmounts[address] += b
-		} else {
-			unstakeAmounts[address] = b
-		}
-
-		unstakeNodes[address] = in.Node().Hex()
+		unstakeNodes[address] = append(unstakeNodes[address], in.Node().Hex())
 	}
 
 	// For each address, cancel the stake
-	for address, amount := range unstakeAmounts {
-		node := unstakeNodes[address]
-		err := p.cancelElectorStake(address, node, amount)
-		if err != nil {
-			log.Errorf("Error processing SystemUnstakeTx: %s", err)
-			return err
+	for address, validators := range unstakeNodes {
+		for _, validator := range validators {
+			amount := p.validators[validator].Electors[address]
+			err := p.cancelElectorStake(address, validator, amount)
+			if err != nil {
+				log.Errorf("Error processing SystemUnstakeTx: %s", err)
+				return err
+			}
 		}
 	}
 	return nil
@@ -346,8 +341,8 @@ func (p *StakingPool) FinalizeStaking(batch []*types.Transaction) error {
 		case common.StakeTxType:
 			err = p.processStakeTx(tx)
 		case common.UnstakeTxType:
-			err = p.processUnstakeTx(tx)
-		case common.SystemUnstakeTxType:
+			err = p.processValidatorsUnstakeTx(tx)
+		case common.ValidatorsUnstakeTxType:
 			err = p.processSystemUnstakeTx(tx)
 		}
 

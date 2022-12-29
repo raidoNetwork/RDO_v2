@@ -435,17 +435,17 @@ func (m *Forger) createCollapseTx(tx *types.Transaction, blockNum uint64) (*type
 }
 
 // Generates system unstake transactions for all electors of node.
-func (m *Forger) generateSystemUnstakes(node string, blockNum uint64) ([]*prototype.Transaction, error) {
+func (m *Forger) generateSystemUnstakes(validator string, blockNum uint64) ([]*prototype.Transaction, error) {
 	unstakeTxs := make([]*prototype.Transaction, 0)
 	inputs := make([]*prototype.TxInput, 0)
 	outputs := make([]*prototype.TxOutput, 0)
-	electors, err := m.att.StakePool().GetElectorsOfValidator(node)
+	electors, err := m.att.StakePool().GetElectorsOfValidator(validator)
 	if err != nil {
 		return nil, err
 	}
 
 	for elector := range electors {
-		deposits, err := m.bf.FindStakeDepositsOfAddress(elector, node)
+		deposits, err := m.bf.FindStakeDepositsOfAddress(elector, validator)
 		if err != nil {
 			return nil, errors.Errorf("Could not get stake deposits of: %s", elector)
 		}
@@ -458,7 +458,7 @@ func (m *Forger) generateSystemUnstakes(node string, blockNum uint64) ([]*protot
 				Outputs: outputs,
 				Fee:     0,
 				Num:     blockNum,
-				Type:    common.SystemUnstakeTxType,
+				Type:    common.ValidatorsUnstakeTxType,
 			}
 
 			ntx, err := types.NewPbTransaction(opts, nil)
@@ -487,7 +487,7 @@ func (m *Forger) generateSystemUnstakes(node string, blockNum uint64) ([]*protot
 			Outputs: outputs,
 			Fee:     0,
 			Num:     blockNum,
-			Type:    common.SystemUnstakeTxType,
+			Type:    common.ValidatorsUnstakeTxType,
 		}
 
 		ntx, err := types.NewPbTransaction(opts, nil)

@@ -234,12 +234,12 @@ func (p *Pool) GetFeePrice() uint64 {
 
 func (p *Pool) Finalize(txarr []*types.Transaction) {
 	p.mu.Lock()
-	// Gather SystemUnstakeTxs
-	systemUnstakes := make([]*types.Transaction, 0)
+	// Gather ValidatorsUnstakeTxs
+	validatorsUnstakes := make([]*types.Transaction, 0)
 
 	for _, tx := range txarr {
-		if tx.Type() == common.SystemUnstakeTxType {
-			systemUnstakes = append(systemUnstakes, tx)
+		if tx.Type() == common.ValidatorsUnstakeTxType {
+			validatorsUnstakes = append(validatorsUnstakes, tx)
 		}
 
 		if utypes.IsSystemTx(tx) && tx.Type() != common.CollapseTxType {
@@ -259,7 +259,7 @@ func (p *Pool) Finalize(txarr []*types.Transaction) {
 	}
 
 	// Clean up SystemUnstakeTxs
-	for _, tx := range systemUnstakes {
+	for _, tx := range validatorsUnstakes {
 		p.cleanUpSystemUnstake(tx)
 	}
 
@@ -309,6 +309,50 @@ func (p *Pool) cleanTransactionMap(tx *types.Transaction) {
 		for _, sender := range tx.AllSenders() {
 			delete(p.txSenderMap, sender.Hex())
 		}
+	}
+}
+
+func (p *Pool) findProblematicStakeTx(address, node string) (*types.Transaction, int, error) {
+	tx, exists := p.txSenderMap[address]
+	if !exists {
+		return nil, -1, errors.Errorf("No problematic transaction found in tx pool")
+	}
+
+	// Checking if the transaction is a stake transaction on the specified node
+	for _, out := range tx.Outputs() {
+		if out.Node().Hex() == node {
+			index := p.pending.GetIndex(tx)
+			return tx, index, nil
+		}
+	}
+
+	// Checking if the transaction is an unstake transaction from the specified node
+	for _, in := range tx.Inputs() {
+		if in.Node().Hex() == node {
+			index := p.pending.GetIndex(tx)
+			return tx, index, nil
+		}
+	}
+
+	return nil, -1, errors.Errorf("No problematic transaction found in tx pool")
+}
+
+func (p *Pool) cleanUpSystemUnstake(tx *types.Transaction) {
+	// For address, remove the corresponding stake and unstake transactions
+	// from the transaction pool
+	for _, in := range tx.Inputs() {
+		address := in.Address().Hex()
+		node := in.Node().Hex()
+		rtx, index, err := p.findProblematicStakeTx(address, node)
+		if err != nil {
+			log.Debugf("Error in cleanUpSystemUnstake: %s\n", err)
+			continue
+		}
+		p.queueLock.Lock()
+		p.pending = p.pending.SwapAndRemove(index)
+		p.queueLock.Unlock()
+
+		p.cleanTransactionMap(rtx)
 	}
 }
 
@@ -428,48 +472,4 @@ func txLess(a, b *types.Transaction) bool {
 	}
 
 	return a.FeePrice() > b.FeePrice()
-}
-
-func (p *Pool) findProblematicStakeTx(address, node string) (*types.Transaction, int, error) {
-	tx, exists := p.txSenderMap[address]
-	if !exists {
-		return nil, -1, errors.Errorf("No problematic transaction found in tx pool")
-	}
-
-	// Checking if the transaction is a stake transaction on the specified node
-	for _, out := range tx.Outputs() {
-		if out.Node().Hex() == node {
-			index := p.pending.GetIndex(tx)
-			return tx, index, nil
-		}
-	}
-
-	// Checking if the transaction is an unstake transaction from the specified node
-	for _, in := range tx.Inputs() {
-		if in.Node().Hex() == node {
-			index := p.pending.GetIndex(tx)
-			return tx, index, nil
-		}
-	}
-
-	return nil, -1, errors.Errorf("No problematic transaction found in tx pool")
-}
-
-func (p *Pool) cleanUpSystemUnstake(tx *types.Transaction) {
-	// For address, remove the corresponding stake and unstake transactions
-	// from the transaction pool
-	for _, in := range tx.Inputs() {
-		address := in.Address().Hex()
-		node := in.Node().Hex()
-		rtx, index, err := p.findProblematicStakeTx(address, node)
-		if err != nil {
-			log.Debugf("Error in cleanUpSystemUnstake: %s\n", err)
-			continue
-		}
-		p.queueLock.Lock()
-		p.pending = p.pending.SwapAndRemove(index)
-		p.queueLock.Unlock()
-
-		p.cleanTransactionMap(rtx)
-	}
 }

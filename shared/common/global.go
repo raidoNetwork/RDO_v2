@@ -9,14 +9,14 @@ import (
 
 // Transaction types
 const (
-	NormalTxType        = 1
-	GenesisTxType       = 2
-	FeeTxType           = 3
-	RewardTxType        = 4
-	StakeTxType         = 5
-	UnstakeTxType       = 6
-	CollapseTxType      = 7
-	SystemUnstakeTxType = 8
+	NormalTxType            = 1
+	GenesisTxType           = 2
+	FeeTxType               = 3
+	RewardTxType            = 4
+	StakeTxType             = 5
+	UnstakeTxType           = 6
+	CollapseTxType          = 7
+	ValidatorsUnstakeTxType = 8
 )
 
 const (
@@ -57,7 +57,7 @@ func IsSystemTx(tx *prototype.Transaction) bool {
 		fallthrough
 	case RewardTxType:
 		fallthrough
-	case SystemUnstakeTxType:
+	case ValidatorsUnstakeTxType:
 		fallthrough
 	case CollapseTxType:
 		return true
@@ -68,5 +68,5 @@ func IsSystemTx(tx *prototype.Transaction) bool {
 
 // HasInputs check transactions should have inputs
 func HasInputs(tx *prototype.Transaction) bool {
-	return IsLegacyTx(tx) || tx.Type == CollapseTxType || tx.Type == SystemUnstakeTxType
+	return IsLegacyTx(tx) || tx.Type == CollapseTxType || tx.Type == ValidatorsUnstakeTxType
 }
