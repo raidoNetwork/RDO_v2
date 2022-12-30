@@ -2,9 +2,10 @@ package attestation
 
 import (
 	"bytes"
-	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"sort"
 	"sync"
+
+	"github.com/raidoNetwork/RDO_v2/shared/params"
 
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
@@ -233,8 +234,14 @@ func (p *Pool) GetFeePrice() uint64 {
 
 func (p *Pool) Finalize(txarr []*types.Transaction) {
 	p.mu.Lock()
+	// Gather ValidatorsUnstakeTxs
+	validatorsUnstakes := make([]*types.Transaction, 0)
 
 	for _, tx := range txarr {
+		if tx.Type() == common.ValidatorsUnstakeTxType {
+			validatorsUnstakes = append(validatorsUnstakes, tx)
+		}
+
 		if utypes.IsSystemTx(tx) && tx.Type() != common.CollapseTxType {
 			continue
 		}
@@ -249,6 +256,11 @@ func (p *Pool) Finalize(txarr []*types.Transaction) {
 		p.queueLock.Unlock()
 
 		p.cleanTransactionMap(rtx)
+	}
+
+	// Clean up SystemUnstakeTxs
+	for _, tx := range validatorsUnstakes {
+		p.cleanUpSystemUnstake(tx)
 	}
 
 	p.mu.Unlock()
@@ -297,6 +309,50 @@ func (p *Pool) cleanTransactionMap(tx *types.Transaction) {
 		for _, sender := range tx.AllSenders() {
 			delete(p.txSenderMap, sender.Hex())
 		}
+	}
+}
+
+func (p *Pool) findProblematicStakeTx(address, node string) (*types.Transaction, int, error) {
+	tx, exists := p.txSenderMap[address]
+	if !exists {
+		return nil, -1, errors.Errorf("No problematic transaction found in tx pool")
+	}
+
+	// Checking if the transaction is a stake transaction on the specified node
+	for _, out := range tx.Outputs() {
+		if out.Node().Hex() == node {
+			index := p.pending.GetIndex(tx)
+			return tx, index, nil
+		}
+	}
+
+	// Checking if the transaction is an unstake transaction from the specified node
+	for _, in := range tx.Inputs() {
+		if in.Node().Hex() == node {
+			index := p.pending.GetIndex(tx)
+			return tx, index, nil
+		}
+	}
+
+	return nil, -1, errors.Errorf("No problematic transaction found in tx pool")
+}
+
+func (p *Pool) cleanUpSystemUnstake(tx *types.Transaction) {
+	// For address, remove the corresponding stake and unstake transactions
+	// from the transaction pool
+	for _, in := range tx.Inputs() {
+		address := in.Address().Hex()
+		node := in.Node().Hex()
+		rtx, index, err := p.findProblematicStakeTx(address, node)
+		if err != nil {
+			log.Debugf("Error in cleanUpSystemUnstake: %s\n", err)
+			continue
+		}
+		p.queueLock.Lock()
+		p.pending = p.pending.SwapAndRemove(index)
+		p.queueLock.Unlock()
+
+		p.cleanTransactionMap(rtx)
 	}
 }
 

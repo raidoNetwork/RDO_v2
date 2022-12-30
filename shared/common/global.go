@@ -2,19 +2,21 @@ package common
 
 import (
 	"fmt"
-	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"time"
+
+	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 )
 
 // Transaction types
 const (
-	NormalTxType  = 1
-	GenesisTxType = 2
-	FeeTxType     = 3
-	RewardTxType  = 4
-	StakeTxType   = 5
-	UnstakeTxType = 6
-	CollapseTxType = 7
+	NormalTxType            = 1
+	GenesisTxType           = 2
+	FeeTxType               = 3
+	RewardTxType            = 4
+	StakeTxType             = 5
+	UnstakeTxType           = 6
+	CollapseTxType          = 7
+	ValidatorsUnstakeTxType = 8
 )
 
 const (
@@ -55,6 +57,8 @@ func IsSystemTx(tx *prototype.Transaction) bool {
 		fallthrough
 	case RewardTxType:
 		fallthrough
+	case ValidatorsUnstakeTxType:
+		fallthrough
 	case CollapseTxType:
 		return true
 	default:
@@ -64,5 +68,5 @@ func IsSystemTx(tx *prototype.Transaction) bool {
 
 // HasInputs check transactions should have inputs
 func HasInputs(tx *prototype.Transaction) bool {
-	return IsLegacyTx(tx) || tx.Type == CollapseTxType
+	return IsLegacyTx(tx) || tx.Type == CollapseTxType || tx.Type == ValidatorsUnstakeTxType
 }

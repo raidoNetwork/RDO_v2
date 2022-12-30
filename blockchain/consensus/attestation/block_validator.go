@@ -200,7 +200,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensu
 
 	failedTx, err := cv.verifyTransactions(block, journal)
 	if err != nil {
-		return failedTx, errors.Wrap(err, "Error verify transactions")
+		return failedTx, errors.Wrap(err, "Error verifying transactions")
 	}
 
 	return nil, nil
@@ -226,10 +226,13 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal con
 			case common.RewardTxType:
 				err = cv.validateRewardTx(tx, block)
 				txType = "RewardTx"
+			case common.ValidatorsUnstakeTxType:
+				err = cv.validateSystemUnstakeTx(tx, block)
+				txType = "SystemUnstakeTx"
 			}
 
 			if err != nil {
-				return nil, errors.Wrap(err, "Error validation "+txType)
+				return nil, errors.Wrap(err, "Error validating "+txType)
 			}
 
 			continue

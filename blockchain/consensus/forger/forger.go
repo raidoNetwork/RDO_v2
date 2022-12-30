@@ -20,7 +20,10 @@ var (
 	ErrZeroFeeAmount = errors.New("Block has no transactions with fee.")
 )
 
-const txBatchLimit = 1000
+const (
+	txBatchLimit     = 1000
+	InputsPerTxLimit = 2000
+)
 
 type Config struct {
 	EnableMetrics bool
@@ -65,6 +68,10 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 	txBatch := make([]*prototype.Transaction, 0, txQueueLen)
 	collapseBatch := make([]*prototype.Transaction, 0, txQueueLen)
 
+	// map of full validator unstakes
+	fullUnstakes := make(map[string]struct{})
+	systemUnstakes := make([]*prototype.Transaction, 0)
+
 	pendingTxCounter.Set(float64(txQueueLen)) // todo remove metrics to the core service
 
 	// create reward transaction for current block
@@ -84,8 +91,9 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 
 	var size int
 	txType := "StandardTx"
+MAINLOOP:
 	for _, tx := range txQueue {
-		if len(txBatch)+len(collapseBatch) == txCountPerBlock {
+		if len(txBatch)+len(collapseBatch)+len(systemUnstakes) == txCountPerBlock {
 			break
 		}
 
@@ -149,6 +157,43 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 			txType = "StakeTx"
 		}
 
+		// If full validator unstake, create a SystemUnstakeTx
+		if tx.Type() == common.UnstakeTxType && m.cfg.Engine.IsValidator(tx.From()) {
+			fullUnstake := true
+			node := tx.From().Hex()
+			for _, out := range tx.Outputs() {
+				if out.Node().Hex() == node {
+					fullUnstake = false
+					break
+				}
+			}
+			if fullUnstake {
+				fullUnstakes[node] = struct{}{}
+				txs, err := m.generateSystemUnstakes(node, m.bf.GetBlockCount())
+				if err != nil {
+					return nil, err
+				}
+
+				txsSize := countTXsSize(txs)
+
+				// If exceeds the limit, skip the validator unstake transaction
+				// and delete from fullUnstakes
+				if txsSize+totalSize > m.cfg.BlockSize {
+					delete(fullUnstakes, node)
+					continue MAINLOOP
+				}
+
+				if len(txBatch)+len(collapseBatch)+len(systemUnstakes) > txCountPerBlock {
+					continue MAINLOOP
+				}
+
+				totalSize += txsSize
+
+				systemUnstakes = append(systemUnstakes, txs...)
+			}
+
+		}
+
 		txBatch = append(txBatch, tx.GetTx())
 		tx.Forge()
 		log.Debugf("Add %s %s to the block %d", txType, hash, bn)
@@ -181,6 +226,24 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 
 	// add collapsed transaction to the end of the batch
 	txBatch = append(txBatch, collapseBatch...)
+
+	// Cleaning up according to fullUnstakes map.
+	// We want to remove any stake or unstake transaction on particular nodes
+	if len(fullUnstakes) > 0 {
+		cleanBatch := make([]*prototype.Transaction, 0, len(txBatch))
+		for _, tx := range txBatch {
+			// If the node parameter in outputs is in fullUnstakes map,
+			// remove the transaction from the batch
+			bad := isBadTransaction(tx, fullUnstakes)
+			if !bad {
+				cleanBatch = append(cleanBatch, tx)
+			}
+		}
+		txBatch = cleanBatch
+	}
+
+	// Add system unstake transactions to the batch
+	txBatch = append(systemUnstakes, txBatch...)
 
 	// generate fee tx for block
 	if len(txBatch) > 0 {
@@ -298,7 +361,6 @@ func (m *Forger) createRewardTx(blockNum uint64, proposer string) (*prototype.Tr
 
 func (m *Forger) createCollapseTx(tx *types.Transaction, blockNum uint64) (*types.Transaction, error) {
 	const CollapseOutputsNum = 100 // minimal count of UTxO to collapse address outputs
-	const InputsPerTxLimit = 2000
 
 	opts := types.TxOptions{
 		Inputs:  make([]*prototype.TxInput, 0, len(tx.Inputs())),
@@ -376,4 +438,90 @@ func (m *Forger) createCollapseTx(tx *types.Transaction, blockNum uint64) (*type
 	}
 
 	return types.NewTransaction(collapseTx), nil
+}
+
+// Generates system unstake transactions for all electors of node.
+func (m *Forger) generateSystemUnstakes(validator string, blockNum uint64) ([]*prototype.Transaction, error) {
+	unstakeTxs := make([]*prototype.Transaction, 0)
+	inputs := make([]*prototype.TxInput, 0)
+	outputs := make([]*prototype.TxOutput, 0)
+	electors, err := m.att.StakePool().GetElectorsOfValidator(validator)
+	if err != nil {
+		return nil, err
+	}
+
+	for elector := range electors {
+		deposits, err := m.bf.FindStakeDepositsOfAddress(elector, validator)
+		if err != nil {
+			return nil, errors.Errorf("Could not get stake deposits of: %s", elector)
+		}
+
+		// The transaction is filled up, add it to the unstakeTxs
+		// and proceed to the next one
+		if len(deposits)+len(inputs) > InputsPerTxLimit {
+			opts := types.TxOptions{
+				Inputs:  inputs,
+				Outputs: outputs,
+				Fee:     0,
+				Num:     blockNum,
+				Type:    common.ValidatorsUnstakeTxType,
+			}
+
+			ntx, err := types.NewPbTransaction(opts, nil)
+			if err != nil {
+				return nil, err
+			}
+			unstakeTxs = append(unstakeTxs, ntx)
+
+			// Reset inputs and outputs lists
+			inputs = make([]*prototype.TxInput, 0)
+			outputs = make([]*prototype.TxOutput, 0)
+		}
+
+		// Convert utxos to inputs and create a corrresponding output
+		var amount uint64
+		for _, deposit := range deposits {
+			inputs = append(inputs, deposit.ToPbInput())
+			amount += deposit.Amount
+		}
+		output := types.NewOutput(common.FromHex(elector), amount, nil)
+		outputs = append(outputs, output)
+	}
+	if len(inputs) > 0 {
+		opts := types.TxOptions{
+			Inputs:  inputs,
+			Outputs: outputs,
+			Fee:     0,
+			Num:     blockNum,
+			Type:    common.ValidatorsUnstakeTxType,
+		}
+
+		ntx, err := types.NewPbTransaction(opts, nil)
+		if err != nil {
+			return nil, err
+		}
+		unstakeTxs = append(unstakeTxs, ntx)
+	}
+
+	return unstakeTxs, nil
+}
+
+func countTXsSize(txs []*prototype.Transaction) int {
+	size := 0
+	for _, tx := range txs {
+		size += tx.SizeSSZ()
+	}
+	return size
+}
+
+func isBadTransaction(tx *prototype.Transaction, fullUnstakes map[string]struct{}) bool {
+	// scanning through outputs, checking if node is in fullUnstakes
+	if tx.Type == common.StakeTxType || tx.Type == common.UnstakeTxType {
+		for _, out := range tx.Outputs {
+			if _, exists := fullUnstakes[common.Encode(out.Node)]; exists {
+				return true
+			}
+		}
+	}
+	return false
 }
