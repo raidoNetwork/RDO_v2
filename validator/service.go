@@ -206,7 +206,7 @@ func (s *Service) verifyBlock(block *prototype.Block) error {
 	}
 
 	attestationType := types.Approve
-	_, err := s.att.Validator().ValidateBlock(block, s.att.TxPool(), false)
+	_, err := s.att.Validator().ValidateBlock(block, false)
 	if err != nil {
 		log.Errorf("Failed block attestation: %s", err)
 		attestationType = types.Reject

@@ -17,7 +17,7 @@ type TxValidator interface {
 // BlockValidator checks only blocks
 type BlockValidator interface {
 	// ValidateBlock validate block and return an error if something is wrong
-	ValidateBlock(*prototype.Block, TxJournal, bool) ([]*types.Transaction, error)
+	ValidateBlock(*prototype.Block, bool) ([]*types.Transaction, error)
 
 	// ValidateGenesis compare given Genesis with local
 	ValidateGenesis(*prototype.Block) error
@@ -110,12 +110,6 @@ type TxPool interface {
 
 	// ClearForged mark all forged tx as not forged
 	ClearForged(*prototype.Block)
-
-	TxJournal
-}
-
-type TxJournal interface {
-	IsKnown(*types.Transaction) bool
 }
 
 // StakePool regulates stake slots condition.

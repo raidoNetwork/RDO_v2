@@ -104,7 +104,7 @@ func (cv *CryspValidator) validateBlockHeader(block *prototype.Block) error {
 }
 
 // ValidateBlock validate block and return an error if something is wrong
-func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensus.TxJournal, countSign bool) ([]*types.Transaction, error) {
+func (cv *CryspValidator) ValidateBlock(block *prototype.Block, countSign bool) ([]*types.Transaction, error) {
 	log.Debugf("Validate block #%d", block.Num)
 
 	start := time.Now()
@@ -198,7 +198,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensu
 		log.Infof("Approvers %d, slashers %d", approversCount, slashersCount)
 	}
 
-	failedTx, err := cv.verifyTransactions(block, journal)
+	failedTx, err := cv.verifyTransactions(block)
 	if err != nil {
 		return failedTx, errors.Wrap(err, "Error verifying transactions")
 	}
@@ -207,7 +207,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensu
 
 }
 
-func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal consensus.TxJournal) ([]*types.Transaction, error) {
+func (cv *CryspValidator) verifyTransactions(block *prototype.Block) ([]*types.Transaction, error) {
 	failedTx := make([]*types.Transaction, 0)
 	standardTxCount := 0
 	for _, txpb := range block.Transactions {
@@ -244,10 +244,6 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal con
 			log.Error(err)
 			failedTx = append(failedTx, tx)
 			tx.SetStatus(types.TxFailed)
-			continue
-		}
-
-		if journal.IsKnown(tx) {
 			continue
 		}
 

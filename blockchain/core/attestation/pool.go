@@ -379,22 +379,6 @@ func (p *Pool) DeleteTransaction(tx *types.Transaction) error {
 	return nil
 }
 
-func (p *Pool) IsKnown(tx *types.Transaction) bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	oldTx, exists := p.txSenderMap[tx.From().Hex()]
-	if !exists {
-		return false
-	}
-
-	if bytes.Equal(oldTx.Hash(), tx.Hash()) {
-		return true
-	}
-
-	return oldTx.HasDouble(tx.Hash())
-}
-
 func (p *Pool) LockPool() {
 	p.swapLock.Lock()
 }
