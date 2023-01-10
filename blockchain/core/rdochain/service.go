@@ -3,6 +3,8 @@ package rdochain
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/blockchain/state"
@@ -13,7 +15,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/sirupsen/logrus"
-	"sync"
 )
 
 var _ shared.Service = (*Service)(nil)
@@ -36,7 +37,7 @@ func NewService(kv db.BlockStorage, sql db.OutputStorage, stateFeed events.Feed,
 		bc:        bc,
 		outm:      outm,
 		stateFeed: stateFeed,
-		repairDB: repairDB,
+		repairDB:  repairDB,
 	}
 
 	return srv, nil
@@ -50,7 +51,7 @@ type Service struct {
 	ready        bool
 	statusErr    error
 	startFailure error
-	repairDB	 bool
+	repairDB     bool
 }
 
 func (s *Service) Start() {
@@ -258,12 +259,12 @@ func (s *Service) GetGenesis() *prototype.Block {
 }
 
 // FinalizeBlock save block to the local databases
-func (s *Service) FinalizeBlock(block *prototype.Block, failedTx []*types.Transaction) error {
+func (s *Service) FinalizeBlock(block *prototype.Block) error {
 	s.outm.FinalizeLock()
 	defer s.outm.FinalizeUnlock()
 
 	// update SQL
-	err := s.outm.ProcessBlock(block, failedTx)
+	err := s.outm.ProcessBlock(block)
 	if err != nil {
 		return errors.Wrap(err, "SQL error")
 	}

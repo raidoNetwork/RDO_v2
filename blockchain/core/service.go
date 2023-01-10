@@ -173,7 +173,7 @@ func (s *Service) FinalizeBlock(block *prototype.Block) error {
 	}
 
 	// save block
-	err = s.bc.FinalizeBlock(block, failedTx)
+	err = s.bc.FinalizeBlock(block)
 	if err != nil {
 		return errors.Wrap(err, "FinalizeBlockError")
 	}

@@ -203,8 +203,11 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, countSign bool) 
 		return failedTx, errors.Wrap(err, "Error verifying transactions")
 	}
 
-	return nil, nil
+	if len(failedTx) != 0 {
+		return failedTx, errors.Wrap(err, "There are failed transactions in the block")
+	}
 
+	return nil, nil
 }
 
 func (cv *CryspValidator) verifyTransactions(block *prototype.Block) ([]*types.Transaction, error) {

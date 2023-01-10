@@ -65,7 +65,7 @@ type BlockchainReader interface {
 // BlockFinalizer interface for any struct that can create and save block to the database
 type BlockFinalizer interface {
 	// FinalizeBlock store block to the blockchain.
-	FinalizeBlock(*prototype.Block, []*types.Transaction) error
+	FinalizeBlock(*prototype.Block) error
 
 	// GetBlockCount return block count in the blockchain
 	GetBlockCount() uint64

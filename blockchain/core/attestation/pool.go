@@ -276,10 +276,6 @@ func (p *Pool) findPoolTransaction(tx *types.Transaction) (*types.Transaction, i
 		return nil, -1, errors.New("Undefined sender and transaction")
 	}
 
-	if !exists && tx.Status() == types.TxFailed {
-		return nil, -1, errors.New("Undefined transaction")
-	}
-
 	// now tx can be one of several cases:
 	//  1. tx exists in pool
 	//  2. tx is double of previous sender tx
