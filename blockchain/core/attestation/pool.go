@@ -172,33 +172,34 @@ func (p *Pool) validateTx(tx *types.Transaction) error {
 	return p.cfg.Validator.ValidateTransaction(tx)
 }
 
-func (p *Pool) InsertCollapseTx(tx *types.Transaction) error {
-	if tx.Type() != common.CollapseTxType {
-		return errors.New("Wrong tx type given")
-	}
-
+func (p *Pool) InsertCollapseTx(txs []*types.Transaction) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-
-	senders := map[string]struct{}{}
-	for _, in := range tx.Inputs() {
-		from := in.Address().Hex()
-		if _, exists := senders[from]; exists {
-			continue
+	for _, tx := range txs {
+		if tx.Type() != common.CollapseTxType {
+			return errors.New("Wrong tx type given")
 		}
 
-		if _, exists := p.txSenderMap[from]; exists {
-			return errors.New("CollapseTx can trigger double spend")
+		senders := map[string]struct{}{}
+		for _, in := range tx.Inputs() {
+			from := in.Address().Hex()
+			if _, exists := senders[from]; exists {
+				continue
+			}
+
+			if _, exists := p.txSenderMap[from]; exists {
+				return errors.New("CollapseTx can trigger double spend")
+			}
+
+			senders[from] = struct{}{}
 		}
 
-		senders[from] = struct{}{}
-	}
+		for from := range senders {
+			p.txSenderMap[from] = tx
+		}
 
-	for from := range senders {
-		p.txSenderMap[from] = tx
+		p.txHashMap[tx.Hash().Hex()] = tx
 	}
-
-	p.txHashMap[tx.Hash().Hex()] = tx
 
 	return nil
 }

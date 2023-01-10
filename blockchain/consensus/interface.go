@@ -100,7 +100,7 @@ type TxPool interface {
 	DeleteTransaction(*types.Transaction) error
 
 	// InsertCollapseTx insert collapse tx to the pool
-	InsertCollapseTx(*types.Transaction) error
+	InsertCollapseTx([]*types.Transaction) error
 
 	// LockPool locks pool operations
 	LockPool()
