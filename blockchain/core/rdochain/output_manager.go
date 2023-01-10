@@ -420,7 +420,7 @@ func (om *OutputManager) prepareOutputsQuery(tx *prototype.Transaction, from com
 	var index uint32
 	for _, out := range tx.Outputs {
 		// skip all fee outputs
-		if tx.Type == common.FeeTxType && common.BytesToAddress(out.Address).Hex() == common.BlackHoleAddress {
+		if tx.Type == common.FeeTxType {
 			index++
 			continue
 		}
