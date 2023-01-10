@@ -323,7 +323,7 @@ func (m *Forger) createFeeTx(txarr []*prototype.Transaction) (*prototype.Transac
 
 	opts := types.TxOptions{
 		Outputs: []*prototype.TxOutput{
-			types.NewOutput(common.HexToAddress(common.BlackHoleAddress).Bytes(), feeAmount, nil),
+			types.NewOutput(m.cfg.Engine.Leader().Bytes(), feeAmount, nil),
 		},
 		Type: common.FeeTxType,
 		Fee:  0,
