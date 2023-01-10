@@ -10,7 +10,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/rdochain"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
-	"github.com/raidoNetwork/RDO_v2/shared/math"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/hash"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
@@ -20,8 +19,6 @@ import (
 var (
 	ErrReadingBlock = errors.New("Error reading block from database")
 )
-
-const failedTxLimitPercent = 50
 
 // checkBlockBalance count block inputs and outputs sum and check that all inputs in block are unique.
 func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
@@ -261,11 +258,7 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block) ([]*types.T
 		tx.SetStatus(types.TxSuccess)
 	}
 
-	if math.IsGEPercentLimit(len(failedTx), standardTxCount, failedTxLimitPercent) {
-		return failedTx, errors.New("too many failed tx")
-	}
-
-	return nil, nil
+	return failedTx, nil
 }
 
 func (cv *CryspValidator) verifyBlockSign(block *prototype.Block, sign *prototype.Sign) error {
