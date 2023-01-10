@@ -103,15 +103,8 @@ func (p *Pool) processDoubleSpend(oldTx, newTx *types.Transaction) error {
 		}
 
 		return p.swap(oldTx, newTx)
-	} else {
-		err := p.validateTx(newTx)
-		if err != nil {
-			return err
-		}
-
-		oldTx.AddDouble(newTx)
-		return nil
 	}
+	return nil
 }
 
 func (p *Pool) swap(oldTx, newTx *types.Transaction) error {

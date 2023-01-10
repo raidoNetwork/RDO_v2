@@ -1,15 +1,15 @@
 package types
 
 import (
-	"bytes"
 	"crypto/ecdsa"
+	"sync"
+	"time"
+
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/crypto"
 	"github.com/raidoNetwork/RDO_v2/utils/hash"
 	"github.com/sirupsen/logrus"
-	"sync"
-	"time"
 )
 
 type ExecutionStatus uint32
@@ -186,40 +186,6 @@ func (tx *Transaction) Num() uint64 {
 
 func (tx *Transaction) Timestamp() uint64 {
 	return tx.timestamp
-}
-
-func (tx *Transaction) AddDouble(ntx *Transaction) {
-	tx.lock.Lock()
-	defer tx.lock.Unlock()
-
-	// avoid add already known doubles
-	for _, stx := range tx.doubles {
-		if bytes.Equal(stx.Hash(), ntx.Hash()) {
-			return
-		}
-	}
-
-	tx.doubles = append(tx.doubles, ntx)
-}
-
-func (tx *Transaction) GetDoubles() []*Transaction {
-	tx.lock.Lock()
-	defer tx.lock.Unlock()
-
-	return tx.doubles
-}
-
-func (tx *Transaction) HasDouble(hash common.Hash) bool {
-	tx.lock.Lock()
-	defer tx.lock.Unlock()
-
-	for _, double := range tx.doubles {
-		if bytes.Equal(double.Hash(), hash) {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (tx *Transaction) Hash() common.Hash {
