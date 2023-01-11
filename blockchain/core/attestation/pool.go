@@ -103,15 +103,8 @@ func (p *Pool) processDoubleSpend(oldTx, newTx *types.Transaction) error {
 		}
 
 		return p.swap(oldTx, newTx)
-	} else {
-		err := p.validateTx(newTx)
-		if err != nil {
-			return err
-		}
-
-		oldTx.AddDouble(newTx)
-		return nil
 	}
+	return nil
 }
 
 func (p *Pool) swap(oldTx, newTx *types.Transaction) error {
@@ -179,33 +172,34 @@ func (p *Pool) validateTx(tx *types.Transaction) error {
 	return p.cfg.Validator.ValidateTransaction(tx)
 }
 
-func (p *Pool) InsertCollapseTx(tx *types.Transaction) error {
-	if tx.Type() != common.CollapseTxType {
-		return errors.New("Wrong tx type given")
-	}
-
+func (p *Pool) InsertCollapseTx(txs []*types.Transaction) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-
-	senders := map[string]struct{}{}
-	for _, in := range tx.Inputs() {
-		from := in.Address().Hex()
-		if _, exists := senders[from]; exists {
-			continue
+	for _, tx := range txs {
+		if tx.Type() != common.CollapseTxType {
+			return errors.New("Wrong tx type given")
 		}
 
-		if _, exists := p.txSenderMap[from]; exists {
-			return errors.New("CollapseTx can trigger double spend")
+		senders := map[string]struct{}{}
+		for _, in := range tx.Inputs() {
+			from := in.Address().Hex()
+			if _, exists := senders[from]; exists {
+				continue
+			}
+
+			if _, exists := p.txSenderMap[from]; exists {
+				return errors.New("CollapseTx can trigger double spend")
+			}
+
+			senders[from] = struct{}{}
 		}
 
-		senders[from] = struct{}{}
-	}
+		for from := range senders {
+			p.txSenderMap[from] = tx
+		}
 
-	for from := range senders {
-		p.txSenderMap[from] = tx
+		p.txHashMap[tx.Hash().Hex()] = tx
 	}
-
-	p.txHashMap[tx.Hash().Hex()] = tx
 
 	return nil
 }
@@ -274,10 +268,6 @@ func (p *Pool) findPoolTransaction(tx *types.Transaction) (*types.Transaction, i
 
 	if !exists && !senderExists {
 		return nil, -1, errors.New("Undefined sender and transaction")
-	}
-
-	if !exists && tx.Status() == types.TxFailed {
-		return nil, -1, errors.New("Undefined transaction")
 	}
 
 	// now tx can be one of several cases:
@@ -377,22 +367,6 @@ func (p *Pool) DeleteTransaction(tx *types.Transaction) error {
 	log.Debugf("Delete transaction %s", tx.Hash().Hex())
 
 	return nil
-}
-
-func (p *Pool) IsKnown(tx *types.Transaction) bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	oldTx, exists := p.txSenderMap[tx.From().Hex()]
-	if !exists {
-		return false
-	}
-
-	if bytes.Equal(oldTx.Hash(), tx.Hash()) {
-		return true
-	}
-
-	return oldTx.HasDouble(tx.Hash())
 }
 
 func (p *Pool) LockPool() {

@@ -143,11 +143,6 @@ func (cv *CryspValidator) validateTxInputs(tx *types.Transaction) error {
 
 	// count sizes
 	utxoSize := len(utxo)
-	inputsSize := len(tx.Inputs())
-
-	if utxoSize != inputsSize {
-		return errors.Errorf("ValidateTransaction: Inputs size mismatch: real - %d given - %d. Address: %s. Tx: %s", utxoSize, inputsSize, from, tx.Hash().Hex())
-	}
 
 	if utxoSize == 0 {
 		return consensus.ErrUtxoSize
@@ -174,18 +169,18 @@ func (cv *CryspValidator) validateTxInputs(tx *types.Transaction) error {
 	}
 
 	// validate each input
-	alreadySpent, err := cv.checkInputsData(tx, spentOutputsMap)
+	_, err = cv.checkInputsData(tx, spentOutputsMap)
 	if err != nil {
 		log.Errorf("ValidateTransaction: Error checking inputs: %s.", err.Error())
 		return err
 	}
 
-	//Check that all outputs are spent
-	for key := range spentOutputsMap {
-		if _, exists := alreadySpent[key]; !exists {
-			return errors.Errorf("Unspent output of user %s with key %s.", from, key)
-		}
-	}
+	// //Check that all spent outputs exist
+	// for key := range alreadySpent {
+	// 	if _, exists := spentOutputsMap[key]; !exists {
+	// 		return errors.Errorf("No such utxo of user %s with key %s.", from, key)
+	// 	}
+	// }
 
 	return nil
 }

@@ -211,15 +211,19 @@ MAINLOOP:
 			if err != nil {
 				log.Error(err)
 			} else {
-				collapseBatch = append(collapseBatch, collapseTx.GetTx())
-				totalSize += collapseTx.Size()
+				// Check for size when appending collapseTxs
+				for _, coltx := range collapseTx {
+					collapseBatch = append(collapseBatch, coltx.GetTx())
+					totalSize += coltx.Size()
 
-				log.Debugf("Add CollapseTx %s to the block %d", collapseTx.Hash().Hex(), bn)
+					log.Debugf("Add CollapseTx %s to the block %d", coltx.Hash().Hex(), bn)
+
+				}
 			}
 		}
 
 		// we fill block successfully
-		if totalSize == m.cfg.BlockSize {
+		if totalSize >= m.cfg.BlockSize {
 			break
 		}
 	}
@@ -300,10 +304,12 @@ func (m *Forger) addRewardTxToBatch(proposer string, txBatch []*prototype.Transa
 				return txBatch, collapseBatch, totalSize, nil
 			}
 
-			collapseBatch = append(collapseBatch, collapseTx.GetTx())
-			totalSize += collapseTx.Size()
+			for _, coltx := range collapseTx {
+				collapseBatch = append(collapseBatch, coltx.GetTx())
+				totalSize += coltx.Size()
+				log.Debugf("Add CollapseTx %s to the block %d", coltx.Hash().Hex(), bn)
+			}
 
-			log.Debugf("Add CollapseTx %s to the block %d", collapseTx.Hash().Hex(), bn)
 		}
 	}
 
@@ -323,7 +329,7 @@ func (m *Forger) createFeeTx(txarr []*prototype.Transaction) (*prototype.Transac
 
 	opts := types.TxOptions{
 		Outputs: []*prototype.TxOutput{
-			types.NewOutput(common.HexToAddress(common.BlackHoleAddress).Bytes(), feeAmount, nil),
+			types.NewOutput(m.cfg.Engine.Leader().Bytes(), feeAmount, nil),
 		},
 		Type: common.FeeTxType,
 		Fee:  0,
@@ -359,16 +365,10 @@ func (m *Forger) createRewardTx(blockNum uint64, proposer string) (*prototype.Tr
 	return ntx, nil
 }
 
-func (m *Forger) createCollapseTx(tx *types.Transaction, blockNum uint64) (*types.Transaction, error) {
+func (m *Forger) createCollapseTx(tx *types.Transaction, blockNum uint64) ([]*types.Transaction, error) {
 	const CollapseOutputsNum = 100 // minimal count of UTxO to collapse address outputs
 
-	opts := types.TxOptions{
-		Inputs:  make([]*prototype.TxInput, 0, len(tx.Inputs())),
-		Outputs: make([]*prototype.TxOutput, 0, len(tx.Outputs())-1),
-		Fee:     0,
-		Num:     blockNum,
-		Type:    common.CollapseTxType,
-	}
+	transactions := make([]*types.Transaction, 0)
 
 	from := ""
 	if tx.Type() != common.RewardTxType {
@@ -376,13 +376,20 @@ func (m *Forger) createCollapseTx(tx *types.Transaction, blockNum uint64) (*type
 		m.skipAddr[from] = struct{}{}
 	}
 
-	inputsLimitReached := false
 	for _, out := range tx.Outputs() {
 		addr := out.Address().Hex()
 
 		// skip already collapsed addresses and sender address
 		if _, exists := m.skipAddr[addr]; exists {
 			continue
+		}
+
+		opts := types.TxOptions{
+			Inputs:  make([]*prototype.TxInput, 0, len(tx.Inputs())),
+			Outputs: make([]*prototype.TxOutput, 0, len(tx.Outputs())-1),
+			Fee:     0,
+			Num:     blockNum,
+			Type:    common.CollapseTxType,
 		}
 
 		utxo, err := m.bf.FindAllUTxO(addr)
@@ -394,6 +401,7 @@ func (m *Forger) createCollapseTx(tx *types.Transaction, blockNum uint64) (*type
 		m.skipAddr[addr] = struct{}{}
 
 		// check address need collapsing
+		// should revert this
 		if utxoCount < CollapseOutputsNum {
 			continue
 		}
@@ -402,15 +410,13 @@ func (m *Forger) createCollapseTx(tx *types.Transaction, blockNum uint64) (*type
 		userInputs := make([]*prototype.TxInput, 0, len(utxo))
 		var balance uint64
 		for _, uo := range utxo {
+			if len(opts.Inputs)+len(userInputs)+1 == InputsPerTxLimit {
+				break
+			}
 			input := uo.ToPbInput()
-
 			balance += uo.Amount
 			userInputs = append(userInputs, input)
 
-			if len(opts.Inputs)+len(userInputs) == InputsPerTxLimit {
-				inputsLimitReached = true
-				break
-			}
 		}
 
 		if len(userInputs) > 0 {
@@ -419,25 +425,20 @@ func (m *Forger) createCollapseTx(tx *types.Transaction, blockNum uint64) (*type
 			opts.Outputs = append(opts.Outputs, collapsedOutput)
 		}
 
-		// break generation when inputs limit is reached
-		if inputsLimitReached {
-			break
+		var collapseTx *prototype.Transaction
+
+		if len(opts.Inputs) > 0 {
+			collapseTx, err = types.NewPbTransaction(opts, nil)
+			if err != nil {
+				return nil, err
+			}
+			transactions = append(transactions, types.NewTransaction(collapseTx))
+
+			log.Debugf("Collapse tx for %s with hash %s", tx.Hash().Hex(), common.Encode(collapseTx.Hash))
 		}
 	}
 
-	var collapseTx *prototype.Transaction
-	var err error
-
-	if len(opts.Inputs) > 0 {
-		collapseTx, err = types.NewPbTransaction(opts, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		log.Debugf("Collapse tx for %s with hash %s", tx.Hash().Hex(), common.Encode(collapseTx.Hash))
-	}
-
-	return types.NewTransaction(collapseTx), nil
+	return transactions, nil
 }
 
 // Generates system unstake transactions for all electors of node.

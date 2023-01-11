@@ -17,7 +17,7 @@ type TxValidator interface {
 // BlockValidator checks only blocks
 type BlockValidator interface {
 	// ValidateBlock validate block and return an error if something is wrong
-	ValidateBlock(*prototype.Block, TxJournal, bool) ([]*types.Transaction, error)
+	ValidateBlock(*prototype.Block, bool) ([]*types.Transaction, error)
 
 	// ValidateGenesis compare given Genesis with local
 	ValidateGenesis(*prototype.Block) error
@@ -65,7 +65,7 @@ type BlockchainReader interface {
 // BlockFinalizer interface for any struct that can create and save block to the database
 type BlockFinalizer interface {
 	// FinalizeBlock store block to the blockchain.
-	FinalizeBlock(*prototype.Block, []*types.Transaction) error
+	FinalizeBlock(*prototype.Block) error
 
 	// GetBlockCount return block count in the blockchain
 	GetBlockCount() uint64
@@ -100,7 +100,7 @@ type TxPool interface {
 	DeleteTransaction(*types.Transaction) error
 
 	// InsertCollapseTx insert collapse tx to the pool
-	InsertCollapseTx(*types.Transaction) error
+	InsertCollapseTx([]*types.Transaction) error
 
 	// LockPool locks pool operations
 	LockPool()
@@ -110,12 +110,6 @@ type TxPool interface {
 
 	// ClearForged mark all forged tx as not forged
 	ClearForged(*prototype.Block)
-
-	TxJournal
-}
-
-type TxJournal interface {
-	IsKnown(*types.Transaction) bool
 }
 
 // StakePool regulates stake slots condition.

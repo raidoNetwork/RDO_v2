@@ -1,6 +1,11 @@
 package rdochain
 
 import (
+	"math"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -8,10 +13,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/async"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
-	"math"
-	"strings"
-	"sync"
-	"time"
 )
 
 var (
@@ -53,7 +54,7 @@ func (om *OutputManager) FindAllUTxO(from string) ([]*types.UTxO, error) {
 }
 
 // ProcessBlock update SQL data according to changes in the given block.
-func (om *OutputManager) ProcessBlock(block *prototype.Block, failedTx []*types.Transaction) error {
+func (om *OutputManager) ProcessBlock(block *prototype.Block) error {
 	start := time.Now()
 
 	blockTx, err := om.db.CreateTx(true)
@@ -74,21 +75,12 @@ func (om *OutputManager) ProcessBlock(block *prototype.Block, failedTx []*types.
 
 	var queryBuilder strings.Builder
 
-	failedTxMap := map[string]struct{}{}
-	for _, tx := range failedTx {
-		failedTxMap[tx.Hash().Hex()] = struct{}{}
-	}
-
 	// update SQL
 	for _, tx := range block.Transactions {
 		// update outputs section
 		startInner = time.Now()
 
 		txHash = common.BytesToHash(tx.Hash)
-		// skip failed tx processing
-		if _, exists := failedTxMap[txHash.Hex()]; exists {
-			continue
-		}
 
 		if common.HasInputs(tx) {
 			from = common.BytesToAddress(tx.Inputs[0].Address)
@@ -428,7 +420,7 @@ func (om *OutputManager) prepareOutputsQuery(tx *prototype.Transaction, from com
 	var index uint32
 	for _, out := range tx.Outputs {
 		// skip all fee outputs
-		if tx.Type == common.FeeTxType && common.BytesToAddress(out.Address).Hex() == common.BlackHoleAddress {
+		if tx.Type == common.FeeTxType {
 			index++
 			continue
 		}
