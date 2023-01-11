@@ -2,6 +2,8 @@ package attestation
 
 import (
 	"bytes"
+	"time"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -12,7 +14,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	utypes "github.com/raidoNetwork/RDO_v2/utils/types"
 	"github.com/sirupsen/logrus"
-	"time"
 )
 
 var (
@@ -40,29 +41,24 @@ type CryspValidatorConfig struct {
 
 func NewCryspValidator(bc consensus.BlockchainReader, stakeValidator consensus.StakePool, cfg *CryspValidatorConfig) *CryspValidator {
 	v := CryspValidator{
-		bc: bc,
-		stakeValidator:  stakeValidator,
-		cfg:             cfg,
+		bc:             bc,
+		stakeValidator: stakeValidator,
+		cfg:            cfg,
 	}
 
 	return &v
 }
 
 type CryspValidator struct {
-	bc consensus.BlockchainReader
-	stakeValidator  consensus.StakePool
-	cfg             *CryspValidatorConfig
+	bc             consensus.BlockchainReader
+	stakeValidator consensus.StakePool
+	cfg            *CryspValidatorConfig
 }
 
 // ValidateTransaction validate transaction and return an error if something is wrong
 func (cv *CryspValidator) ValidateTransaction(tx *types.Transaction) error {
 	switch tx.Type() {
 	case common.UnstakeTxType:
-		_, err := cv.checkStakeType(tx)
-		if err != nil {
-			return err
-		}
-
 		return cv.validateUnstakeTx(tx)
 	case common.StakeTxType:
 		st, err := cv.checkStakeType(tx)
@@ -147,11 +143,6 @@ func (cv *CryspValidator) validateTxInputs(tx *types.Transaction) error {
 
 	// count sizes
 	utxoSize := len(utxo)
-	inputsSize := len(tx.Inputs())
-
-	if utxoSize != inputsSize {
-		return errors.Errorf("ValidateTransaction: Inputs size mismatch: real - %d given - %d. Address: %s. Tx: %s", utxoSize, inputsSize, from, tx.Hash().Hex())
-	}
 
 	if utxoSize == 0 {
 		return consensus.ErrUtxoSize
@@ -178,18 +169,18 @@ func (cv *CryspValidator) validateTxInputs(tx *types.Transaction) error {
 	}
 
 	// validate each input
-	alreadySpent, err := cv.checkInputsData(tx, spentOutputsMap)
+	_, err = cv.checkInputsData(tx, spentOutputsMap)
 	if err != nil {
 		log.Errorf("ValidateTransaction: Error checking inputs: %s.", err.Error())
 		return err
 	}
 
-	//Check that all outputs are spent
-	for key := range spentOutputsMap {
-		if _, exists := alreadySpent[key]; !exists {
-			return errors.Errorf("Unspent output of user %s with key %s.", from, key)
-		}
-	}
+	// //Check that all spent outputs exist
+	// for key := range alreadySpent {
+	// 	if _, exists := spentOutputsMap[key]; !exists {
+	// 		return errors.Errorf("No such utxo of user %s with key %s.", from, key)
+	// 	}
+	// }
 
 	return nil
 }
@@ -388,7 +379,7 @@ func (cv *CryspValidator) validateTxStructBase(tx *types.Transaction) error {
 	}
 
 	// verify tx signature
-	if tx.Type() != common.CollapseTxType {
+	if tx.Type() != common.CollapseTxType && tx.Type() != common.ValidatorsUnstakeTxType {
 		signer := types.MakeTxSigner("keccak256")
 		err := signer.Verify(tx.GetTx())
 		if err != nil {
@@ -424,7 +415,7 @@ func (cv *CryspValidator) validateTxStructBase(tx *types.Transaction) error {
 		// check stake outputs in the stake transaction
 		if tx.Type() == common.StakeTxType {
 			node := out.Node().Hex()
-			if len(node) == 0 {
+			if len(out.Node()) == common.AddressLength {
 				if (node == common.BlackHoleAddress && out.Amount()%cv.cfg.StakeUnit != 0) || out.Amount() == 0 {
 					return errors.Wrap(consensus.ErrLowStakeAmount, "Stake error")
 				}
@@ -452,7 +443,7 @@ func (cv *CryspValidator) validateTxStructBase(tx *types.Transaction) error {
 
 	if inputsBalance != outputsBalance {
 		diff, underflow := math.Sub64(inputsBalance, outputsBalance)
-		if outputsBalance > inputsBalance{
+		if outputsBalance > inputsBalance {
 			diff, _ = math.Sub64(outputsBalance, inputsBalance)
 		}
 
@@ -524,6 +515,10 @@ func (cv *CryspValidator) checkInputsData(tx *types.Transaction, spentOutputsMap
 			return nil, errors.Errorf("Amount mismatch with key: %s. Given %d. Expected %d. Tx %s", key, in.Amount(), dbInput.Amount(), txHash)
 		}
 
+		if !bytes.Equal(dbInput.Node(), in.Node()) {
+			return nil, errors.Errorf("Node mismatch with key %s. Given %s. Expected %s. Tx %s", key, in.Node().Hex(), dbInput.Node().Hex(), txHash)
+		}
+
 		// mark output as already spent
 		alreadySpent[key] = struct{}{}
 	}
@@ -547,6 +542,16 @@ func (cv *CryspValidator) checkHash(tx *types.Transaction) error {
 
 // validateUnstakeTx check unstake tx
 func (cv *CryspValidator) validateUnstakeTx(tx *types.Transaction) error {
+	stakeNode := ""
+	for _, in := range tx.Inputs() {
+		node := in.Node().Hex()
+		if stakeNode == "" {
+			stakeNode = node
+		} else if stakeNode != node {
+			return errors.Errorf("Unstake from different nodes is not allowed. Given %s, %s", stakeNode, node)
+		}
+	}
+
 	// validate unstake outputs are valid
 	for _, out := range tx.Outputs() {
 		if out.Node().Hex() == common.BlackHoleAddress && (out.Amount()%cv.cfg.StakeUnit) != 0 {
@@ -555,6 +560,88 @@ func (cv *CryspValidator) validateUnstakeTx(tx *types.Transaction) error {
 	}
 
 	return cv.validateTxInputs(tx)
+}
+
+// checkSystemUnstakeTx verifies SystemUnstake transactions
+func (cv *CryspValidator) validateSystemUnstakeTx(tx *types.Transaction, block *prototype.Block) error {
+	// Num of SystemUnstake should be equal to the block num
+	if tx.Num() != block.Num {
+		return errors.New("Wrong system unstake tx num")
+	}
+	err := cv.validateTxStructBase(tx)
+	if err != nil {
+		return err
+	}
+
+	// Collect senders balances
+	senderBalances := make(map[string]uint64)
+	for _, in := range tx.Inputs() {
+		key := in.Address().Hex()
+		if b, exists := senderBalances[key]; exists {
+			result, overflow := math.Add64(senderBalances[key], b)
+			if overflow {
+				return errors.Errorf("Balance overflow for %s", in.Address().Hex())
+			}
+			senderBalances[key] = result
+		} else {
+			senderBalances[key] = in.Amount()
+		}
+	}
+
+	// We have one output per staker. We want to make sure
+	// that the sum of inputs for a particular staker is
+	// equal to the amount in the output
+	seenOuts := make(map[string]struct{})
+	for _, out := range tx.Outputs() {
+		// the node parameter should be nil
+		if out.Node().Bytes() != nil {
+			return errors.Errorf("Node should be nil in SystemUnstakeTx's outputs")
+		}
+
+		address := out.Address().Hex()
+		if _, exists := seenOuts[address]; exists {
+			return errors.Errorf("More than one output for a staker")
+		}
+		seenOuts[address] = struct{}{}
+		amountOut := out.Amount()
+		sumIn, exists := senderBalances[address]
+		if !exists {
+			// Recipient without sender
+			return errors.Errorf("Recipient without sender")
+		}
+		if amountOut != sumIn {
+			return errors.Errorf("Balance inconsistency in transaction: %s", tx.Hash().Hex())
+		}
+	}
+
+	// Finally, check that the utxos correspond to the inputs
+	// get all utxo
+	spentOutputsMap := map[string]*types.Input{}
+	for addr := range senderBalances {
+		utxo, err := cv.bc.FindStakeDepositsOfAddress(addr, "all")
+		if err != nil {
+			return err
+		}
+
+		for _, uo := range utxo {
+			input := uo.ToInput()
+			inputKey := serialize.GenKeyFromInput(input)
+			spentOutputsMap[inputKey] = input
+		}
+	}
+
+	// validate each input
+	alreadySpent, err := cv.checkInputsData(tx, spentOutputsMap)
+	if err != nil {
+		log.Errorf("ValidateSystemUnstakeTx: Error checking inputs: %s.", err)
+		return err
+	}
+	if len(alreadySpent) != len(tx.Inputs()) {
+		err = errors.New("ValidateSystemUnstakeTx: Inputs do not correspond to utxos")
+		log.Error(err)
+		return err
+	}
+	return nil
 }
 
 // checkStakeType check stake tx type

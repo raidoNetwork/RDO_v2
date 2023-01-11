@@ -30,10 +30,11 @@ func (uo *UTxO) ToPbInput() *prototype.TxInput {
 
 func (uo *UTxO) ToInput() *Input {
 	return &Input{
-		hash: uo.Hash,
+		hash:    uo.Hash,
 		address: uo.To,
-		index: uo.Index,
-		amount: uo.Amount,
+		index:   uo.Index,
+		amount:  uo.Amount,
+		node:    uo.Node,
 	}
 }
 

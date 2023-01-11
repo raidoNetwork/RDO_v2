@@ -21,7 +21,11 @@ var (
 		Name:  "clear-db",
 		Usage: "Prompt for clearing any previously stored data at the data directory",
 	}
-
+	// RepairDB update database struct according to the types changes
+	RepairDB = altsrc.NewBoolFlag(&cli.BoolFlag{
+		Name: "repair-db",
+		Usage: "Update database struct according to the types changes",
+	})
 	// SQLConfigPath setups path to the MySQL config file.
 	SQLConfigPath = altsrc.NewStringFlag(&cli.StringFlag{
 		Name:  "sql-cfg",

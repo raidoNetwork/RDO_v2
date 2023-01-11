@@ -1,6 +1,9 @@
 package staking
 
 import (
+	"sync"
+	"unicode/utf8"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -8,11 +11,11 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/sirupsen/logrus"
-	"sync"
-	"unicode/utf8"
 )
 
 var log = logrus.WithField("prefix", "StakePool")
+
+var ErrNoStake = errors.New("no stake from address")
 
 type ValidatorStakeData struct {
 	SlotsFilled     int
@@ -22,15 +25,15 @@ type ValidatorStakeData struct {
 }
 
 type StakingPool struct {
-	validators map[string]*ValidatorStakeData
-	electors map[string]map[string]struct{}
-	cumulativeStake uint64
-	rewardPerBlock uint64
+	validators         map[string]*ValidatorStakeData
+	electors           map[string]map[string]struct{}
+	cumulativeStake    uint64
+	rewardPerBlock     uint64
 	stakeAmountPerSlot uint64
-	slotsLimit int
-	slotsFilled int
-	slotsReserved int
-	blockchain consensus.BlockchainReader
+	slotsLimit         int
+	slotsFilled        int
+	slotsReserved      int
+	blockchain         consensus.BlockchainReader
 
 	mu sync.Mutex
 }
@@ -95,7 +98,7 @@ func (p *StakingPool) registerValidatorStake(validator string, amount uint64) er
 	return nil
 }
 
-func (p *StakingPool) cancelValidatorStake(validator string, amount uint64) error  {
+func (p *StakingPool) cancelValidatorStake(validator string, amount uint64) error {
 	slotsCount := int(amount / p.stakeAmountPerSlot)
 	if slotsCount == 0 {
 		return errors.Errorf("Bad unstake amount given: %d.", amount)
@@ -213,7 +216,7 @@ func (p *StakingPool) ReserveSlots(amount uint64) error {
 		return errors.New("Too low amount for staking.")
 	}
 
-	emptySlots := p.slotsLimit-p.filledSlots(true)
+	emptySlots := p.slotsLimit - p.filledSlots(true)
 	if emptySlots < count {
 		return errors.New("Can't reserve all slots with given amount.")
 	}
@@ -263,37 +266,36 @@ func (p *StakingPool) processStakeTx(tx *types.Transaction) error {
 	return nil
 }
 
-func (p *StakingPool) processUnstakeTx(tx *types.Transaction) error {
-	// count tx stake amount
-	var amount uint64
+func (p *StakingPool) processValidatorsUnstakeTx(tx *types.Transaction) (err error) {
+	stakeNode := ""
+	var amount uint64 // count tx stake amount
 	for _, in := range tx.Inputs() {
+		node := in.Node().Hex()
+		if stakeNode == "" {
+			stakeNode = node
+		} else if stakeNode != node {
+			return errors.Errorf("Unstake from different nodes is not allowed. Given %s, %s", stakeNode, node)
+		}
+
 		amount += in.Amount()
 	}
 
 	// find amount to unstake
-	isValidatorUnstake := false
-	var validator string
+	isValidatorUnstake := stakeNode == common.BlackHoleAddress
 	for _, out := range tx.Outputs() {
 		if len(out.Node()) == common.AddressLength {
-			if out.Node().Hex() == common.BlackHoleAddress {
-				isValidatorUnstake = true
-			} else {
-				validator = out.Node().Hex()
-			}
-
 			amount -= out.Amount()
 		}
 	}
 
-	if !isValidatorUnstake && utf8.RuneCountInString(validator) != 42 {
+	if !isValidatorUnstake && utf8.RuneCountInString(stakeNode) != 42 {
 		return errors.New("Incorrect unstake tx")
 	}
 
-	var err error
 	if isValidatorUnstake {
 		err = p.cancelValidatorStake(tx.From().Hex(), amount)
 	} else {
-		err = p.cancelElectorStake(tx.From().Hex(), validator, amount)
+		err = p.cancelElectorStake(tx.From().Hex(), stakeNode, amount)
 	}
 
 	if err != nil {
@@ -301,6 +303,29 @@ func (p *StakingPool) processUnstakeTx(tx *types.Transaction) error {
 		return err
 	}
 
+	return nil
+}
+
+func (p *StakingPool) processSystemUnstakeTx(tx *types.Transaction) error {
+	// Calculate the inputs amounts for each address
+	// record the corresponding node address
+	unstakeNodes := make(map[string][]string)
+	for _, in := range tx.Inputs() {
+		address := in.Address().Hex()
+		unstakeNodes[address] = append(unstakeNodes[address], in.Node().Hex())
+	}
+
+	// For each address, cancel the stake
+	for address, validators := range unstakeNodes {
+		for _, validator := range validators {
+			amount := p.validators[validator].Electors[address]
+			err := p.cancelElectorStake(address, validator, amount)
+			if err != nil {
+				log.Errorf("Error processing SystemUnstakeTx: %s", err)
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -316,7 +341,9 @@ func (p *StakingPool) FinalizeStaking(batch []*types.Transaction) error {
 		case common.StakeTxType:
 			err = p.processStakeTx(tx)
 		case common.UnstakeTxType:
-			err = p.processUnstakeTx(tx)
+			err = p.processValidatorsUnstakeTx(tx)
+		case common.ValidatorsUnstakeTxType:
+			err = p.processSystemUnstakeTx(tx)
 		}
 
 		if err != nil {
@@ -340,9 +367,8 @@ func (p *StakingPool) GetRewardMap(proposer string) map[string]uint64 {
 		blockReward := params.RaidoConfig().ProposerReward
 		stakeData := p.validators[proposer]
 
-		validatorReward := blockReward
 		if len(stakeData.Electors) > 0 {
-			validatorReward = blockReward * params.RaidoConfig().ChosenValidatorRewardPercent / 100
+			validatorReward := blockReward * params.RaidoConfig().ChosenValidatorRewardPercent / 100
 			electorsReward := blockReward - validatorReward
 			electorsStake := stakeData.CumulativeStake - stakeData.SelfStake
 			for elector, stakeAmount := range stakeData.Electors {
@@ -353,9 +379,8 @@ func (p *StakingPool) GetRewardMap(proposer string) map[string]uint64 {
 
 				rewards[elector] += reward
 			}
+			rewards[proposer] += validatorReward
 		}
-
-		rewards[proposer] += validatorReward
 	}
 
 	// divide rewards among all validator slots
@@ -418,11 +443,21 @@ func (p *StakingPool) ValidatorStakeMap() map[string]uint64 {
 
 func NewPool(blockchain consensus.BlockchainReader, slotsLimit int, reward uint64, stakeAmount uint64) consensus.StakePool {
 	return &StakingPool{
-		validators: map[string]*ValidatorStakeData{},
-		electors: map[string]map[string]struct{}{},
-		blockchain: blockchain,
-		slotsLimit: slotsLimit,
+		validators:         map[string]*ValidatorStakeData{},
+		electors:           map[string]map[string]struct{}{},
+		blockchain:         blockchain,
+		slotsLimit:         slotsLimit,
 		stakeAmountPerSlot: stakeAmount,
-		rewardPerBlock: reward,
+		rewardPerBlock:     reward,
 	}
+}
+
+func (s *StakingPool) GetElectorsOfValidator(validator string) (map[string]uint64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stakeData, exists := s.validators[validator]
+	if !exists {
+		return nil, errors.Errorf("Such validator does not exists")
+	}
+	return stakeData.Electors, nil
 }

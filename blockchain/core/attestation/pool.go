@@ -5,6 +5,8 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/raidoNetwork/RDO_v2/shared/params"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -17,7 +19,6 @@ import (
 
 const (
 	maxTxCount = 1000
-	minFee     = 1
 )
 
 var log = logrus.WithField("prefix", "attestation")
@@ -102,15 +103,8 @@ func (p *Pool) processDoubleSpend(oldTx, newTx *types.Transaction) error {
 		}
 
 		return p.swap(oldTx, newTx)
-	} else {
-		err := p.validateTx(newTx)
-		if err != nil {
-			return err
-		}
-
-		oldTx.AddDouble(newTx)
-		return nil
 	}
+	return nil
 }
 
 func (p *Pool) swap(oldTx, newTx *types.Transaction) error {
@@ -178,33 +172,34 @@ func (p *Pool) validateTx(tx *types.Transaction) error {
 	return p.cfg.Validator.ValidateTransaction(tx)
 }
 
-func (p *Pool) InsertCollapseTx(tx *types.Transaction) error {
-	if tx.Type() != common.CollapseTxType {
-		return errors.New("Wrong tx type given")
-	}
-
+func (p *Pool) InsertCollapseTx(txs []*types.Transaction) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-
-	senders := map[string]struct{}{}
-	for _, in := range tx.Inputs() {
-		from := in.Address().Hex()
-		if _, exists := senders[from]; exists {
-			continue
+	for _, tx := range txs {
+		if tx.Type() != common.CollapseTxType {
+			return errors.New("Wrong tx type given")
 		}
 
-		if _, exists := p.txSenderMap[from]; exists {
-			return errors.New("CollapseTx can trigger double spend")
+		senders := map[string]struct{}{}
+		for _, in := range tx.Inputs() {
+			from := in.Address().Hex()
+			if _, exists := senders[from]; exists {
+				continue
+			}
+
+			if _, exists := p.txSenderMap[from]; exists {
+				return errors.New("CollapseTx can trigger double spend")
+			}
+
+			senders[from] = struct{}{}
 		}
 
-		senders[from] = struct{}{}
-	}
+		for from := range senders {
+			p.txSenderMap[from] = tx
+		}
 
-	for from := range senders {
-		p.txSenderMap[from] = tx
+		p.txHashMap[tx.Hash().Hex()] = tx
 	}
-
-	p.txHashMap[tx.Hash().Hex()] = tx
 
 	return nil
 }
@@ -223,7 +218,7 @@ func (p *Pool) GetFeePrice() uint64 {
 	queue := p.GetQueue()
 	size := len(queue)
 	if size == 0 {
-		return minFee // todo change with config value
+		return params.RaidoConfig().MinimalFee
 	} else if size == 1 {
 		return queue[0].FeePrice()
 	} else {
@@ -233,8 +228,14 @@ func (p *Pool) GetFeePrice() uint64 {
 
 func (p *Pool) Finalize(txarr []*types.Transaction) {
 	p.mu.Lock()
+	// Gather ValidatorsUnstakeTxs
+	validatorsUnstakes := make([]*types.Transaction, 0)
 
 	for _, tx := range txarr {
+		if tx.Type() == common.ValidatorsUnstakeTxType {
+			validatorsUnstakes = append(validatorsUnstakes, tx)
+		}
+
 		if utypes.IsSystemTx(tx) && tx.Type() != common.CollapseTxType {
 			continue
 		}
@@ -251,6 +252,11 @@ func (p *Pool) Finalize(txarr []*types.Transaction) {
 		p.cleanTransactionMap(rtx)
 	}
 
+	// Clean up SystemUnstakeTxs
+	for _, tx := range validatorsUnstakes {
+		p.cleanUpSystemUnstake(tx)
+	}
+
 	p.mu.Unlock()
 }
 
@@ -262,10 +268,6 @@ func (p *Pool) findPoolTransaction(tx *types.Transaction) (*types.Transaction, i
 
 	if !exists && !senderExists {
 		return nil, -1, errors.New("Undefined sender and transaction")
-	}
-
-	if !exists && tx.Status() == types.TxFailed {
-		return nil, -1, errors.New("Undefined transaction")
 	}
 
 	// now tx can be one of several cases:
@@ -300,6 +302,50 @@ func (p *Pool) cleanTransactionMap(tx *types.Transaction) {
 	}
 }
 
+func (p *Pool) findProblematicStakeTx(address, node string) (*types.Transaction, int, error) {
+	tx, exists := p.txSenderMap[address]
+	if !exists {
+		return nil, -1, errors.Errorf("No problematic transaction found in tx pool")
+	}
+
+	// Checking if the transaction is a stake transaction on the specified node
+	for _, out := range tx.Outputs() {
+		if out.Node().Hex() == node {
+			index := p.pending.GetIndex(tx)
+			return tx, index, nil
+		}
+	}
+
+	// Checking if the transaction is an unstake transaction from the specified node
+	for _, in := range tx.Inputs() {
+		if in.Node().Hex() == node {
+			index := p.pending.GetIndex(tx)
+			return tx, index, nil
+		}
+	}
+
+	return nil, -1, errors.Errorf("No problematic transaction found in tx pool")
+}
+
+func (p *Pool) cleanUpSystemUnstake(tx *types.Transaction) {
+	// For address, remove the corresponding stake and unstake transactions
+	// from the transaction pool
+	for _, in := range tx.Inputs() {
+		address := in.Address().Hex()
+		node := in.Node().Hex()
+		rtx, index, err := p.findProblematicStakeTx(address, node)
+		if err != nil {
+			log.Debugf("Error in cleanUpSystemUnstake: %s\n", err)
+			continue
+		}
+		p.queueLock.Lock()
+		p.pending = p.pending.SwapAndRemove(index)
+		p.queueLock.Unlock()
+
+		p.cleanTransactionMap(rtx)
+	}
+}
+
 func (p *Pool) DeleteTransaction(tx *types.Transaction) error {
 	found := false
 	for i, ptx := range p.pending {
@@ -321,22 +367,6 @@ func (p *Pool) DeleteTransaction(tx *types.Transaction) error {
 	log.Debugf("Delete transaction %s", tx.Hash().Hex())
 
 	return nil
-}
-
-func (p *Pool) IsKnown(tx *types.Transaction) bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	oldTx, exists := p.txSenderMap[tx.From().Hex()]
-	if !exists {
-		return false
-	}
-
-	if bytes.Equal(oldTx.Hash(), tx.Hash()) {
-		return true
-	}
-
-	return oldTx.HasDouble(tx.Hash())
 }
 
 func (p *Pool) LockPool() {

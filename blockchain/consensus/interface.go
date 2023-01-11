@@ -17,7 +17,7 @@ type TxValidator interface {
 // BlockValidator checks only blocks
 type BlockValidator interface {
 	// ValidateBlock validate block and return an error if something is wrong
-	ValidateBlock(*prototype.Block, TxJournal, bool) ([]*types.Transaction, error)
+	ValidateBlock(*prototype.Block, bool) ([]*types.Transaction, error)
 
 	// ValidateGenesis compare given Genesis with local
 	ValidateGenesis(*prototype.Block) error
@@ -34,7 +34,7 @@ type GenesisReader interface {
 	GetGenesis() *prototype.Block
 }
 
-type BlockchainReader interface{
+type BlockchainReader interface {
 	// FindAllUTxO find all address unspent outputs
 	FindAllUTxO(string) ([]*types.UTxO, error)
 
@@ -65,13 +65,16 @@ type BlockchainReader interface{
 // BlockFinalizer interface for any struct that can create and save block to the database
 type BlockFinalizer interface {
 	// FinalizeBlock store block to the blockchain.
-	FinalizeBlock(*prototype.Block, []*types.Transaction) error
+	FinalizeBlock(*prototype.Block) error
 
 	// GetBlockCount return block count in the blockchain
 	GetBlockCount() uint64
 
 	// FindAllUTxO find all address unspent outputs
 	FindAllUTxO(string) ([]*types.UTxO, error)
+
+	// FindStakeDepositsOfAddress returns all stake deposits of an address on a specified node
+	FindStakeDepositsOfAddress(address string, node string) ([]*types.UTxO, error)
 
 	// ParentHash return parent block hash for current block
 	ParentHash() []byte
@@ -97,7 +100,7 @@ type TxPool interface {
 	DeleteTransaction(*types.Transaction) error
 
 	// InsertCollapseTx insert collapse tx to the pool
-	InsertCollapseTx(*types.Transaction) error
+	InsertCollapseTx([]*types.Transaction) error
 
 	// LockPool locks pool operations
 	LockPool()
@@ -107,12 +110,6 @@ type TxPool interface {
 
 	// ClearForged mark all forged tx as not forged
 	ClearForged(*prototype.Block)
-
-	TxJournal
-}
-
-type TxJournal interface {
-	IsKnown(*types.Transaction) bool
 }
 
 // StakePool regulates stake slots condition.
@@ -127,6 +124,9 @@ type StakePool interface {
 	GetRewardOutputs(string) []*prototype.TxOutput
 
 	GetRewardMap(string) map[string]uint64
+
+	// GetElectorsOfValidator returns electors' data of a validator
+	GetElectorsOfValidator(string) (map[string]uint64, error)
 
 	// Init load initial pool data
 	Init() error
@@ -147,7 +147,7 @@ type StakeDataReader interface {
 }
 
 // AttestationPool control block and transaction validation and staking
-type AttestationPool interface{
+type AttestationPool interface {
 	StakePool() StakePool
 
 	TxPool() TxPool

@@ -204,7 +204,16 @@ func (m *TxValue) validate(all bool) error {
 
 	// no validation rules for Type
 
-	// no validation rules for Timestamp
+	if m.GetTimestamp() <= 0 {
+		err := TxValueValidationError{
+			field:  "Timestamp",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
 
 	if utf8.RuneCountInString(m.GetHash()) != 66 {
 		err := TxValueValidationError{
@@ -218,10 +227,10 @@ func (m *TxValue) validate(all bool) error {
 
 	}
 
-	if m.GetFee() <= 0 {
+	if m.GetFee() < 0 {
 		err := TxValueValidationError{
 			field:  "Fee",
-			reason: "value must be greater than 0",
+			reason: "value must be greater than or equal to 0",
 		}
 		if !all {
 			return err
@@ -446,6 +455,17 @@ func (m *TxInputValue) validate(all bool) error {
 	}
 
 	// no validation rules for Amount
+
+	if utf8.RuneCountInString(m.GetNode()) > 42 {
+		err := TxInputValueValidationError{
+			field:  "Node",
+			reason: "value length must be at most 42 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
 
 	if len(errors) > 0 {
 		return TxInputValueMultiError(errors)

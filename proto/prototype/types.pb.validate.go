@@ -444,10 +444,10 @@ func (m *Transaction) validate(all bool) error {
 		errors = append(errors, err)
 	}
 
-	if m.GetFee() <= 0 {
+	if m.GetFee() < 0 {
 		err := TransactionValidationError{
 			field:  "Fee",
-			reason: "value must be greater than 0",
+			reason: "value must be greater than or equal to 0",
 		}
 		if !all {
 			return err
@@ -683,6 +683,21 @@ func (m *TxInput) validate(all bool) error {
 			return err
 		}
 		errors = append(errors, err)
+	}
+
+	if len(m.GetNode()) > 0 {
+
+		if len(m.GetNode()) != 20 {
+			err := TxInputValidationError{
+				field:  "Node",
+				reason: "value length must be 20 bytes",
+			}
+			if !all {
+				return err
+			}
+			errors = append(errors, err)
+		}
+
 	}
 
 	if len(errors) > 0 {

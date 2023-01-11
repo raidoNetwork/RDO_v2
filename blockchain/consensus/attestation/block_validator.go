@@ -2,25 +2,23 @@ package attestation
 
 import (
 	"bytes"
+	"strconv"
+	"time"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/rdochain"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
-	"github.com/raidoNetwork/RDO_v2/shared/math"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/hash"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	vtypes "github.com/raidoNetwork/RDO_v2/validator/types"
-	"strconv"
-	"time"
 )
 
 var (
 	ErrReadingBlock = errors.New("Error reading block from database")
 )
-
-const failedTxLimitPercent = 50
 
 // checkBlockBalance count block inputs and outputs sum and check that all inputs in block are unique.
 func (cv *CryspValidator) checkBlockBalance(block *prototype.Block) error {
@@ -103,7 +101,7 @@ func (cv *CryspValidator) validateBlockHeader(block *prototype.Block) error {
 }
 
 // ValidateBlock validate block and return an error if something is wrong
-func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensus.TxJournal, countSign bool) ([]*types.Transaction, error) {
+func (cv *CryspValidator) ValidateBlock(block *prototype.Block, countSign bool) ([]*types.Transaction, error) {
 	log.Debugf("Validate block #%d", block.Num)
 
 	start := time.Now()
@@ -197,16 +195,19 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, journal consensu
 		log.Infof("Approvers %d, slashers %d", approversCount, slashersCount)
 	}
 
-	failedTx, err := cv.verifyTransactions(block, journal)
+	failedTx, err := cv.verifyTransactions(block)
 	if err != nil {
-		return failedTx, errors.Wrap(err, "Error verify transactions")
+		return failedTx, errors.Wrap(err, "Error verifying transactions")
+	}
+
+	if len(failedTx) != 0 {
+		return failedTx, errors.Wrap(err, "There are failed transactions in the block")
 	}
 
 	return nil, nil
-
 }
 
-func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal consensus.TxJournal) ([]*types.Transaction, error) {
+func (cv *CryspValidator) verifyTransactions(block *prototype.Block) ([]*types.Transaction, error) {
 	failedTx := make([]*types.Transaction, 0)
 	standardTxCount := 0
 	for _, txpb := range block.Transactions {
@@ -225,10 +226,13 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal con
 			case common.RewardTxType:
 				err = cv.validateRewardTx(tx, block)
 				txType = "RewardTx"
+			case common.ValidatorsUnstakeTxType:
+				err = cv.validateSystemUnstakeTx(tx, block)
+				txType = "SystemUnstakeTx"
 			}
 
 			if err != nil {
-				return nil, errors.Wrap(err, "Error validation " + txType)
+				return nil, errors.Wrap(err, "Error validating "+txType)
 			}
 
 			continue
@@ -243,25 +247,18 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block, journal con
 			continue
 		}
 
-		if journal.IsKnown(tx) {
-			continue
-		}
-
 		err = cv.ValidateTransaction(tx)
 		if err != nil {
 			log.Error(err)
 			failedTx = append(failedTx, tx)
 			tx.SetStatus(types.TxFailed)
+			continue
 		}
 
 		tx.SetStatus(types.TxSuccess)
 	}
 
-	if math.IsGEPercentLimit(len(failedTx), standardTxCount, failedTxLimitPercent) {
-		return failedTx, errors.New("too much failed tx")
-	}
-
-	return nil, nil
+	return failedTx, nil
 }
 
 func (cv *CryspValidator) verifyBlockSign(block *prototype.Block, sign *prototype.Sign) error {

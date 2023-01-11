@@ -3,6 +3,8 @@ package rdochain
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/blockchain/state"
@@ -13,7 +15,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/sirupsen/logrus"
-	"sync"
 )
 
 var _ shared.Service = (*Service)(nil)
@@ -23,7 +24,7 @@ var (
 	ErrNotForgedBlock = errors.New("Given block number is not forged yet.")
 )
 
-func NewService(kv db.BlockStorage, sql db.OutputStorage, stateFeed events.Feed) (*Service, error){
+func NewService(kv db.BlockStorage, sql db.OutputStorage, stateFeed events.Feed, repairDB bool) (*Service, error) {
 	cfg := params.RaidoConfig()
 
 	// create blockchain instance
@@ -33,25 +34,27 @@ func NewService(kv db.BlockStorage, sql db.OutputStorage, stateFeed events.Feed)
 	outm := NewOutputManager(bc, sql)
 
 	srv := &Service{
-		bc: bc,
-		outm: outm,
+		bc:        bc,
+		outm:      outm,
 		stateFeed: stateFeed,
+		repairDB:  repairDB,
 	}
 
 	return srv, nil
 }
 
-type Service struct{
-	bc *BlockChain
-	outm *OutputManager
-	stateFeed events.Feed
-	mu sync.Mutex
-	ready bool
-	statusErr error
+type Service struct {
+	bc           *BlockChain
+	outm         *OutputManager
+	stateFeed    events.Feed
+	mu           sync.Mutex
+	ready        bool
+	statusErr    error
 	startFailure error
+	repairDB     bool
 }
 
-func (s *Service) Start(){
+func (s *Service) Start() {
 	// load head data and Genesis
 	err := s.bc.Init()
 	if err != nil {
@@ -74,6 +77,14 @@ func (s *Service) Start(){
 		s.startFailure = err
 		s.mu.Unlock()
 		return
+	}
+
+	if s.repairDB {
+		err = s.RepairDatabase()
+		if err != nil {
+			log.Errorf("Error repair database: %s", err)
+			return
+		}
 	}
 
 	// change service status
@@ -145,7 +156,7 @@ func (s *Service) GetSyncStatus() (string, error) {
 	return s.getSQLsyncStatus()
 }
 
-func (s *Service) getSQLsyncStatus() (string, error){
+func (s *Service) getSQLsyncStatus() (string, error) {
 	s.mu.Lock()
 	isNodeReady := s.ready
 	statusError := s.statusErr
@@ -186,7 +197,6 @@ func (s *Service) GetBalance(addr string) (uint64, error) {
 	return balance, nil
 }
 
-
 func (s *Service) GetBlockByNum(n uint64) (*prototype.Block, error) {
 	return s.bc.GetBlockByNum(n)
 }
@@ -196,7 +206,7 @@ func (s *Service) GetBlockByHashHex(hexHash string) (*prototype.Block, error) {
 	return s.bc.GetBlockByHash(hash.Bytes())
 }
 
-func (s *Service) GetBlockByHash(hash []byte) (*prototype.Block, error){
+func (s *Service) GetBlockByHash(hash []byte) (*prototype.Block, error) {
 	return s.bc.GetBlockByHash(hash)
 }
 
@@ -236,7 +246,7 @@ func (s *Service) GetBlockCount() uint64 {
 	return s.bc.GetBlockCount()
 }
 
-func (s *Service) ParentHash() []byte{
+func (s *Service) ParentHash() []byte {
 	return s.bc.ParentHash()
 }
 
@@ -249,12 +259,12 @@ func (s *Service) GetGenesis() *prototype.Block {
 }
 
 // FinalizeBlock save block to the local databases
-func (s *Service) FinalizeBlock(block *prototype.Block, failedTx []*types.Transaction) error {
+func (s *Service) FinalizeBlock(block *prototype.Block) error {
 	s.outm.FinalizeLock()
 	defer s.outm.FinalizeUnlock()
 
 	// update SQL
-	err := s.outm.ProcessBlock(block, failedTx)
+	err := s.outm.ProcessBlock(block)
 	if err != nil {
 		return errors.Wrap(err, "SQL error")
 	}
@@ -316,4 +326,9 @@ func (s *Service) GetBlocksRange(ctx context.Context, start uint64, end uint64) 
 
 func (s *Service) FindValidatorStakeDeposits() ([]*types.UTxO, error) {
 	return s.outm.FindValidatorStakeDeposits()
+}
+
+func (s *Service) RepairDatabase() error {
+	// todo make impl
+	return nil
 }
