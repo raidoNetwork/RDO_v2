@@ -461,3 +461,9 @@ func (s *StakingPool) GetElectorsOfValidator(validator string) (map[string]uint6
 	}
 	return stakeData.Electors, nil
 }
+
+func (s *StakingPool) NumberStakers(validator string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.validators[validator].Electors)
+}

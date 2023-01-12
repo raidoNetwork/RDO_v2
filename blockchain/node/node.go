@@ -3,6 +3,13 @@ package node
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"sync"
+	"syscall"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/attestation"
@@ -26,12 +33,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/validator"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"strings"
-	"sync"
-	"syscall"
 )
 
 var log = logrus.WithField("prefix", "node")
@@ -229,7 +230,7 @@ func (r *RDONode) registerRPCservice() error {
 	host := r.cliCtx.String(flags.RPCHost.Name)
 	port := r.cliCtx.String(flags.RPCPort.Name)
 
-	genService := generator.NewService(blockchainService)
+	genService := generator.NewService(blockchainService, attestationService)
 
 	srv := rpc.NewService(r.ctx, &rpc.Config{
 		Host:               host,

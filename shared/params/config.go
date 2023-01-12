@@ -29,4 +29,6 @@ type RDOBlockChainConfig struct {
 	NTPChecks int `yaml:"NTP_CHECKS"` // number of NTP checks to perform
 
 	NTPThreshold int `yaml:"NTP_THRESHOLD"` // Specifies what clock drift is considered within boundaries (in ms)
+
+	MaxNumberOfStakers int `yaml:"MAX_STAKERS"` // Maximum number of stakers per validator
 }

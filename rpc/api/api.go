@@ -58,6 +58,10 @@ type AttestationAPI interface {
 
 	// GetPendingTransactions returns list of pending transactions.
 	GetPendingTransactions() ([]*prototype.Transaction, error)
+
+	// StakersLimitReached returns an error if
+	// the limit of stakers for a particular validator is exceeded
+	StakersLimitReached(tx *types.Transaction) error
 }
 
 type GeneratorAPI interface {

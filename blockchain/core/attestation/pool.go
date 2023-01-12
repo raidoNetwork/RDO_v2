@@ -32,6 +32,7 @@ func NewPool(cfg *PoolSettings) *Pool {
 	return &Pool{
 		txSenderMap: map[string]*types.Transaction{},
 		txHashMap:   map[string]*types.Transaction{},
+		stakeTxMap:  map[string]*types.Transaction{},
 		pending:     make(Transactions, 0),
 		cfg:         cfg,
 	}
@@ -40,6 +41,7 @@ func NewPool(cfg *PoolSettings) *Pool {
 type Pool struct {
 	txSenderMap map[string]*types.Transaction
 	txHashMap   map[string]*types.Transaction
+	stakeTxMap  map[string]*types.Transaction
 
 	pending Transactions
 	cfg     *PoolSettings
@@ -122,6 +124,16 @@ func (p *Pool) swap(oldTx, newTx *types.Transaction) error {
 	p.queueLock.Unlock()
 
 	p.mu.Lock()
+
+	// If a stake tx, update stakeTxMap
+	if newTx.Type() == common.StakeTxType {
+		p.stakeTxMap[newTx.From().Hex()] = newTx
+	}
+
+	if oldTx.Type() == common.StakeTxType {
+		delete(p.stakeTxMap, oldTx.From().Hex())
+	}
+
 	delete(p.txHashMap, oldTx.Hash().Hex())
 	p.txHashMap[newTx.Hash().Hex()] = newTx
 	p.txSenderMap[newTx.From().Hex()] = newTx
@@ -134,6 +146,9 @@ func (p *Pool) swap(oldTx, newTx *types.Transaction) error {
 
 func (p *Pool) finalizeInsert(tx *types.Transaction) {
 	p.mu.Lock()
+	if tx.Type() == uint32(common.StakeTxType) {
+		p.stakeTxMap[tx.Hash().Hex()] = tx
+	}
 	p.txSenderMap[tx.From().Hex()] = tx
 	p.txHashMap[tx.Hash().Hex()] = tx
 	p.mu.Unlock()
@@ -168,8 +183,21 @@ func (p *Pool) validateTx(tx *types.Transaction) error {
 	}
 
 	// todo check locked inputs here
+	if tx.Type() == uint32(common.StakeTxType) {
+		if err := p.cfg.Validator.ValidateTransaction(tx); err != nil {
+			return err
+		}
 
-	return p.cfg.Validator.ValidateTransaction(tx)
+		return p.CheckMaxStakers(tx)
+	} else {
+		return p.cfg.Validator.ValidateTransaction(tx)
+	}
+}
+
+func (p *Pool) CheckMaxStakers(tx *types.Transaction) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.cfg.Validator.CheckMaxStakers(tx, len(p.stakeTxMap))
 }
 
 func (p *Pool) InsertCollapseTx(txs []*types.Transaction) error {
@@ -299,6 +327,10 @@ func (p *Pool) cleanTransactionMap(tx *types.Transaction) {
 		for _, sender := range tx.AllSenders() {
 			delete(p.txSenderMap, sender.Hex())
 		}
+	}
+
+	if tx.Type() == common.StakeTxType {
+		delete(p.stakeTxMap, tx.Hash().Hex())
 	}
 }
 

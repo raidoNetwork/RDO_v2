@@ -2,6 +2,7 @@ package attestation
 
 import (
 	"bytes"
+	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -9,6 +10,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/math"
+	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/hash"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
@@ -17,7 +19,8 @@ import (
 )
 
 var (
-	log = logrus.WithField("prefix", "CryspValidator")
+	log    = logrus.WithField("prefix", "CryspValidator")
+	config = params.MainnetConfig()
 )
 
 const maxOutputs = 2000
@@ -76,6 +79,20 @@ func (cv *CryspValidator) ValidateTransaction(tx *types.Transaction) error {
 	default:
 		return consensus.ErrBadTxType
 	}
+}
+
+// CheckMaxStakers checks whether the limit of
+// stakers for a given validator is reached
+func (cv *CryspValidator) CheckMaxStakers(tx *types.Transaction, stakers int) error {
+	// Look through all outputs; if for any the number
+	// of stakers per validator is exceeded, invalidate the transaction
+	for _, out := range tx.Outputs() {
+		validator := out.Node().Hex()
+		if cv.stakeValidator.NumberStakers(validator)+stakers >= config.MaxNumberOfStakers {
+			return errors.New(fmt.Sprintf("The number of stakers for validator %s is at its maximum", validator))
+		}
+	}
+	return nil
 }
 
 // ValidateTransactionStruct validates transaction balances, signatures and hash. Use only for legacy tx type.
@@ -673,6 +690,11 @@ func (cv *CryspValidator) checkStakeType(tx *types.Transaction) (StakeType, erro
 		return NoStake, errors.New("Different stake types in one tx")
 	}
 
+	// Invalidate the stake tx if the number of stakers per validator is exceeded
+	if err := cv.IsMaxStakers(tx); err != nil {
+		return NoStake, err
+	}
+
 	if !hasStaking {
 		return NoStake, nil
 	}
@@ -682,4 +704,16 @@ func (cv *CryspValidator) checkStakeType(tx *types.Transaction) (StakeType, erro
 	} else {
 		return ElectorStake, nil
 	}
+}
+
+func (cv *CryspValidator) IsMaxStakers(tx *types.Transaction) error {
+	// Look through all outputs; if for any the number
+	// of stakers per validator is exceeded, invalidate the transaction
+	for _, out := range tx.Outputs() {
+		validator := out.Node().Hex()
+		if cv.stakeValidator.NumberStakers(validator) >= config.MaxNumberOfStakers {
+			return errors.New(fmt.Sprintf("The number of stakers for validator %s is at its maximum", validator))
+		}
+	}
+	return nil
 }

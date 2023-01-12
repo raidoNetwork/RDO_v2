@@ -10,6 +10,9 @@ type TxValidator interface {
 	// ValidateTransaction validate transaction and return an error if something is wrong
 	ValidateTransaction(*types.Transaction) error
 
+	// ValidateStakeTransaction validates stake transaction and return an error if something is wrong
+	CheckMaxStakers(*types.Transaction, int) error
+
 	// ValidateTransactionStruct validates transaction balances, signatures and hash.
 	ValidateTransactionStruct(*types.Transaction) error
 }
@@ -136,6 +139,9 @@ type StakePool interface {
 
 	// GetRewardPerSlot return reward per slot
 	GetRewardPerSlot(uint64) uint64
+
+	// NumberStakers returns the number of stakers in the StakePool for a given validator
+	NumberStakers(validator string) int
 
 	HasValidator(validator string) bool
 
