@@ -465,5 +465,9 @@ func (s *StakingPool) GetElectorsOfValidator(validator string) (map[string]uint6
 func (s *StakingPool) NumberStakers(validator string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return len(s.validators[validator].Electors)
+	if data, exists := s.validators[validator]; !exists {
+		return 0
+	} else {
+		return len(data.Electors)
+	}
 }
