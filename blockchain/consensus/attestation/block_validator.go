@@ -209,6 +209,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, countSign bool) 
 
 func (cv *CryspValidator) verifyTransactions(block *prototype.Block) ([]*types.Transaction, error) {
 	failedTx := make([]*types.Transaction, 0)
+	rewardRecord := make(map[string]uint64)
 	standardTxCount := 0
 	for _, txpb := range block.Transactions {
 		tx := types.NewTransaction(txpb)
@@ -224,7 +225,7 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block) ([]*types.T
 				err = cv.validateFeeTx(tx, block)
 				txType = "FeeTx"
 			case common.RewardTxType:
-				err = cv.validateRewardTx(tx, block)
+				err = cv.validateRewardTx(tx, block, rewardRecord)
 				txType = "RewardTx"
 			case common.ValidatorsUnstakeTxType:
 				err = cv.validateSystemUnstakeTx(tx, block)
@@ -256,6 +257,12 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block) ([]*types.T
 		}
 
 		tx.SetStatus(types.TxSuccess)
+	}
+
+	// Verifying that all stakers got their reward
+	rewardMap := cv.stakeValidator.GetRewardMap(common.Encode(block.Proposer.Address))
+	if len(rewardRecord) != len(rewardMap) {
+		return nil, errors.New("Rewards in the block are not valid")
 	}
 
 	return failedTx, nil

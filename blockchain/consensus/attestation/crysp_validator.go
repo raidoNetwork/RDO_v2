@@ -338,7 +338,7 @@ func (cv *CryspValidator) validateFeeTx(tx *types.Transaction, block *prototype.
 }
 
 // validateAwardTx validate award transaction
-func (cv *CryspValidator) validateRewardTx(tx *types.Transaction, block *prototype.Block) error {
+func (cv *CryspValidator) validateRewardTx(tx *types.Transaction, block *prototype.Block, rewardRecord map[string]uint64) error {
 	// if tx has type different from fee return error
 	if tx.Type() != common.RewardTxType {
 		return errors.Errorf("Transaction has wrong type: %d.", tx.Type())
@@ -349,11 +349,7 @@ func (cv *CryspValidator) validateRewardTx(tx *types.Transaction, block *prototy
 		return errors.New("Wrong tx reward num.")
 	}
 
-	rewardSize := len(tx.Outputs())
 	rewardMap := cv.stakeValidator.GetRewardMap(common.Encode(block.Proposer.Address))
-	if rewardSize != len(rewardMap) {
-		return errors.Errorf("Wrong outputs size. Given: %d. Expected: %d.", rewardSize, len(rewardMap))
-	}
 
 	processed := map[string]struct{}{}
 	for _, out := range tx.Outputs() {
@@ -367,10 +363,7 @@ func (cv *CryspValidator) validateRewardTx(tx *types.Transaction, block *prototy
 		}
 
 		processed[staker] = struct{}{}
-	}
-
-	if len(processed) != len(rewardMap) {
-		return errors.Errorf("Not all stakers take reward")
+		rewardRecord[staker] = out.Amount()
 	}
 
 	return nil

@@ -21,8 +21,9 @@ var (
 )
 
 const (
-	txBatchLimit     = 1000
-	InputsPerTxLimit = 2000
+	txBatchLimit      = 1000
+	InputsPerTxLimit  = 2000
+	OutputsPerTxLimit = 2000
 )
 
 type Config struct {
@@ -75,7 +76,8 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 	pendingTxCounter.Set(float64(txQueueLen)) // todo remove metrics to the core service
 
 	// create reward transaction for current block
-	txBatch, collapseBatch, totalSize, err := m.addRewardTxToBatch(m.cfg.Proposer.Addr().Hex(), txBatch, collapseBatch, totalSize, bn)
+	// txBatch, collapseBatch, totalSize, err := m.addRewardTxToBatch(m.cfg.Proposer.Addr().Hex(), txBatch, collapseBatch, totalSize, bn)
+	txBatch, collapseBatch, totalSize, err := m.addRewardsTxToBatch(m.cfg.Proposer.Addr().Hex(), txBatch, collapseBatch, totalSize, bn)
 	if err != nil {
 		return nil, err
 	}
@@ -278,15 +280,18 @@ MAINLOOP:
 	return block, nil
 }
 
-func (m *Forger) addRewardTxToBatch(proposer string, txBatch []*prototype.Transaction, collapseBatch []*prototype.Transaction, totalSize int, bn int64) ([]*prototype.Transaction, []*prototype.Transaction, int, error) {
-	rewardTx, err := m.createRewardTx(m.bf.GetBlockCount(), proposer)
+func (m *Forger) addRewardsTxToBatch(proposer string, txBatch []*prototype.Transaction, collapseBatch []*prototype.Transaction, totalSize int, bn int64) ([]*prototype.Transaction, []*prototype.Transaction, int, error) {
+	rewardTxs, err := m.createRewardTxs(m.bf.GetBlockCount(), proposer)
 	if err != nil {
 		if errors.Is(err, consensus.ErrNoStakers) {
 			log.Debug(err)
+			return txBatch, collapseBatch, totalSize, nil
 		} else {
 			return nil, nil, 0, err
 		}
-	} else {
+	}
+
+	for _, rewardTx := range rewardTxs {
 		txBatch = append(txBatch, rewardTx)
 		totalSize += rewardTx.SizeSSZ()
 
@@ -344,25 +349,53 @@ func (m *Forger) createFeeTx(txarr []*prototype.Transaction) (*prototype.Transac
 	return ntx, nil
 }
 
-func (m *Forger) createRewardTx(blockNum uint64, proposer string) (*prototype.Transaction, error) {
+func (m *Forger) createRewardTxs(blockNum uint64, proposer string) ([]*prototype.Transaction, error) {
 	outs := m.att.StakePool().GetRewardOutputs(proposer)
 	if len(outs) == 0 {
 		return nil, consensus.ErrNoStakers
 	}
 
+	transactions := make([]*prototype.Transaction, 0)
+	count := 0
+
 	opts := types.TxOptions{
-		Outputs: outs,
+		Outputs: make([]*prototype.TxOutput, 0),
 		Type:    common.RewardTxType,
 		Fee:     0,
 		Num:     blockNum,
 	}
 
-	ntx, err := types.NewPbTransaction(opts, nil)
-	if err != nil {
-		return nil, err
+	for _, out := range outs {
+		if count >= OutputsPerTxLimit {
+			ntx, err := types.NewPbTransaction(opts, nil)
+			if err != nil {
+				return nil, err
+			}
+			transactions = append(transactions, ntx)
+
+			// Clean up opts
+			opts = types.TxOptions{
+				Outputs: make([]*prototype.TxOutput, 0),
+				Type:    common.RewardTxType,
+				Fee:     0,
+				Num:     blockNum,
+			}
+			count = 0
+		}
+
+		opts.Outputs = append(opts.Outputs, out)
+		count += 1
 	}
 
-	return ntx, nil
+	if count > 0 {
+		ntx, err := types.NewPbTransaction(opts, nil)
+		if err != nil {
+			return nil, err
+		}
+		transactions = append(transactions, ntx)
+	}
+
+	return transactions, nil
 }
 
 func (m *Forger) createCollapseTx(tx *types.Transaction, blockNum uint64) ([]*types.Transaction, error) {
