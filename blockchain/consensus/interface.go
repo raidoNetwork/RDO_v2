@@ -137,13 +137,13 @@ type StakePool interface {
 	// FinalizeStaking complete all staking pool updates
 	FinalizeStaking([]*types.Transaction) error
 
-	// GetRewardPerSlot return reward per slot
-	GetRewardPerSlot(uint64) uint64
-
 	// NumberStakers returns the number of stakers in the StakePool for a given validator
 	NumberStakers(validator string) int
 
 	HasValidator(validator string) bool
+
+	// DetermineProposer determines the proposer according to seed
+	DetermineProposer(seed int64) string
 
 	StakeDataReader
 }

@@ -8,7 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
-	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/backend/poa"
+	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/backend/pos"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/forger"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/blockchain/state"
@@ -21,6 +21,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/cmd"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
+	stypes "github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/validator/types"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -31,7 +32,9 @@ var _ shared.Service = (*Service)(nil)
 
 const (
 	votingDuration    = 3 * time.Second
+	seedTimer         = 2 * time.Second
 	attestationsCount = 10
+	seedCount         = 10
 )
 
 type Config struct {
@@ -41,6 +44,7 @@ type Config struct {
 	AttestationFeed events.Feed
 	BlockFeed       events.Feed
 	StateFeed       events.Feed
+	SeedFeed        events.Feed
 	Context         context.Context
 }
 
@@ -61,14 +65,16 @@ type Service struct {
 	// events
 	proposeEvent     chan *prototype.Block
 	attestationEvent chan *types.Attestation
+	seedEvent        chan *prototype.Seed
 
 	proposeFeed     events.Feed
 	attestationFeed events.Feed
+	seedFeed        events.Feed
 	blockFeed       events.Feed
 	stateFeed       events.Feed
 
 	// consensus Engine
-	backend consensus.PoA
+	backend consensus.PoS
 
 	unsubscribe func()
 
@@ -76,7 +82,12 @@ type Service struct {
 	proposedBlock    *prototype.Block
 	votingIsFinished bool
 	blockVoting      map[string]*voting
+	seedMap          map[string]*prototype.Seed
 	finishVoting     <-chan time.Time
+	waitSeed         <-chan time.Time
+
+	// seed
+	seed int64
 }
 
 func (s *Service) Start() {
@@ -124,6 +135,16 @@ func (s *Service) loop() {
 	for {
 		select {
 		case <-s.ticker.C():
+			// generate a seed, send it.
+			s.generateSeed()
+		case seed := <-s.seedEvent:
+			// Add to the map
+			s.handleSeedEvent(seed)
+		case <-s.waitSeed:
+			s.mu.Lock()
+			s.seedMap = make(map[string]*prototype.Seed)
+			s.mu.Unlock()
+
 			s.forgeBlock()
 		case block := <-s.proposeEvent:
 			err := s.verifyBlock(block)
@@ -152,10 +173,12 @@ func (s *Service) loop() {
 func (s *Service) subscribeEvents() {
 	proposeSub := s.proposeFeed.Subscribe(s.proposeEvent)
 	attSub := s.attestationFeed.Subscribe(s.attestationEvent)
+	seedSub := s.seedFeed.Subscribe(s.seedEvent)
 
 	s.unsubscribe = func() {
 		proposeSub.Unsubscribe()
 		attSub.Unsubscribe()
+		seedSub.Unsubscribe()
 	}
 }
 
@@ -199,11 +222,14 @@ func (s *Service) verifyBlock(block *prototype.Block) error {
 		return nil
 	}
 
-	if !s.backend.IsLeader(blockProposer) {
+	s.mu.Lock()
+	if !s.backend.IsLeader(blockProposer, s.seed) {
 		// todo mark validator as malicious
 		log.Warnf("Not ordered block proposition from %s", blockProposer.Hex())
+		s.mu.Unlock()
 		return nil
 	}
+	s.mu.Unlock()
 
 	attestationType := types.Approve
 	_, err := s.att.Validator().ValidateBlock(block, false)
@@ -272,10 +298,15 @@ func (s *Service) processAttestation(att *types.Attestation) {
 }
 
 func (s *Service) forgeBlock() {
+
+	s.mu.Lock()
 	// Check node is leader now
-	if !s.backend.IsLeader(s.proposer.Addr()) {
+	log.Debugf("%s is leader: %b", s.proposer.Addr().Hex(), s.backend.IsLeader(s.proposer.Addr(), s.seed))
+	if !s.backend.IsLeader(s.proposer.Addr(), s.seed) {
+		s.mu.Unlock()
 		return
 	}
+	s.mu.Unlock()
 
 	start := time.Now()
 
@@ -287,7 +318,6 @@ func (s *Service) forgeBlock() {
 		s.mu.Lock()
 		s.statusErr = err
 		s.mu.Unlock()
-
 		return
 	}
 
@@ -303,6 +333,47 @@ func (s *Service) forgeBlock() {
 	s.votingIsFinished = false
 
 	log.Debugf("Block #%d forged in %d ms", block.Num, time.Since(start).Milliseconds())
+}
+
+// Generate the seed and send it to all peers
+func (s *Service) generateSeed() {
+	seed, err := stypes.NewSeed(s.proposer)
+	if err != nil {
+		log.Errorf("[ValidatorService] Error generating seed: %s", err.Error())
+
+		s.mu.Lock()
+		s.statusErr = err
+		s.mu.Unlock()
+
+		return
+	}
+
+	log.Debugf("Successfully generated seed: %d", seed.Seed)
+
+	// Push the generated seed to events
+	s.seedFeed.Send(seed)
+	s.waitSeed = time.After(seedTimer)
+}
+
+// reseive the seed & calculate the resulting seed
+func (s *Service) handleSeedEvent(seed *prototype.Seed) {
+	// Checking for signature
+	if err := stypes.GetSeedSigner().Verify(seed); err != nil {
+		return
+	}
+	log.Debugf("Accepted incoming seed %d from %s", seed.Seed, common.BytesToAddress(seed.Proposer.Address).Hex())
+
+	s.mu.Lock()
+	address := common.BytesToAddress(seed.Proposer.Address).Hex()
+	s.seedMap[address] = seed
+
+	var result int64
+	for _, seed := range s.seedMap {
+		result += int64(seed.Seed)
+	}
+
+	s.seed = result
+	s.mu.Unlock()
 }
 
 func New(cliCtx *cli.Context, cfg *Config) (*Service, error) {
@@ -326,7 +397,10 @@ func New(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 
 	log.Infof("Register validator key %s", proposer.Addr().Hex())
 
-	engine := poa.New()
+	posConfig := pos.Config{
+		AttestationPool: &cfg.AttestationPool,
+	}
+	engine := pos.New(posConfig)
 	if !engine.IsValidator(proposer.Addr()) {
 		return nil, errors.New("Attach validator key to start validator flow")
 	}
@@ -358,18 +432,22 @@ func New(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		// events
 		proposeEvent:     make(chan *prototype.Block, 1),
 		attestationEvent: make(chan *types.Attestation, attestationsCount),
+		seedEvent:        make(chan *prototype.Seed, seedCount),
 
 		// feeds
 		proposeFeed:     cfg.ProposeFeed,
 		attestationFeed: cfg.AttestationFeed,
 		blockFeed:       cfg.BlockFeed,
 		stateFeed:       cfg.StateFeed,
+		seedFeed:        cfg.SeedFeed,
 
 		// engine
 		backend: engine,
 
 		// validator loop
 		blockVoting: map[string]*voting{},
+
+		seedMap: make(map[string]*prototype.Seed),
 	}
 
 	return srv, nil

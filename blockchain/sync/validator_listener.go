@@ -13,8 +13,8 @@ func (s *Service) listenValidatorTopics() {
 	subs := s.cfg.P2P.ValidatorNotifier().Subscribe(validatorNotification)
 	defer subs.Unsubscribe()
 
-	for{
-		select{
+	for {
+		select {
 		case <-s.ctx.Done():
 			return
 		case notty := <-validatorNotification:
@@ -37,6 +37,15 @@ func (s *Service) listenValidatorTopics() {
 
 				s.cfg.Validator.AttestationFeed.Send(att)
 				receivedMessages.WithLabelValues(p2p.AttestationTopic).Inc()
+
+			case p2p.SeedTopic:
+				seed, err := serialize.UnmarshalSeed(notty.Data)
+				if err != nil {
+					log.Errorf("Error unmarshaling seed: %s", err)
+					break
+				}
+				s.cfg.Validator.SeedFeed.Send(seed)
+				receivedMessages.WithLabelValues(p2p.SeedTopic).Inc()
 			default:
 				log.Warnf("Unsupported notification %s", notty.Topic)
 			}
@@ -46,18 +55,21 @@ func (s *Service) listenValidatorTopics() {
 
 func (s *Service) gossipValidatorMessages() {
 	proposeEvent := make(chan *prototype.Block, 1)
-	attEvent := make(chan *types.Attestation, 5)
+	attEvent := make(chan *types.Attestation, 10)
+	seedEvent := make(chan *prototype.Seed, 10)
 
 	proposeSub := s.cfg.Validator.ProposeFeed.Subscribe(proposeEvent)
 	attSub := s.cfg.Validator.AttestationFeed.Subscribe(attEvent)
+	seedSub := s.cfg.Validator.SeedFeed.Subscribe(seedEvent)
 
 	defer func() {
 		proposeSub.Unsubscribe()
 		attSub.Unsubscribe()
-	} ()
+		seedSub.Unsubscribe()
+	}()
 
-	for{
-		select{
+	for {
+		select {
 		case block := <-proposeEvent:
 			raw, err := serialize.MarshalBlock(block)
 			if err != nil {
@@ -68,6 +80,16 @@ func (s *Service) gossipValidatorMessages() {
 			err = s.cfg.P2P.Publish(p2p.ProposalTopic, raw)
 			if err != nil {
 				log.Errorf("Error sending proposed block: %s", err)
+			}
+		case seed := <-seedEvent:
+			raw, err := serialize.MarshalSeed(seed)
+			if err != nil {
+				log.Errorf("Error marshaling seed: %s", err)
+				continue
+			}
+			err = s.cfg.P2P.Publish(p2p.SeedTopic, raw)
+			if err != nil {
+				log.Errorf("Error sending seed: %s", err)
 			}
 		case att := <-attEvent:
 			raw, err := serialize.MarshalAttestation(att)

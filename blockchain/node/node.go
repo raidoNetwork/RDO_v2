@@ -51,6 +51,7 @@ type RDONode struct {
 	stateFeed events.Bus
 	blockFeed events.Bus
 	txFeed    events.Bus
+	seedFeed  events.Bus
 	// validator events
 	proposeFeed     events.Bus
 	attestationFeed events.Bus
@@ -175,6 +176,7 @@ func (r *RDONode) InitValidatorService() error {
 		AttestationFeed: &r.attestationFeed,
 		BlockFeed:       &r.blockFeed,
 		StateFeed:       &r.stateFeed,
+		SeedFeed:        &r.seedFeed,
 		Context:         r.ctx,
 	}
 
@@ -344,6 +346,7 @@ func (r *RDONode) registerSyncService() error {
 		Validator: rsync.ValidatorCfg{
 			ProposeFeed:     &r.proposeFeed,
 			AttestationFeed: &r.attestationFeed,
+			SeedFeed:        &r.seedFeed,
 		},
 	}
 	srv := rsync.NewService(r.ctx, &cfg)

@@ -5,7 +5,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
-	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/backend/poa"
+	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/backend/pos"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/keystore"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -30,7 +30,7 @@ type Config struct {
 	EnableMetrics bool
 	BlockSize     int
 	Proposer      *keystore.ValidatorAccount
-	Engine        *poa.Backend
+	Engine        *pos.Backend
 }
 
 func New(bc consensus.BlockFinalizer, att consensus.AttestationPool, cfg *Config) *Forger {

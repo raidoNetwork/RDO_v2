@@ -34,7 +34,7 @@ func NewService(parentCtx context.Context, cfg *Config) (*Service, error) {
 	slotTime := time.Duration(chainConfig.SlotTime) * time.Second
 
 	// create new staking pool
-	stakePool := staking.NewPool(cfg.Blockchain, chainConfig.ValidatorRegistryLimit, chainConfig.RewardBase, stakeAmount)
+	stakePool := staking.NewPool(cfg.Blockchain, chainConfig.ValidatorRegistryLimit, stakeAmount)
 
 	validatorCfg := attestation.CryspValidatorConfig{
 		SlotTime:               slotTime,

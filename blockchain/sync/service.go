@@ -2,6 +2,10 @@ package sync
 
 import (
 	"context"
+	"runtime/debug"
+	"sync/atomic"
+	"time"
+
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -15,9 +19,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/utils/async"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	"github.com/sirupsen/logrus"
-	"runtime/debug"
-	"sync/atomic"
-	"time"
 )
 
 var log = logrus.WithField("prefix", "syncBlocks")
@@ -37,6 +38,7 @@ const (
 type ValidatorCfg struct {
 	ProposeFeed     events.Feed
 	AttestationFeed events.Feed
+	SeedFeed        events.Feed
 	Enabled         bool
 }
 
@@ -88,7 +90,7 @@ type Service struct {
 	synced int32
 
 	forkBlockEvent chan *prototype.Block
-	bq *blockQueue
+	bq             *blockQueue
 }
 
 func (s *Service) Start() {
