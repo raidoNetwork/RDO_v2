@@ -201,6 +201,10 @@ func (r *RDONode) registerCoreService() error {
 		return err
 	}
 
+	if err != nil {
+		return err
+	}
+
 	cfg := core.Config{
 		BlockFinalizer:  blockchainService,
 		AttestationPool: attestationService,

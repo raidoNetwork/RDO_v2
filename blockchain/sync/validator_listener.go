@@ -54,9 +54,9 @@ func (s *Service) listenValidatorTopics() {
 }
 
 func (s *Service) gossipValidatorMessages() {
-	proposeEvent := make(chan *prototype.Block, 1)
-	attEvent := make(chan *types.Attestation, 10)
-	seedEvent := make(chan *prototype.Seed, 10)
+	proposeEvent := make(chan *prototype.Block, 10)
+	attEvent := make(chan *types.Attestation, 100)
+	seedEvent := make(chan *prototype.Seed, 100)
 
 	proposeSub := s.cfg.Validator.ProposeFeed.Subscribe(proposeEvent)
 	attSub := s.cfg.Validator.AttestationFeed.Subscribe(attEvent)

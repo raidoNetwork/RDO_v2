@@ -1,13 +1,14 @@
 package p2p
 
 import (
+	"sync"
+	"time"
+
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/score"
-	"sync"
-	"time"
 )
 
 type PeerStatus int8
@@ -20,10 +21,10 @@ const (
 
 const badThreshold = 1
 
-var PeerMetaUpdateInterval = time.Duration(4 * params.RaidoConfig().SlotTime) * time.Second
+var PeerMetaUpdateInterval = time.Duration(params.RaidoConfig().SlotTime) * time.Second
 
 type scorers struct {
-	PeerHeadSlot *score.Scorer
+	PeerHeadSlot  *score.Scorer
 	PeerHeadBlock *score.Scorer
 }
 
@@ -34,21 +35,21 @@ type PeerStore struct {
 }
 
 type MetaData struct {
-	HeadSlot uint64
-	HeadBlockNum uint64
+	HeadSlot      uint64
+	HeadBlockNum  uint64
 	HeadBlockHash common.Hash
 }
 
 type PeerScorers struct {
 	BlockRequest int64
-	BadResponse int64
+	BadResponse  int64
 }
 
 type PeerData struct {
-	Id peer.ID
-	Status PeerStatus
+	Id         peer.ID
+	Status     PeerStatus
 	LastUpdate time.Time
-	Scorers PeerScorers
+	Scorers    PeerScorers
 	MetaData
 }
 
@@ -56,7 +57,7 @@ func NewPeerStore() *PeerStore {
 	return &PeerStore{
 		data: map[peer.ID]*PeerData{},
 		scorers: scorers{
-			PeerHeadSlot: score.MaxScorer(),
+			PeerHeadSlot:  score.MaxScorer(),
 			PeerHeadBlock: score.MaxScorer(),
 		},
 	}
@@ -75,7 +76,6 @@ func (ps *PeerStore) Connect(id peer.ID) {
 		Id: id,
 	}
 }
-
 
 func (ps *PeerStore) Disconnect(id peer.ID) {
 	ps.lock.Lock()
@@ -101,8 +101,8 @@ func (ps *PeerStore) AddMeta(pid peer.ID, meta *prototype.Metadata) {
 
 	ps.data[pid].LastUpdate = time.Now()
 	ps.data[pid].MetaData = MetaData{
-		HeadSlot: meta.HeadSlot,
-		HeadBlockNum: meta.HeadBlockNum,
+		HeadSlot:      meta.HeadSlot,
+		HeadBlockNum:  meta.HeadBlockNum,
 		HeadBlockHash: meta.HeadBlockHash,
 	}
 
@@ -116,10 +116,10 @@ func (ps *PeerStore) Stats() map[string]int {
 	defer ps.lock.Unlock()
 
 	res := map[string]int{
-		"connected": 0,
-		"reconnected": 0,
+		"connected":    0,
+		"reconnected":  0,
 		"disconnected": 0,
-		"total": len(ps.data),
+		"total":        len(ps.data),
 	}
 
 	for _, data := range ps.data {
@@ -142,7 +142,7 @@ func (ps *PeerStore) Connected() []PeerData {
 
 	result := make([]PeerData, 0, len(ps.data))
 	for _, data := range ps.data {
-		if data.Status == Connected || data.Status == Reconnected  {
+		if data.Status == Connected || data.Status == Reconnected {
 			result = append(result, *data)
 		}
 	}
@@ -182,7 +182,6 @@ func (ps *PeerStore) IsBad(pid peer.ID) bool {
 	if _, exists := ps.data[pid]; !exists {
 		return false
 	}
-
 
 	return ps.data[pid].Scorers.BadResponse >= badThreshold
 }

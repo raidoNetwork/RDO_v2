@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"bytes"
 	"context"
 	"path/filepath"
 	"sync"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
+	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/attestation"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/backend/pos"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/forger"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
@@ -32,9 +34,10 @@ var _ shared.Service = (*Service)(nil)
 
 const (
 	votingDuration    = 3 * time.Second
-	seedTimer         = 2 * time.Second
-	attestationsCount = 10
-	seedCount         = 10
+	seedTimer         = 1 * time.Second
+	attestationsCount = 50
+	seedCount         = 50
+	proposeCount      = 50
 )
 
 type Config struct {
@@ -147,10 +150,21 @@ func (s *Service) loop() {
 
 			s.forgeBlock()
 		case block := <-s.proposeEvent:
+			s.mu.Lock()
+			if s.proposedBlock != nil && bytes.Equal(block.Hash, s.proposedBlock.Hash) {
+				s.mu.Unlock()
+				continue
+			}
+			s.mu.Unlock()
 			err := s.verifyBlock(block)
+
 			if err != nil {
 				panic(err)
 			}
+
+			s.mu.Lock()
+			s.proposedBlock = block
+			s.mu.Unlock()
 		case att := <-s.attestationEvent:
 			s.processAttestation(att)
 		case <-s.ctx.Done():
@@ -233,7 +247,9 @@ func (s *Service) verifyBlock(block *prototype.Block) error {
 
 	attestationType := types.Approve
 	_, err := s.att.Validator().ValidateBlock(block, false)
-	if err != nil {
+	if err == attestation.ErrPreviousBlockNotExists {
+		return nil
+	} else if err != nil {
 		log.Errorf("Failed block attestation: %s", err)
 		attestationType = types.Reject
 	}
@@ -430,7 +446,7 @@ func New(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		ticker: slot.NewSlotTicker(),
 
 		// events
-		proposeEvent:     make(chan *prototype.Block, 1),
+		proposeEvent:     make(chan *prototype.Block, proposeCount),
 		attestationEvent: make(chan *types.Attestation, attestationsCount),
 		seedEvent:        make(chan *prototype.Seed, seedCount),
 

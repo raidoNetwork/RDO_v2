@@ -1,12 +1,13 @@
 package sync
 
 import (
+	"sort"
+	"time"
+
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
-	"sort"
-	"time"
 )
 
 const waitPeerInterval = 5 * time.Second
@@ -29,7 +30,7 @@ func (s *Service) waitMinimumPeersForSync(findWithMaxBlock bool) {
 	}
 }
 
-func (s *Service) syncWithNetwork() error {
+func (s *Service) SyncWithNetwork() error {
 	// sync to most known block
 	err := s.syncToBestKnownBlock()
 	if err != nil {

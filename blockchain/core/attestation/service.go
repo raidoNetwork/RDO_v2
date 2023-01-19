@@ -42,6 +42,7 @@ func NewService(parentCtx context.Context, cfg *Config) (*Service, error) {
 		StakeUnit:              stakeAmount,
 		ValidatorRegistryLimit: chainConfig.ValidatorRegistryLimit,
 		EnableMetrics:          cfg.EnableMetrics,
+		BlockSize:              chainConfig.BlockSize,
 	}
 
 	// new block and tx validator
@@ -170,14 +171,14 @@ func (s *Service) Validator() consensus.Validator {
 }
 
 func (s *Service) waitSyncing() error {
-	sub := s.cfg.StateFeed.Subscribe(s.stateEvent)
-	defer sub.Unsubscribe()
+	stateFeed := s.cfg.StateFeed
 
-	for st := range s.stateEvent {
-		if st == state.Synced {
-			return s.stakePool.Init()
-		}
+	err := s.stakePool.Init()
+	if err != nil {
+		return err
 	}
+
+	stateFeed.Send(state.StakePoolInitialized)
 
 	return nil
 }

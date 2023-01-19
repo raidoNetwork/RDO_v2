@@ -40,6 +40,7 @@ type CryspValidatorConfig struct {
 	StakeUnit              uint64        // StakeUnit roi amount needed for stake.
 	EnableMetrics          bool          // EnableMetrics enables time statistic log entries.
 	ValidatorRegistryLimit int           // ValidatorRegistryLimit defines validator slots count
+	BlockSize              int           // BlockSize defines the maximum size of the block
 }
 
 func NewCryspValidator(bc consensus.BlockchainReader, stakeValidator consensus.StakePool, cfg *CryspValidatorConfig) *CryspValidator {

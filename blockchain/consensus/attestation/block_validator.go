@@ -17,7 +17,8 @@ import (
 )
 
 var (
-	ErrReadingBlock = errors.New("Error reading block from database")
+	ErrReadingBlock           = errors.New("Error reading block from database")
+	ErrPreviousBlockNotExists = errors.New("Previous block for given block does not exist")
 )
 
 // checkBlockBalance count block inputs and outputs sum and check that all inputs in block are unique.
@@ -106,6 +107,11 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, countSign bool) 
 
 	start := time.Now()
 
+	// Validate size of the block
+	if block.SizeSSZ() > cv.cfg.BlockSize {
+		return nil, errors.Errorf("The block size is: %d, exceeds: %d", block.SizeSSZ()/1024, cv.cfg.BlockSize/1024)
+	}
+
 	// check that block has total balance equal to zero
 	// check that inputs of block don't repeat
 	err := cv.checkBlockBalance(block)
@@ -171,7 +177,8 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, countSign bool) 
 	}
 
 	if prevBlock == nil {
-		return nil, errors.Errorf("ValidateBlock: Previous Block #%d for given block #%d is not exists.", block.Num-1, block.Num)
+		log.Errorf("ValidateBlock: Previous Block #%d for given block #%d is not exists.", block.Num-1, block.Num)
+		return nil, ErrPreviousBlockNotExists
 	}
 
 	if prevBlock.Timestamp >= block.Timestamp {

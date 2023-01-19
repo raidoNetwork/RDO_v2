@@ -7,8 +7,10 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
+	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/attestation"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/blockchain/state"
+	rsync "github.com/raidoNetwork/RDO_v2/blockchain/sync"
 	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared"
@@ -41,8 +43,8 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		ticker: slot.Ticker(),
 
 		// events
-		blockEvent: make(chan *prototype.Block, 5),
-		stateEvent: make(chan state.State, 1),
+		blockEvent: make(chan *prototype.Block, 1),
+		stateEvent: make(chan state.State, 10),
 
 		// feeds
 		blockFeed: cfg.BlockFeed,
@@ -96,6 +98,21 @@ func (s *Service) mainLoop() {
 			start := time.Now()
 
 			err := s.FinalizeBlock(block)
+			if err == attestation.ErrPreviousBlockNotExists {
+				log.Infof("Previous block for given block does not exist. Try syncing")
+				syncService := rsync.GetMainService()
+				if syncService == nil {
+					log.Errorf("Error fetching syncService: %s", err)
+					continue
+				}
+				err = syncService.SyncWithNetwork()
+				if err != nil {
+					log.Errorf("Error syncing: %s", err)
+					continue
+				}
+				err = s.FinalizeBlock(block)
+			}
+
 			if err != nil {
 				log.Errorf("[CoreService] Error finalizing block: %s", err.Error())
 
@@ -169,7 +186,7 @@ func (s *Service) FinalizeBlock(block *prototype.Block) error {
 			s.att.TxPool().Finalize(failedTx)
 		}
 		s.att.TxPool().ClearForged(block)
-		return errors.Wrap(err, "ValidateBlockError")
+		return err
 	}
 
 	// save block
