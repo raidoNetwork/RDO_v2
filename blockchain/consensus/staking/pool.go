@@ -464,8 +464,8 @@ func (s *StakingPool) DetermineProposer(seed int64) string {
 	defer s.mu.Unlock()
 	weights := make(map[string]uint64, 0)
 
-	slotUnit := params.MainnetConfig().StakeSlotUnit
-	coefficient := params.MainnetConfig().ElectorsCoefficient
+	slotUnit := params.RaidoConfig().StakeSlotUnit
+	coefficient := params.RaidoConfig().ElectorsCoefficient
 
 	var cumulative uint64
 

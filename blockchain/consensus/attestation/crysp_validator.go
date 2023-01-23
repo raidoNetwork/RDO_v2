@@ -20,7 +20,7 @@ import (
 
 var (
 	log    = logrus.WithField("prefix", "CryspValidator")
-	config = params.MainnetConfig()
+	config = params.RaidoConfig()
 )
 
 const maxOutputs = 2000

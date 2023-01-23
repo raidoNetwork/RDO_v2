@@ -147,7 +147,7 @@ func (p *Pool) swap(oldTx, newTx *types.Transaction) error {
 func (p *Pool) finalizeInsert(tx *types.Transaction) {
 	p.mu.Lock()
 	if tx.Type() == uint32(common.StakeTxType) {
-		p.stakeTxMap[tx.Hash().Hex()] = tx
+		p.stakeTxMap[tx.From().Hex()] = tx
 	}
 	p.txSenderMap[tx.From().Hex()] = tx
 	p.txHashMap[tx.Hash().Hex()] = tx
@@ -330,7 +330,7 @@ func (p *Pool) cleanTransactionMap(tx *types.Transaction) {
 	}
 
 	if tx.Type() == common.StakeTxType {
-		delete(p.stakeTxMap, tx.Hash().Hex())
+		delete(p.stakeTxMap, tx.From().Hex())
 	}
 }
 

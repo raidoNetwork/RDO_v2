@@ -23,5 +23,5 @@ var mainnetRDOConfig = &RDOBlockChainConfig{
 	NTPPool:             "pool.ntp.org",
 	NTPChecks:           3,
 	NTPThreshold:        1200,
-	MaxNumberOfStakers:  10000,
+	MaxNumberOfStakers:  1000,
 }
