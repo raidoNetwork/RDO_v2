@@ -24,6 +24,7 @@ const (
 	txBatchLimit      = 1000
 	InputsPerTxLimit  = 2000
 	OutputsPerTxLimit = 2000
+	collapseTxLimit   = 30
 )
 
 type Config struct {
@@ -474,7 +475,11 @@ func (m *Forger) createCollapseTx(tx *types.Transaction, blockNum uint64, totalS
 			sizeCounter += collapseTx.SizeSSZ()
 
 			log.Debugf("Collapse tx for %s with hash %s", tx.Hash().Hex(), common.Encode(collapseTx.Hash))
+			if len(transactions) == collapseTxLimit {
+				break
+			}
 		}
+
 	}
 
 	return transactions, nil
