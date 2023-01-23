@@ -19,6 +19,7 @@ import (
 var (
 	ErrReadingBlock           = errors.New("Error reading block from database")
 	ErrPreviousBlockNotExists = errors.New("Previous block for given block does not exist")
+	feeSizeAllowance          = 1000
 )
 
 // checkBlockBalance count block inputs and outputs sum and check that all inputs in block are unique.
@@ -108,8 +109,9 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, countSign bool) 
 	start := time.Now()
 
 	// Validate size of the block
-	if block.SizeSSZ() > cv.cfg.BlockSize {
-		return nil, errors.Errorf("The block size is: %d, exceeds: %d", block.SizeSSZ()/1024, cv.cfg.BlockSize/1024)
+	// Allow for fee transaction
+	if block.SizeSSZ() > cv.cfg.BlockSize+feeSizeAllowance {
+		return nil, errors.Errorf("The block size is: %d, exceeds: %d", block.SizeSSZ(), cv.cfg.BlockSize)
 	}
 
 	// check that block has total balance equal to zero
