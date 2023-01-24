@@ -43,7 +43,7 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		ticker: slot.Ticker(),
 
 		// events
-		blockEvent: make(chan *prototype.Block, 1),
+		blockEvent: make(chan *prototype.Block, 10),
 		stateEvent: make(chan state.State, 10),
 
 		// feeds
@@ -98,7 +98,7 @@ func (s *Service) mainLoop() {
 			start := time.Now()
 
 			err := s.FinalizeBlock(block)
-			if err == attestation.ErrPreviousBlockNotExists {
+			for err == attestation.ErrPreviousBlockNotExists {
 				log.Infof("Previous block for given block does not exist. Try syncing")
 				syncService := rsync.GetMainService()
 				if syncService == nil {
