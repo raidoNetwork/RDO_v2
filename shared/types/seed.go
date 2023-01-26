@@ -1,8 +1,8 @@
 package types
 
 import (
-	"math/rand"
-	"time"
+	"crypto/rand"
+	"math/big"
 
 	"github.com/raidoNetwork/RDO_v2/keystore"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -11,10 +11,12 @@ import (
 // This package is used for generating random seeds so validators
 // can agree on a single random number for determining the proposer
 func NewSeed(key *keystore.ValidatorAccount) (*prototype.Seed, error) {
-	genSeed := time.Now().UnixNano()
-	rand.Seed(genSeed)
-	num := rand.Uint32()
-	seed := &prototype.Seed{Seed: num, Proposer: &prototype.Sign{}}
+	big, err := rand.Int(rand.Reader, big.NewInt(1<<32))
+	if err != nil {
+		return nil, err
+	}
+	intseed := uint32(big.Int64())
+	seed := &prototype.Seed{Seed: intseed, Proposer: &prototype.Sign{}}
 	signer := GetSeedSigner()
 
 	signature, err := signer.Sign(seed, key.Key())
