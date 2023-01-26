@@ -34,10 +34,11 @@ var _ shared.Service = (*Service)(nil)
 
 const (
 	votingDuration    = 3 * time.Second
-	seedTimer         = 1 * time.Second
+	seedTimer         = 2 * time.Second
 	attestationsCount = 50
 	seedCount         = 50
 	proposeCount      = 50
+	seedPrime         = 4294967291 // prime number closest to 2**32-1
 )
 
 type Config struct {
@@ -395,12 +396,13 @@ func (s *Service) handleSeedEvent(seed *prototype.Seed) {
 	address := common.BytesToAddress(seed.Proposer.Address).Hex()
 	s.seedMap[address] = seed
 
-	var result int64
+	var result uint64 = 1
 	for _, seed := range s.seedMap {
-		result += int64(seed.Seed)
+		se := uint64(seed.Seed)
+		result = (result * se) % seedPrime
 	}
 
-	s.seed = result
+	s.seed = int64(result)
 	s.mu.Unlock()
 }
 
