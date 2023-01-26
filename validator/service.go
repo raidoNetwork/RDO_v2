@@ -163,10 +163,6 @@ func (s *Service) loop() {
 			if err != nil {
 				panic(err)
 			}
-
-			s.mu.Lock()
-			s.receivedBlock = block
-			s.mu.Unlock()
 		case att := <-s.attestationEvent:
 			s.processAttestation(att)
 		case <-s.ctx.Done():
@@ -265,6 +261,12 @@ func (s *Service) verifyBlock(block *prototype.Block) error {
 	att, err := types.NewAttestation(block, s.proposer, attestationType)
 	if err != nil {
 		return errors.Wrap(err, "Attestation error")
+	}
+
+	if attestationType == types.Approve {
+		s.mu.Lock()
+		s.receivedBlock = block
+		s.mu.Unlock()
 	}
 
 	s.attestationFeed.Send(att)
