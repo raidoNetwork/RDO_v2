@@ -87,7 +87,6 @@ type Service struct {
 	votingIsFinished bool
 	blockVoting      map[string]*voting
 	seedMap          map[string]*prototype.Seed
-	attestations     map[string]*types.Attestation
 	finishVoting     <-chan time.Time
 	waitSeed         <-chan time.Time
 
@@ -283,11 +282,6 @@ func (s *Service) processAttestation(att *types.Attestation) {
 		return
 	}
 
-	current, exists := s.attestations[att.Validator.Hex()]
-	if exists && bytes.Equal(att.Block.Hash, current.Block.Hash) {
-		return
-	}
-
 	blockHash := common.Encode(att.Block.Hash)
 	if att.Validator.Hex() != s.proposer.Addr().Hex() {
 		log.Debugf(
@@ -316,7 +310,6 @@ func (s *Service) processAttestation(att *types.Attestation) {
 
 	isLocalProposer := proposer.Hex() == s.proposer.Addr().Hex()
 	canUpdateProposedBlock := isLocalProposer && !s.votingIsFinished
-	s.attestations[att.Validator.Hex()] = att
 	if att.Type == types.Approve {
 		s.blockVoting[blockHash].approved += 1
 
@@ -480,8 +473,7 @@ func New(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		backend: engine,
 
 		// validator loop
-		blockVoting:  map[string]*voting{},
-		attestations: map[string]*types.Attestation{},
+		blockVoting: map[string]*voting{},
 
 		seedMap: map[string]*prototype.Seed{},
 	}
