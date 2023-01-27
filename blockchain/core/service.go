@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"sync"
 	"time"
@@ -46,6 +47,9 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 
 		ticker: slot.Ticker(),
 
+		// received block
+		receivedBlock: &prototype.Block{},
+
 		// events
 		blockEvent: make(chan *prototype.Block, 10),
 		stateEvent: make(chan state.State, 10),
@@ -73,6 +77,9 @@ type Service struct {
 
 	mu sync.Mutex
 
+	// Recorded block
+	receivedBlock *prototype.Block
+
 	// events
 	stateEvent chan state.State
 	blockEvent chan *prototype.Block
@@ -99,6 +106,12 @@ func (s *Service) mainLoop() {
 		case <-s.ticker.C():
 			updateCoreMetrics()
 		case block := <-s.blockEvent:
+			s.mu.Lock()
+			if bytes.Equal(block.Hash, s.receivedBlock.Hash) {
+				continue
+			}
+			s.mu.Unlock()
+
 			start := time.Now()
 
 			err := s.FinalizeBlock(block)
@@ -129,6 +142,10 @@ func (s *Service) mainLoop() {
 					continue
 				}
 			}
+
+			s.mu.Lock()
+			s.receivedBlock = block
+			s.mu.Unlock()
 
 			blockSize := block.SizeSSZ() / 1024
 			log.Warnf("[CoreService] Block #%d finalized. Transactions in block: %d. Size: %d kB.", block.Num, len(block.Transactions), blockSize)
