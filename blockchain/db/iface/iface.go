@@ -1,9 +1,10 @@
 package iface
 
 import (
+	"io"
+
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
-	"io"
 )
 
 // ChainStorage interface for work with blocks
@@ -91,6 +92,9 @@ type OutputStorage interface {
 	ClearDatabase() error
 
 	StakeStorage
+
+	// Ping the mysql database to keep the connection alive
+	Ping() error
 }
 
 type StakeStorage interface {
@@ -112,6 +116,6 @@ type OutputDatabase interface {
 
 // SQLConfig create config for any SQL database.
 type SQLConfig struct {
-	ConfigPath   string
-	DataDir      string
+	ConfigPath string
+	DataDir    string
 }
