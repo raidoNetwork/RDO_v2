@@ -22,6 +22,10 @@ import (
 var log = logrus.WithField("prefix", "core")
 var _ shared.Service = (*Service)(nil)
 
+const (
+	syncInterval = time.Duration(5) * time.Second
+)
+
 type Config struct {
 	BlockFinalizer  consensus.BlockFinalizer
 	AttestationPool consensus.AttestationPool
@@ -108,6 +112,7 @@ func (s *Service) mainLoop() {
 				err = syncService.SyncWithNetwork()
 				if err != nil {
 					log.Errorf("Error syncing: %s", err)
+					<-time.After(syncInterval)
 					continue
 				}
 				err = s.FinalizeBlock(block)
