@@ -177,6 +177,7 @@ func (s *Service) loop() {
 			if s.proposedBlock == nil {
 				continue
 			}
+
 			s.blockFeed.Send(s.proposedBlock)
 
 			delete(s.blockVoting, common.Encode(s.proposedBlock.Hash))
@@ -305,20 +306,31 @@ func (s *Service) processAttestation(att *types.Attestation) {
 
 	if _, exists := s.blockVoting[blockHash]; !exists {
 		s.blockVoting[blockHash] = &voting{
-			started: time.Now(),
+			started:  time.Now(),
+			approved: map[string]struct{}{},
+			rejected: map[string]struct{}{},
 		}
+	}
+
+	node := att.Validator.Hex()
+
+	_, exists1 := s.blockVoting[blockHash].approved[node]
+	_, exists2 := s.blockVoting[blockHash].rejected[node]
+
+	if exists1 || exists2 {
+		return
 	}
 
 	isLocalProposer := proposer.Hex() == s.proposer.Addr().Hex()
 	canUpdateProposedBlock := isLocalProposer && !s.votingIsFinished
 	if att.Type == types.Approve {
-		s.blockVoting[blockHash].approved += 1
+		s.blockVoting[blockHash].approved[node] = struct{}{}
 
 		if canUpdateProposedBlock {
 			s.proposedBlock.Approvers = append(s.proposedBlock.Approvers, att.Signature)
 		}
 	} else {
-		s.blockVoting[blockHash].rejected += 1
+		s.blockVoting[blockHash].rejected[node] = struct{}{}
 
 		if canUpdateProposedBlock {
 			s.proposedBlock.Slashers = append(s.proposedBlock.Slashers, att.Signature)

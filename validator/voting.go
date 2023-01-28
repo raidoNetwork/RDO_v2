@@ -3,7 +3,7 @@ package validator
 import "time"
 
 type voting struct {
-	approved int
-	rejected int
-	started time.Time
+	approved map[string]struct{}
+	rejected map[string]struct{}
+	started  time.Time
 }
