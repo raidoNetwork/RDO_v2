@@ -73,7 +73,7 @@ func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
 		cfg:         cfg,
 		topics:      map[string]*pubsub.Topic{},
 		subs:        map[string]*pubsub.Subscription{},
-		stateEvent:  make(chan state.State, 1),
+		stateEvent:  make(chan state.State, 10),
 		initialized: make(chan struct{}),
 	}
 
