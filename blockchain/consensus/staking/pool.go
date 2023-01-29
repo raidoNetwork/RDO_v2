@@ -1,6 +1,7 @@
 package staking
 
 import (
+	"math/big"
 	"math/rand"
 	"sync"
 	"unicode/utf8"
@@ -371,7 +372,17 @@ func (p *StakingPool) GetRewardMap(proposer string) map[string]uint64 {
 		electorsReward := blockReward - validatorReward
 		electorsStake := stakeData.CumulativeStake - stakeData.SelfStake
 		for elector, stakeAmount := range stakeData.Electors {
-			reward := stakeAmount * electorsReward / electorsStake
+			// We must use big ints; otherwise, we will face an overflow
+			bigStake := big.NewInt(int64(stakeAmount))
+			bigElectorsReward := big.NewInt(int64(electorsReward))
+			bigElectorsStake := big.NewInt(int64(electorsStake))
+
+			res1 := big.Int{}
+			res2 := big.Int{}
+			res1.Mul(bigStake, bigElectorsReward)
+			res2.Div(&res1, bigElectorsStake)
+
+			reward := uint64(res2.Int64())
 			if reward == 0 {
 				continue
 			}
