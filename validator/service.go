@@ -398,6 +398,11 @@ func (s *Service) generateSeed() {
 
 // reseive the seed & calculate the resulting seed
 func (s *Service) handleSeedEvent(seed *prototype.Seed) {
+	address := common.BytesToAddress(seed.Proposer.Address).Hex()
+	if se, exists := s.seedMap[address]; exists && seed.Seed == se.Seed {
+		return
+	}
+
 	// Checking for signature
 	if err := stypes.GetSeedSigner().Verify(seed); err != nil {
 		return
@@ -405,7 +410,6 @@ func (s *Service) handleSeedEvent(seed *prototype.Seed) {
 	log.Debugf("Accepted incoming seed %d from %s", seed.Seed, common.BytesToAddress(seed.Proposer.Address).Hex())
 
 	s.mu.Lock()
-	address := common.BytesToAddress(seed.Proposer.Address).Hex()
 	s.seedMap[address] = seed
 
 	var result uint64 = 1
