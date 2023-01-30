@@ -4,7 +4,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
-	"github.com/raidoNetwork/RDO_v2/shared/types"
+	stypes "github.com/raidoNetwork/RDO_v2/shared/types"
 )
 
 type AttestationType uint32
@@ -31,8 +31,8 @@ func NewAttestation(block *prototype.Block, proposer Proposer, attestType Attest
 		return nil, errors.New("Unknown attestation type")
 	}
 
-	sign, err := types.GetBlockSigner().SignMixed(
-		types.GetBlockHeader(block),
+	sign, err := stypes.GetBlockSigner().SignMixed(
+		stypes.GetBlockHeader(block),
 		mixMap[attestType],
 		proposer.Key(),
 	)
@@ -42,28 +42,32 @@ func NewAttestation(block *prototype.Block, proposer Proposer, attestType Attest
 
 	return &Attestation{
 		Validator: proposer.Addr(),
-		Block: block,
+		Block:     block,
 		Signature: sign,
-		Type: attestType,
+		Type:      attestType,
 	}, nil
 }
 
 func VerifyAttestationSign(att *Attestation) error {
 	return VerifyBlockSign(
-		types.NewHeader(att.Block),
+		stypes.NewHeader(att.Block),
 		att.Type,
 		att.Signature,
 	)
 }
 
-func VerifyBlockSign(header *types.BlockHeader, att AttestationType, sign *prototype.Sign) error {
+func VerifyBlockSign(header *stypes.BlockHeader, att AttestationType, sign *prototype.Sign) error {
 	if _, exists := mixMap[att]; !exists {
 		return errors.New("Unknown attestation type")
 	}
 
-	return types.GetBlockSigner().VerifyMixed(
+	return stypes.GetBlockSigner().VerifyMixed(
 		header,
 		mixMap[att],
 		sign,
 	)
+}
+
+func VerifySeedSign(seed *prototype.Seed) error {
+	return stypes.GetSeedSigner().Verify(seed)
 }

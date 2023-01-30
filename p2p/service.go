@@ -3,6 +3,11 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"io"
+	"net"
+	"sync"
+	"time"
+
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/libp2p/go-libp2p"
 	phost "github.com/libp2p/go-libp2p-core/host"
@@ -18,10 +23,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/utils/async"
 	"github.com/sirupsen/logrus"
-	"io"
-	"net"
-	"sync"
-	"time"
 )
 
 var log = logrus.WithField("prefix", "p2p")
@@ -72,7 +73,7 @@ func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
 		cfg:         cfg,
 		topics:      map[string]*pubsub.Topic{},
 		subs:        map[string]*pubsub.Subscription{},
-		stateEvent:  make(chan state.State, 1),
+		stateEvent:  make(chan state.State, 10),
 		initialized: make(chan struct{}),
 	}
 
@@ -519,16 +520,16 @@ func (s *Service) CreateStream(ctx context.Context, msg ssz.Marshaler, topic str
 	}
 
 	if _, err := s.EncodeStream(stream, msg); err != nil {
-		_err := stream.Reset()
+		_err := stream.Close()
 		_ = _err
-		log.Warnf("Reset stream on write for %s", string(stream.Protocol()))
+		log.Warnf("Close stream for %s", string(stream.Protocol()))
 		return nil, err
 	}
 
 	// Close stream for writing.
 	if err := stream.CloseWrite(); err != nil {
-		log.Warnf("Reset stream on close write for %s", string(stream.Protocol()))
-		_err := stream.Reset()
+		log.Warnf("Close stream for %s", string(stream.Protocol()))
+		_err := stream.Close()
 		_ = _err
 		return nil, err
 	}

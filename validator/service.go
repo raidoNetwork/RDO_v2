@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"bytes"
 	"context"
 	"path/filepath"
 	"sync"
@@ -8,7 +9,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
-	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/backend/poa"
+	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/attestation"
+	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/backend/pos"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/forger"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/blockchain/state"
@@ -21,6 +23,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/cmd"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
+	stypes "github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/validator/types"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -31,7 +34,11 @@ var _ shared.Service = (*Service)(nil)
 
 const (
 	votingDuration    = 3 * time.Second
-	attestationsCount = 10
+	seedTimer         = 2 * time.Second
+	attestationsCount = 50
+	seedCount         = 50
+	proposeCount      = 50
+	seedPrime         = 4294967291 // prime number closest to 2**32-1
 )
 
 type Config struct {
@@ -41,6 +48,7 @@ type Config struct {
 	AttestationFeed events.Feed
 	BlockFeed       events.Feed
 	StateFeed       events.Feed
+	SeedFeed        events.Feed
 	Context         context.Context
 }
 
@@ -61,22 +69,30 @@ type Service struct {
 	// events
 	proposeEvent     chan *prototype.Block
 	attestationEvent chan *types.Attestation
+	seedEvent        chan *prototype.Seed
 
 	proposeFeed     events.Feed
 	attestationFeed events.Feed
+	seedFeed        events.Feed
 	blockFeed       events.Feed
 	stateFeed       events.Feed
 
 	// consensus Engine
-	backend consensus.PoA
+	backend consensus.PoS
 
 	unsubscribe func()
 
 	// validation loop
 	proposedBlock    *prototype.Block
+	receivedBlock    *prototype.Block
 	votingIsFinished bool
 	blockVoting      map[string]*voting
+	seedMap          map[string]*prototype.Seed
 	finishVoting     <-chan time.Time
+	waitSeed         <-chan time.Time
+
+	// seed
+	seed int64
 }
 
 func (s *Service) Start() {
@@ -124,9 +140,26 @@ func (s *Service) loop() {
 	for {
 		select {
 		case <-s.ticker.C():
+			// generate a seed, send it.
+			s.generateSeed()
+		case seed := <-s.seedEvent:
+			// Add to the map
+			s.handleSeedEvent(seed)
+		case <-s.waitSeed:
+			s.mu.Lock()
+			s.seedMap = make(map[string]*prototype.Seed)
+			s.mu.Unlock()
+
 			s.forgeBlock()
 		case block := <-s.proposeEvent:
+			s.mu.Lock()
+			if s.receivedBlock != nil && bytes.Equal(block.Hash, s.receivedBlock.Hash) {
+				s.mu.Unlock()
+				continue
+			}
+			s.mu.Unlock()
 			err := s.verifyBlock(block)
+
 			if err != nil {
 				panic(err)
 			}
@@ -136,13 +169,20 @@ func (s *Service) loop() {
 			log.Warn("Finish validation process...")
 			return
 		case <-s.finishVoting:
+			s.mu.Lock()
+
 			s.votingIsFinished = true
 
 			// gossip to network
+			if s.proposedBlock == nil {
+				continue
+			}
+
 			s.blockFeed.Send(s.proposedBlock)
 
 			delete(s.blockVoting, common.Encode(s.proposedBlock.Hash))
 			s.proposedBlock = nil
+			s.mu.Unlock()
 		case <-clearInterval.C:
 			clearVoting()
 		}
@@ -152,10 +192,12 @@ func (s *Service) loop() {
 func (s *Service) subscribeEvents() {
 	proposeSub := s.proposeFeed.Subscribe(s.proposeEvent)
 	attSub := s.attestationFeed.Subscribe(s.attestationEvent)
+	seedSub := s.seedFeed.Subscribe(s.seedEvent)
 
 	s.unsubscribe = func() {
 		proposeSub.Unsubscribe()
 		attSub.Unsubscribe()
+		seedSub.Unsubscribe()
 	}
 }
 
@@ -168,7 +210,7 @@ func (s *Service) AttestationFeed() events.Feed {
 }
 
 func (s *Service) waitInitEvent() {
-	stateEvent := make(chan state.State)
+	stateEvent := make(chan state.State, 1)
 	subs := s.stateFeed.Subscribe(stateEvent)
 
 	defer func() {
@@ -199,15 +241,20 @@ func (s *Service) verifyBlock(block *prototype.Block) error {
 		return nil
 	}
 
-	if !s.backend.IsLeader(blockProposer) {
+	s.mu.Lock()
+	if !s.backend.IsLeader(blockProposer, s.seed) {
 		// todo mark validator as malicious
 		log.Warnf("Not ordered block proposition from %s", blockProposer.Hex())
+		s.mu.Unlock()
 		return nil
 	}
+	s.mu.Unlock()
 
 	attestationType := types.Approve
 	_, err := s.att.Validator().ValidateBlock(block, false)
-	if err != nil {
+	if err == attestation.ErrPreviousBlockNotExists {
+		return nil
+	} else if err != nil {
 		log.Errorf("Failed block attestation: %s", err)
 		attestationType = types.Reject
 	}
@@ -217,12 +264,21 @@ func (s *Service) verifyBlock(block *prototype.Block) error {
 		return errors.Wrap(err, "Attestation error")
 	}
 
+	if attestationType == types.Approve {
+		s.mu.Lock()
+		s.receivedBlock = block
+		s.mu.Unlock()
+	}
+
 	s.attestationFeed.Send(att)
 
 	return nil
 }
 
 func (s *Service) processAttestation(att *types.Attestation) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	proposer := common.BytesToAddress(att.Block.Proposer.Address)
 	if !s.backend.IsValidator(proposer) {
 		return
@@ -250,20 +306,31 @@ func (s *Service) processAttestation(att *types.Attestation) {
 
 	if _, exists := s.blockVoting[blockHash]; !exists {
 		s.blockVoting[blockHash] = &voting{
-			started: time.Now(),
+			started:  time.Now(),
+			approved: map[string]struct{}{},
+			rejected: map[string]struct{}{},
 		}
+	}
+
+	node := att.Validator.Hex()
+
+	_, exists1 := s.blockVoting[blockHash].approved[node]
+	_, exists2 := s.blockVoting[blockHash].rejected[node]
+
+	if exists1 || exists2 {
+		return
 	}
 
 	isLocalProposer := proposer.Hex() == s.proposer.Addr().Hex()
 	canUpdateProposedBlock := isLocalProposer && !s.votingIsFinished
 	if att.Type == types.Approve {
-		s.blockVoting[blockHash].approved += 1
+		s.blockVoting[blockHash].approved[node] = struct{}{}
 
 		if canUpdateProposedBlock {
 			s.proposedBlock.Approvers = append(s.proposedBlock.Approvers, att.Signature)
 		}
 	} else {
-		s.blockVoting[blockHash].rejected += 1
+		s.blockVoting[blockHash].rejected[node] = struct{}{}
 
 		if canUpdateProposedBlock {
 			s.proposedBlock.Slashers = append(s.proposedBlock.Slashers, att.Signature)
@@ -272,10 +339,15 @@ func (s *Service) processAttestation(att *types.Attestation) {
 }
 
 func (s *Service) forgeBlock() {
+
+	s.mu.Lock()
 	// Check node is leader now
-	if !s.backend.IsLeader(s.proposer.Addr()) {
+	log.Debugf("%s is leader: %b", s.proposer.Addr().Hex(), s.backend.IsLeader(s.proposer.Addr(), s.seed))
+	if !s.backend.IsLeader(s.proposer.Addr(), s.seed) {
+		s.mu.Unlock()
 		return
 	}
+	s.mu.Unlock()
 
 	start := time.Now()
 
@@ -287,7 +359,6 @@ func (s *Service) forgeBlock() {
 		s.mu.Lock()
 		s.statusErr = err
 		s.mu.Unlock()
-
 		return
 	}
 
@@ -303,6 +374,52 @@ func (s *Service) forgeBlock() {
 	s.votingIsFinished = false
 
 	log.Debugf("Block #%d forged in %d ms", block.Num, time.Since(start).Milliseconds())
+}
+
+// Generate the seed and send it to all peers
+func (s *Service) generateSeed() {
+	seed, err := stypes.NewSeed(s.proposer)
+	if err != nil {
+		log.Errorf("[ValidatorService] Error generating seed: %s", err.Error())
+
+		s.mu.Lock()
+		s.statusErr = err
+		s.mu.Unlock()
+
+		return
+	}
+
+	log.Debugf("Successfully generated seed: %d", seed.Seed)
+
+	// Push the generated seed to events
+	s.seedFeed.Send(seed)
+	s.waitSeed = time.After(seedTimer)
+}
+
+// reseive the seed & calculate the resulting seed
+func (s *Service) handleSeedEvent(seed *prototype.Seed) {
+	address := common.BytesToAddress(seed.Proposer.Address).Hex()
+	if se, exists := s.seedMap[address]; exists && seed.Seed == se.Seed {
+		return
+	}
+
+	// Checking for signature
+	if err := stypes.GetSeedSigner().Verify(seed); err != nil {
+		return
+	}
+	log.Debugf("Accepted incoming seed %d from %s", seed.Seed, common.BytesToAddress(seed.Proposer.Address).Hex())
+
+	s.mu.Lock()
+	s.seedMap[address] = seed
+
+	var result uint64 = 1
+	for _, seed := range s.seedMap {
+		se := uint64(seed.Seed)
+		result = (result * se) % seedPrime
+	}
+
+	s.seed = int64(result)
+	s.mu.Unlock()
 }
 
 func New(cliCtx *cli.Context, cfg *Config) (*Service, error) {
@@ -326,7 +443,10 @@ func New(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 
 	log.Infof("Register validator key %s", proposer.Addr().Hex())
 
-	engine := poa.New()
+	posConfig := pos.Config{
+		AttestationPool: &cfg.AttestationPool,
+	}
+	engine := pos.New(posConfig)
 	if !engine.IsValidator(proposer.Addr()) {
 		return nil, errors.New("Attach validator key to start validator flow")
 	}
@@ -356,20 +476,24 @@ func New(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		ticker: slot.NewSlotTicker(),
 
 		// events
-		proposeEvent:     make(chan *prototype.Block, 1),
+		proposeEvent:     make(chan *prototype.Block, proposeCount),
 		attestationEvent: make(chan *types.Attestation, attestationsCount),
+		seedEvent:        make(chan *prototype.Seed, seedCount),
 
 		// feeds
 		proposeFeed:     cfg.ProposeFeed,
 		attestationFeed: cfg.AttestationFeed,
 		blockFeed:       cfg.BlockFeed,
 		stateFeed:       cfg.StateFeed,
+		seedFeed:        cfg.SeedFeed,
 
 		// engine
 		backend: engine,
 
 		// validator loop
 		blockVoting: map[string]*voting{},
+
+		seedMap: map[string]*prototype.Seed{},
 	}
 
 	return srv, nil

@@ -5,7 +5,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
-	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/backend/poa"
+	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/backend/pos"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/keystore"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -21,15 +21,17 @@ var (
 )
 
 const (
-	txBatchLimit     = 1000
-	InputsPerTxLimit = 2000
+	txBatchLimit      = 1000
+	InputsPerTxLimit  = 2000
+	OutputsPerTxLimit = 2000
+	collapseTxLimit   = 30
 )
 
 type Config struct {
 	EnableMetrics bool
 	BlockSize     int
 	Proposer      *keystore.ValidatorAccount
-	Engine        *poa.Backend
+	Engine        *pos.Backend
 }
 
 func New(bc consensus.BlockFinalizer, att consensus.AttestationPool, cfg *Config) *Forger {
@@ -75,7 +77,8 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 	pendingTxCounter.Set(float64(txQueueLen)) // todo remove metrics to the core service
 
 	// create reward transaction for current block
-	txBatch, collapseBatch, totalSize, err := m.addRewardTxToBatch(m.cfg.Proposer.Addr().Hex(), txBatch, collapseBatch, totalSize, bn)
+	// txBatch, collapseBatch, totalSize, err := m.addRewardTxToBatch(m.cfg.Proposer.Addr().Hex(), txBatch, collapseBatch, totalSize, bn)
+	txBatch, collapseBatch, totalSize, err := m.addRewardsTxToBatch(m.cfg.Proposer.Addr().Hex(), txBatch, collapseBatch, totalSize, bn)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +111,7 @@ MAINLOOP:
 		// tx is too big try for look up another one
 		if totalSize > m.cfg.BlockSize {
 			totalSize -= size
-			continue
+			break
 		}
 
 		hash := tx.Hash().Hex()
@@ -178,12 +181,12 @@ MAINLOOP:
 
 				// If exceeds the limit, skip the validator unstake transaction
 				// and delete from fullUnstakes
-				if txsSize+totalSize > m.cfg.BlockSize {
+				if txsSize+totalSize >= m.cfg.BlockSize {
 					delete(fullUnstakes, node)
 					continue MAINLOOP
 				}
 
-				if len(txBatch)+len(collapseBatch)+len(systemUnstakes) > txCountPerBlock {
+				if len(txBatch)+len(collapseBatch)+len(systemUnstakes) >= txCountPerBlock {
 					continue MAINLOOP
 				}
 
@@ -199,32 +202,32 @@ MAINLOOP:
 		log.Debugf("Add %s %s to the block %d", txType, hash, bn)
 		txType = "StandardTx"
 
-		collapseTx, err := m.createCollapseTx(tx, m.bf.GetBlockCount())
+		collapseTx, err := m.createCollapseTx(tx, m.bf.GetBlockCount(), totalSize)
 		if err != nil {
 			log.Errorf("Can't collapse tx %s outputs", hash)
 			return nil, errors.Wrap(err, "Error collapsing tx outputs")
 		}
 
 		// no need to create collapse tx for given tx addresses
+		leftCollapseBatch := make([]*prototype.Transaction, 0, len(collapseTx))
 		if collapseTx != nil {
+			for _, colTx := range collapseTx {
+				if totalSize+colTx.Size() >= m.cfg.BlockSize {
+					break
+				}
+				leftCollapseBatch = append(leftCollapseBatch, colTx.GetTx())
+				totalSize += colTx.Size()
+				log.Debugf("CollapseTx %s created", colTx.Hash().Hex())
+
+			}
 			err := m.att.TxPool().InsertCollapseTx(collapseTx)
 			if err != nil {
 				log.Error(err)
 			} else {
 				// Check for size when appending collapseTxs
-				for _, coltx := range collapseTx {
-					collapseBatch = append(collapseBatch, coltx.GetTx())
-					totalSize += coltx.Size()
-
-					log.Debugf("Add CollapseTx %s to the block %d", coltx.Hash().Hex(), bn)
-
-				}
+				collapseBatch = append(collapseBatch, leftCollapseBatch...)
 			}
-		}
 
-		// we fill block successfully
-		if totalSize >= m.cfg.BlockSize {
-			break
 		}
 	}
 
@@ -278,21 +281,24 @@ MAINLOOP:
 	return block, nil
 }
 
-func (m *Forger) addRewardTxToBatch(proposer string, txBatch []*prototype.Transaction, collapseBatch []*prototype.Transaction, totalSize int, bn int64) ([]*prototype.Transaction, []*prototype.Transaction, int, error) {
-	rewardTx, err := m.createRewardTx(m.bf.GetBlockCount(), proposer)
+func (m *Forger) addRewardsTxToBatch(proposer string, txBatch []*prototype.Transaction, collapseBatch []*prototype.Transaction, totalSize int, bn int64) ([]*prototype.Transaction, []*prototype.Transaction, int, error) {
+	rewardTxs, err := m.createRewardTxs(m.bf.GetBlockCount(), proposer)
 	if err != nil {
 		if errors.Is(err, consensus.ErrNoStakers) {
 			log.Debug(err)
+			return txBatch, collapseBatch, totalSize, nil
 		} else {
 			return nil, nil, 0, err
 		}
-	} else {
+	}
+
+	for _, rewardTx := range rewardTxs {
 		txBatch = append(txBatch, rewardTx)
 		totalSize += rewardTx.SizeSSZ()
 
 		log.Debugf("Add RewardTx %s to the block", common.Encode(rewardTx.Hash))
 
-		collapseTx, err := m.createCollapseTx(types.NewTransaction(rewardTx), m.bf.GetBlockCount())
+		collapseTx, err := m.createCollapseTx(types.NewTransaction(rewardTx), m.bf.GetBlockCount(), totalSize)
 		if err != nil {
 			log.Errorf("Can't collapse reward tx %s outputs", common.Encode(rewardTx.Hash))
 			return nil, nil, 0, errors.Wrap(err, "Error collapsing tx outputs")
@@ -329,7 +335,7 @@ func (m *Forger) createFeeTx(txarr []*prototype.Transaction) (*prototype.Transac
 
 	opts := types.TxOptions{
 		Outputs: []*prototype.TxOutput{
-			types.NewOutput(m.cfg.Engine.Leader().Bytes(), feeAmount, nil),
+			types.NewOutput(common.HexToAddress(common.BlackHoleAddress), feeAmount, nil),
 		},
 		Type: common.FeeTxType,
 		Fee:  0,
@@ -344,31 +350,60 @@ func (m *Forger) createFeeTx(txarr []*prototype.Transaction) (*prototype.Transac
 	return ntx, nil
 }
 
-func (m *Forger) createRewardTx(blockNum uint64, proposer string) (*prototype.Transaction, error) {
+func (m *Forger) createRewardTxs(blockNum uint64, proposer string) ([]*prototype.Transaction, error) {
 	outs := m.att.StakePool().GetRewardOutputs(proposer)
 	if len(outs) == 0 {
 		return nil, consensus.ErrNoStakers
 	}
 
+	transactions := make([]*prototype.Transaction, 0)
+	count := 0
+
 	opts := types.TxOptions{
-		Outputs: outs,
+		Outputs: make([]*prototype.TxOutput, 0),
 		Type:    common.RewardTxType,
 		Fee:     0,
 		Num:     blockNum,
 	}
 
-	ntx, err := types.NewPbTransaction(opts, nil)
-	if err != nil {
-		return nil, err
+	for _, out := range outs {
+		if count >= OutputsPerTxLimit {
+			ntx, err := types.NewPbTransaction(opts, nil)
+			if err != nil {
+				return nil, err
+			}
+			transactions = append(transactions, ntx)
+
+			// Clean up opts
+			opts = types.TxOptions{
+				Outputs: make([]*prototype.TxOutput, 0),
+				Type:    common.RewardTxType,
+				Fee:     0,
+				Num:     blockNum,
+			}
+			count = 0
+		}
+
+		opts.Outputs = append(opts.Outputs, out)
+		count += 1
 	}
 
-	return ntx, nil
+	if count > 0 {
+		ntx, err := types.NewPbTransaction(opts, nil)
+		if err != nil {
+			return nil, err
+		}
+		transactions = append(transactions, ntx)
+	}
+
+	return transactions, nil
 }
 
-func (m *Forger) createCollapseTx(tx *types.Transaction, blockNum uint64) ([]*types.Transaction, error) {
+func (m *Forger) createCollapseTx(tx *types.Transaction, blockNum uint64, totalSize int) ([]*types.Transaction, error) {
 	const CollapseOutputsNum = 100 // minimal count of UTxO to collapse address outputs
 
 	transactions := make([]*types.Transaction, 0)
+	var sizeCounter int
 
 	from := ""
 	if tx.Type() != common.RewardTxType {
@@ -432,10 +467,19 @@ func (m *Forger) createCollapseTx(tx *types.Transaction, blockNum uint64) ([]*ty
 			if err != nil {
 				return nil, err
 			}
+			if collapseTx.SizeSSZ()+sizeCounter+totalSize >= m.cfg.BlockSize {
+				return transactions, nil
+			}
+
 			transactions = append(transactions, types.NewTransaction(collapseTx))
+			sizeCounter += collapseTx.SizeSSZ()
 
 			log.Debugf("Collapse tx for %s with hash %s", tx.Hash().Hex(), common.Encode(collapseTx.Hash))
+			if len(transactions) == collapseTxLimit {
+				break
+			}
 		}
+
 	}
 
 	return transactions, nil

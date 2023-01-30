@@ -3,7 +3,9 @@ package types
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"encoding/binary"
 	"fmt"
+
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -25,13 +27,13 @@ type BlockSigner interface {
 	VerifyMixed(*BlockHeader, []byte, *prototype.Sign) error
 }
 
-type KeccakBlockSigner struct {}
+type KeccakBlockSigner struct{}
 
-func (kbs *KeccakBlockSigner) Sign(header *BlockHeader, key *ecdsa.PrivateKey) (*prototype.Sign, error){
+func (kbs *KeccakBlockSigner) Sign(header *BlockHeader, key *ecdsa.PrivateKey) (*prototype.Sign, error) {
 	return kbs.signRaw(kbs.getBlockDomain(header, nil), key)
 }
 
-func (kbs *KeccakBlockSigner) SignMixed(header *BlockHeader, mix []byte, key *ecdsa.PrivateKey) (*prototype.Sign, error){
+func (kbs *KeccakBlockSigner) SignMixed(header *BlockHeader, mix []byte, key *ecdsa.PrivateKey) (*prototype.Sign, error) {
 	hash := kbs.getBlockDomain(header, mix)
 	return kbs.signRaw(hash, key)
 }
@@ -45,7 +47,7 @@ func (kbs *KeccakBlockSigner) signRaw(hash []byte, key *ecdsa.PrivateKey) (*prot
 
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	sign := &prototype.Sign{
-		Address: addr,
+		Address:   addr,
 		Signature: signature,
 	}
 
@@ -119,7 +121,7 @@ func MakeTxSigner(signType string) TxSigner {
 	}
 }
 
-type KeccakTxSigner struct {}
+type KeccakTxSigner struct{}
 
 func (s *KeccakTxSigner) Sign(tx *prototype.Transaction, key *ecdsa.PrivateKey) ([]byte, error) {
 	if key == nil {
@@ -165,4 +167,65 @@ func (s *KeccakTxSigner) GetTxDomain(tx *prototype.Transaction) []byte {
 func genSalt(hash []byte) []byte {
 	msg := fmt.Sprintf("\x15RaidoSignedData\n%s", string(hash))
 	return crypto.Keccak256([]byte(msg))
+}
+
+type KeccakSeedSigner struct{}
+
+func (s *KeccakSeedSigner) Sign(seed *prototype.Seed, key *ecdsa.PrivateKey) ([]byte, error) {
+	if key == nil {
+		return nil, errors.New("Empty private key.")
+	}
+	dgst := s.GetSeedDomain(seed)
+	kdst := crypto.FromECDSA(key)
+	sign, err := secp256k1.Sign(dgst, kdst)
+	if err != nil {
+		return nil, err
+	}
+
+	return sign, nil
+}
+
+func (s *KeccakSeedSigner) Verify(seed *prototype.Seed) error {
+	if len(seed.Proposer.Signature) != crypto.SignatureLength {
+		return errors.New("Wrong signature size.")
+	}
+
+	dgst := s.GetSeedDomain(seed)
+	sign := seed.Proposer.Signature
+
+	pubKey, err := crypto.SigToPub(dgst, sign)
+	if err != nil {
+		return err
+	}
+
+	addr := crypto.PubkeyToAddress(*pubKey)
+	if !bytes.Equal(addr.Bytes(), seed.Proposer.Address) {
+		return errors.New("Wrong signature given!!!")
+	}
+
+	return nil
+}
+
+func (s *KeccakSeedSigner) GetSeedDomain(seed *prototype.Seed) []byte {
+	bs := make([]byte, 4)
+	binary.LittleEndian.PutUint32(bs, seed.Seed)
+	salt := genSalt(crypto.Keccak256(bs))
+	return salt
+}
+
+type SeedSigner interface {
+	// Sign given digest with given key.
+	Sign(*prototype.Seed, *ecdsa.PrivateKey) ([]byte, error)
+
+	// Verify sign of given input.
+	Verify(seed *prototype.Seed) error
+}
+
+func MakeSeedSigner(signType string) SeedSigner {
+	switch signType {
+	case "keccak256":
+		return &KeccakSeedSigner{}
+	default:
+		return nil
+	}
 }

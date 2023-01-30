@@ -2,6 +2,7 @@ package generator
 
 import (
 	"crypto/ecdsa"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/rpc/api"
@@ -12,12 +13,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func NewService(chain api.ChainAPI) *Service {
+func NewService(chain api.ChainAPI, attestation api.AttestationAPI) *Service {
 	cfg := params.RaidoConfig()
 	stakeAmount := cfg.StakeSlotUnit * cfg.RoiPerRdo
 
 	return &Service{
 		chain:       chain,
+		attestation: attestation,
 		stakeAmount: stakeAmount,
 		blackHole:   common.HexToAddress(common.BlackHoleAddress).Bytes(),
 	}
@@ -27,6 +29,7 @@ var log = logrus.WithField("prefix", "generator")
 
 type Service struct {
 	chain       api.ChainAPI
+	attestation api.AttestationAPI
 	stakeAmount uint64
 	blackHole   []byte
 }
@@ -65,7 +68,19 @@ func (s *Service) GenerateStakeTx(fee uint64, hexKey string, amount uint64, node
 		),
 	}
 
-	return s.createTx(address, key, outputs, fee, common.StakeTxType)
+	transaction, err := s.createTx(address, key, outputs, fee, common.StakeTxType)
+	if err != nil {
+		return transaction, err
+	}
+
+	if transaction.Type == common.StakeTxType {
+		typedTx := types.NewTransaction(transaction)
+		err := s.attestation.StakersLimitReached(typedTx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return transaction, err
 }
 
 func (s *Service) GenerateUnstakeTx(fee uint64, hexKey string, amount uint64, node string) (*prototype.Transaction, error) {

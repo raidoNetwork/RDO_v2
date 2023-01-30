@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
@@ -21,6 +22,7 @@ var _ shared.Service = (*Service)(nil)
 var log = logrus.WithField("prefix", "blockchain")
 
 var (
+	KEEP_ALIVE        = time.Duration(5) * time.Second
 	ErrNotForgedBlock = errors.New("Given block number is not forged yet.")
 )
 
@@ -86,6 +88,9 @@ func (s *Service) Start() {
 			return
 		}
 	}
+
+	// Ping the mysql database
+	go s.PingSQL()
 
 	// change service status
 	s.mu.Lock()
@@ -331,4 +336,17 @@ func (s *Service) FindValidatorStakeDeposits() ([]*types.UTxO, error) {
 func (s *Service) RepairDatabase() error {
 	// todo make impl
 	return nil
+}
+
+func (s *Service) PingSQL() {
+	go func() {
+		updater := time.NewTicker(KEEP_ALIVE)
+		for range updater.C {
+			err := s.outm.db.Ping()
+			if err != nil {
+				err = errors.Wrap(err, "Pinging SQL error: ")
+				log.Error(err)
+			}
+		}
+	}()
 }
