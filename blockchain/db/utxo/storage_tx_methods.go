@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/utxo/dbshared"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
@@ -201,4 +202,9 @@ func (s *Store) removeTx(id int) {
 	delete(s.tx, id)
 	log.Debugf("OutputDB.removeTx: delete database tx id #%d", id)
 	s.lock.Unlock()
+}
+
+func (s *Store) Ping() error {
+	_, err := s.db.Exec("SELECT 42")
+	return err
 }

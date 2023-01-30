@@ -65,3 +65,8 @@ message BlockRequest {
   uint64 count = 2;
   uint64 step = 3;
 }
+
+message Seed {
+  uint32 seed = 1;
+  Sign proposer = 2;
+}

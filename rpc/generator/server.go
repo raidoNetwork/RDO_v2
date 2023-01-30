@@ -2,6 +2,7 @@ package generator
 
 import (
 	"context"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/rpc/api"
@@ -11,8 +12,9 @@ import (
 )
 
 type Server struct {
-	Server  *grpc.Server
-	Backend api.GeneratorAPI
+	Server      *grpc.Server
+	Backend     api.GeneratorAPI
+	Attestation api.AttestationAPI
 
 	prototype.UnimplementedGeneratorServer
 }

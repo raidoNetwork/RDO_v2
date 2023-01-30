@@ -2,6 +2,8 @@ package attestation
 
 import (
 	"context"
+	"time"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/attestation"
@@ -14,13 +16,12 @@ import (
 	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"google.golang.org/grpc/status"
-	"time"
 )
 
 var _ shared.Service = (*Service)(nil)
 
 type Config struct {
-	TxFeed events.Feed
+	TxFeed        events.Feed
 	StateFeed     events.Feed
 	EnableMetrics bool
 	Blockchain    *rdochain.Service
@@ -33,7 +34,7 @@ func NewService(parentCtx context.Context, cfg *Config) (*Service, error) {
 	slotTime := time.Duration(chainConfig.SlotTime) * time.Second
 
 	// create new staking pool
-	stakePool := staking.NewPool(cfg.Blockchain, chainConfig.ValidatorRegistryLimit, chainConfig.RewardBase, stakeAmount)
+	stakePool := staking.NewPool(cfg.Blockchain, chainConfig.ValidatorRegistryLimit, stakeAmount)
 
 	validatorCfg := attestation.CryspValidatorConfig{
 		SlotTime:               slotTime,
@@ -41,6 +42,7 @@ func NewService(parentCtx context.Context, cfg *Config) (*Service, error) {
 		StakeUnit:              stakeAmount,
 		ValidatorRegistryLimit: chainConfig.ValidatorRegistryLimit,
 		EnableMetrics:          cfg.EnableMetrics,
+		BlockSize:              chainConfig.BlockSize,
 	}
 
 	// new block and tx validator
@@ -48,7 +50,7 @@ func NewService(parentCtx context.Context, cfg *Config) (*Service, error) {
 
 	// new tx pool
 	txPool := NewPool(&PoolSettings{
-		Validator: validator,
+		Validator:  validator,
 		MinimalFee: chainConfig.MinimalFee,
 	})
 
@@ -57,34 +59,34 @@ func NewService(parentCtx context.Context, cfg *Config) (*Service, error) {
 	ctx, cancel := context.WithCancel(parentCtx)
 
 	srv := &Service{
-		txPool: txPool,
-		stakePool: stakePool,
-		validator: validator,
+		txPool:     txPool,
+		stakePool:  stakePool,
+		validator:  validator,
 		stateEvent: stateEvent,
-		txEvent: txEvent,
-		cfg: cfg,
-		ctx: ctx,
-		cancel: cancel,
+		txEvent:    txEvent,
+		cfg:        cfg,
+		ctx:        ctx,
+		cancel:     cancel,
 	}
 
 	return srv, nil
 }
 
-type Service struct{
-	txPool *Pool
+type Service struct {
+	txPool    *Pool
 	stakePool consensus.StakePool
 	validator consensus.Validator
 
 	stateEvent chan state.State
-	txEvent chan *types.Transaction
+	txEvent    chan *types.Transaction
 
 	cfg *Config
 
-	ctx context.Context
+	ctx    context.Context
 	cancel context.CancelFunc
 }
 
-func (s *Service) Start(){
+func (s *Service) Start() {
 	// wait for sync
 	err := s.waitSyncing()
 	if err != nil {
@@ -104,7 +106,7 @@ func (s *Service) txListener() {
 		case tx := <-s.txEvent:
 			err := s.txPool.Insert(tx)
 			if err != nil {
-				log.Error(errors.Wrap(err , "Transaction listener error"))
+				log.Debug(errors.Wrap(err, "Transaction listener error"))
 			}
 		case <-s.ctx.Done():
 			log.Debugf("Stop Transaction listener loop")
@@ -169,14 +171,18 @@ func (s *Service) Validator() consensus.Validator {
 }
 
 func (s *Service) waitSyncing() error {
-	sub := s.cfg.StateFeed.Subscribe(s.stateEvent)
-	defer sub.Unsubscribe()
+	stateFeed := s.cfg.StateFeed
 
-	for st := range s.stateEvent {
-		if st == state.Synced {
-			return s.stakePool.Init()
-		}
+	err := s.stakePool.Init()
+	if err != nil {
+		return err
 	}
 
+	stateFeed.Send(state.StakePoolInitialized)
+
 	return nil
+}
+
+func (s *Service) StakersLimitReached(tx *types.Transaction) error {
+	return s.txPool.CheckMaxStakers(tx)
 }
