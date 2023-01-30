@@ -1,14 +1,17 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"sync"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
+	"github.com/raidoNetwork/RDO_v2/blockchain/consensus/attestation"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/blockchain/state"
+	rsync "github.com/raidoNetwork/RDO_v2/blockchain/sync"
 	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared"
@@ -19,6 +22,10 @@ import (
 
 var log = logrus.WithField("prefix", "core")
 var _ shared.Service = (*Service)(nil)
+
+const (
+	syncInterval = time.Duration(5) * time.Second
+)
 
 type Config struct {
 	BlockFinalizer  consensus.BlockFinalizer
@@ -40,9 +47,12 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 
 		ticker: slot.Ticker(),
 
+		// received block
+		receivedBlock: &prototype.Block{},
+
 		// events
-		blockEvent: make(chan *prototype.Block, 5),
-		stateEvent: make(chan state.State, 1),
+		blockEvent: make(chan *prototype.Block, 10),
+		stateEvent: make(chan state.State, 10),
 
 		// feeds
 		blockFeed: cfg.BlockFeed,
@@ -66,6 +76,9 @@ type Service struct {
 	ticker *slot.SlotTicker
 
 	mu sync.Mutex
+
+	// Recorded block
+	receivedBlock *prototype.Block
 
 	// events
 	stateEvent chan state.State
@@ -93,9 +106,31 @@ func (s *Service) mainLoop() {
 		case <-s.ticker.C():
 			updateCoreMetrics()
 		case block := <-s.blockEvent:
+			s.mu.Lock()
+			if bytes.Equal(block.Hash, s.receivedBlock.Hash) {
+				continue
+			}
+			s.mu.Unlock()
+
 			start := time.Now()
 
 			err := s.FinalizeBlock(block)
+			for err == attestation.ErrPreviousBlockNotExists {
+				log.Infof("Previous block for given block does not exist. Try syncing")
+				syncService := rsync.GetMainService()
+				if syncService == nil {
+					log.Errorf("Error fetching syncService: %s", err)
+					continue
+				}
+				err = syncService.SyncWithNetwork()
+				if err != nil {
+					log.Errorf("Error syncing: %s", err)
+					<-time.After(syncInterval)
+					continue
+				}
+				err = s.FinalizeBlock(block)
+			}
+
 			if err != nil {
 				log.Errorf("[CoreService] Error finalizing block: %s", err.Error())
 
@@ -107,6 +142,10 @@ func (s *Service) mainLoop() {
 					continue
 				}
 			}
+
+			s.mu.Lock()
+			s.receivedBlock = block
+			s.mu.Unlock()
 
 			blockSize := block.SizeSSZ() / 1024
 			log.Warnf("[CoreService] Block #%d finalized. Transactions in block: %d. Size: %d kB.", block.Num, len(block.Transactions), blockSize)
@@ -169,7 +208,7 @@ func (s *Service) FinalizeBlock(block *prototype.Block) error {
 			s.att.TxPool().Finalize(failedTx)
 		}
 		s.att.TxPool().ClearForged(block)
-		return errors.Wrap(err, "ValidateBlockError")
+		return err
 	}
 
 	// save block

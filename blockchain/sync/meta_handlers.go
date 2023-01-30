@@ -3,6 +3,7 @@ package sync
 import (
 	"bytes"
 	"context"
+
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/pkg/errors"
@@ -42,7 +43,7 @@ func (s *Service) metaHandler(ctx context.Context, msg interface{}, stream netwo
 
 func (s *Service) validateMetaHandler(meta *prototype.Metadata) error {
 	// compare Genesis blocks
-	if meta.HeadSlot == 0 && !bytes.Equal(meta.HeadBlockHash, s.cfg.Blockchain.GenesisHash()) {
+	if meta.HeadBlockNum == 0 && !bytes.Equal(meta.HeadBlockHash, s.cfg.Blockchain.GenesisHash()) {
 		return errors.New("Wrong Genesis block")
 	}
 
@@ -84,9 +85,9 @@ func (s *Service) getSelfMeta() (*prototype.Metadata, error) {
 	}
 
 	resp := &prototype.Metadata{
-		HeadSlot:       headBlock.Slot, // slot.Ticker().Slot()
-		HeadBlockHash:	headBlock.Hash,
-		HeadBlockNum:  	headBlock.Num,
+		HeadSlot:      headBlock.Slot, // slot.Ticker().Slot()
+		HeadBlockHash: headBlock.Hash,
+		HeadBlockNum:  headBlock.Num,
 	}
 
 	s.cfg.P2P.PeerStore().Scorers().PeerHeadSlot.Set(headBlock.Slot)

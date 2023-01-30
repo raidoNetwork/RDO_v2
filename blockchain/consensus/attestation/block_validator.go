@@ -17,7 +17,9 @@ import (
 )
 
 var (
-	ErrReadingBlock = errors.New("Error reading block from database")
+	ErrReadingBlock           = errors.New("Error reading block from database")
+	ErrPreviousBlockNotExists = errors.New("Previous block for given block does not exist")
+	feeSizeAllowance          = 1000
 )
 
 // checkBlockBalance count block inputs and outputs sum and check that all inputs in block are unique.
@@ -106,6 +108,12 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, countSign bool) 
 
 	start := time.Now()
 
+	// Validate size of the block
+	// Allow for fee transaction
+	if block.SizeSSZ() > cv.cfg.BlockSize+feeSizeAllowance {
+		return nil, errors.Errorf("The block size is: %d, exceeds: %d", block.SizeSSZ(), cv.cfg.BlockSize)
+	}
+
 	// check that block has total balance equal to zero
 	// check that inputs of block don't repeat
 	err := cv.checkBlockBalance(block)
@@ -171,7 +179,8 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, countSign bool) 
 	}
 
 	if prevBlock == nil {
-		return nil, errors.Errorf("ValidateBlock: Previous Block #%d for given block #%d is not exists.", block.Num-1, block.Num)
+		log.Errorf("ValidateBlock: Previous Block #%d for given block #%d is not exists.", block.Num-1, block.Num)
+		return nil, ErrPreviousBlockNotExists
 	}
 
 	if prevBlock.Timestamp >= block.Timestamp {
@@ -209,6 +218,7 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, countSign bool) 
 
 func (cv *CryspValidator) verifyTransactions(block *prototype.Block) ([]*types.Transaction, error) {
 	failedTx := make([]*types.Transaction, 0)
+	rewardRecord := make(map[string]uint64)
 	standardTxCount := 0
 	for _, txpb := range block.Transactions {
 		tx := types.NewTransaction(txpb)
@@ -224,7 +234,7 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block) ([]*types.T
 				err = cv.validateFeeTx(tx, block)
 				txType = "FeeTx"
 			case common.RewardTxType:
-				err = cv.validateRewardTx(tx, block)
+				err = cv.validateRewardTx(tx, block, rewardRecord)
 				txType = "RewardTx"
 			case common.ValidatorsUnstakeTxType:
 				err = cv.validateSystemUnstakeTx(tx, block)
@@ -256,6 +266,12 @@ func (cv *CryspValidator) verifyTransactions(block *prototype.Block) ([]*types.T
 		}
 
 		tx.SetStatus(types.TxSuccess)
+	}
+
+	// Verifying that all stakers got their reward
+	rewardMap := cv.stakeValidator.GetRewardMap(common.Encode(block.Proposer.Address))
+	if len(rewardRecord) != len(rewardMap) {
+		return nil, errors.New("Rewards in the block are not valid")
 	}
 
 	return failedTx, nil

@@ -1,9 +1,10 @@
 package events
 
 import (
-	"github.com/sirupsen/logrus"
 	"reflect"
 	"sync"
+
+	"github.com/sirupsen/logrus"
 )
 
 var log = logrus.WithField("prefix", "events")

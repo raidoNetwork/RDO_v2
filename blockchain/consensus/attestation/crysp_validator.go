@@ -2,6 +2,7 @@ package attestation
 
 import (
 	"bytes"
+	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -9,6 +10,7 @@ import (
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/math"
+	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
 	"github.com/raidoNetwork/RDO_v2/utils/hash"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
@@ -17,7 +19,8 @@ import (
 )
 
 var (
-	log = logrus.WithField("prefix", "CryspValidator")
+	log    = logrus.WithField("prefix", "CryspValidator")
+	config = params.RaidoConfig()
 )
 
 const maxOutputs = 2000
@@ -37,6 +40,7 @@ type CryspValidatorConfig struct {
 	StakeUnit              uint64        // StakeUnit roi amount needed for stake.
 	EnableMetrics          bool          // EnableMetrics enables time statistic log entries.
 	ValidatorRegistryLimit int           // ValidatorRegistryLimit defines validator slots count
+	BlockSize              int           // BlockSize defines the maximum size of the block
 }
 
 func NewCryspValidator(bc consensus.BlockchainReader, stakeValidator consensus.StakePool, cfg *CryspValidatorConfig) *CryspValidator {
@@ -76,6 +80,20 @@ func (cv *CryspValidator) ValidateTransaction(tx *types.Transaction) error {
 	default:
 		return consensus.ErrBadTxType
 	}
+}
+
+// CheckMaxStakers checks whether the limit of
+// stakers for a given validator is reached
+func (cv *CryspValidator) CheckMaxStakers(tx *types.Transaction, stakers int) error {
+	// Look through all outputs; if for any the number
+	// of stakers per validator is exceeded, invalidate the transaction
+	for _, out := range tx.Outputs() {
+		validator := out.Node().Hex()
+		if cv.stakeValidator.NumberStakers(validator)+stakers >= config.MaxNumberOfStakers {
+			return errors.New(fmt.Sprintf("The number of stakers for validator %s is at its maximum", validator))
+		}
+	}
+	return nil
 }
 
 // ValidateTransactionStruct validates transaction balances, signatures and hash. Use only for legacy tx type.
@@ -321,7 +339,7 @@ func (cv *CryspValidator) validateFeeTx(tx *types.Transaction, block *prototype.
 }
 
 // validateAwardTx validate award transaction
-func (cv *CryspValidator) validateRewardTx(tx *types.Transaction, block *prototype.Block) error {
+func (cv *CryspValidator) validateRewardTx(tx *types.Transaction, block *prototype.Block, rewardRecord map[string]uint64) error {
 	// if tx has type different from fee return error
 	if tx.Type() != common.RewardTxType {
 		return errors.Errorf("Transaction has wrong type: %d.", tx.Type())
@@ -332,11 +350,7 @@ func (cv *CryspValidator) validateRewardTx(tx *types.Transaction, block *prototy
 		return errors.New("Wrong tx reward num.")
 	}
 
-	rewardSize := len(tx.Outputs())
 	rewardMap := cv.stakeValidator.GetRewardMap(common.Encode(block.Proposer.Address))
-	if rewardSize != len(rewardMap) {
-		return errors.Errorf("Wrong outputs size. Given: %d. Expected: %d.", rewardSize, len(rewardMap))
-	}
 
 	processed := map[string]struct{}{}
 	for _, out := range tx.Outputs() {
@@ -350,10 +364,7 @@ func (cv *CryspValidator) validateRewardTx(tx *types.Transaction, block *prototy
 		}
 
 		processed[staker] = struct{}{}
-	}
-
-	if len(processed) != len(rewardMap) {
-		return errors.Errorf("Not all stakers take reward")
+		rewardRecord[staker] = out.Amount()
 	}
 
 	return nil
@@ -673,6 +684,11 @@ func (cv *CryspValidator) checkStakeType(tx *types.Transaction) (StakeType, erro
 		return NoStake, errors.New("Different stake types in one tx")
 	}
 
+	// Invalidate the stake tx if the number of stakers per validator is exceeded
+	if err := cv.IsMaxStakers(tx); err != nil {
+		return NoStake, err
+	}
+
 	if !hasStaking {
 		return NoStake, nil
 	}
@@ -682,4 +698,16 @@ func (cv *CryspValidator) checkStakeType(tx *types.Transaction) (StakeType, erro
 	} else {
 		return ElectorStake, nil
 	}
+}
+
+func (cv *CryspValidator) IsMaxStakers(tx *types.Transaction) error {
+	// Look through all outputs; if for any the number
+	// of stakers per validator is exceeded, invalidate the transaction
+	for _, out := range tx.Outputs() {
+		validator := out.Node().Hex()
+		if cv.stakeValidator.NumberStakers(validator) >= config.MaxNumberOfStakers {
+			return errors.New(fmt.Sprintf("The number of stakers for validator %s is at its maximum", validator))
+		}
+	}
+	return nil
 }

@@ -2,6 +2,10 @@ package sync
 
 import (
 	"context"
+	"runtime/debug"
+	"sync/atomic"
+	"time"
+
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -15,18 +19,16 @@ import (
 	"github.com/raidoNetwork/RDO_v2/utils/async"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	"github.com/sirupsen/logrus"
-	"runtime/debug"
-	"sync/atomic"
-	"time"
 )
 
 var log = logrus.WithField("prefix", "syncBlocks")
 var _ shared.Service = (*Service)(nil)
+var MainService *Service
 
 const (
-	txGossipCount            = 200
-	blockGossipCount         = 100
-	stateCount               = 1
+	txGossipCount            = 2000
+	blockGossipCount         = 1000
+	stateCount               = 10
 	notificationsGossipCount = txGossipCount + blockGossipCount
 
 	ttfbTimeout = 5 * time.Second
@@ -37,6 +39,7 @@ const (
 type ValidatorCfg struct {
 	ProposeFeed     events.Feed
 	AttestationFeed events.Feed
+	SeedFeed        events.Feed
 	Enabled         bool
 }
 
@@ -63,11 +66,14 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		ctx:          ctx,
 		cancel:       cancel,
 		initialized:  make(chan struct{}),
+		stakeSynced:  make(chan struct{}),
 		synced:       0,
 	}
 
 	// subscribe on new events
 	srv.subscribeEvents()
+
+	MainService = srv
 
 	return srv
 }
@@ -84,19 +90,17 @@ type Service struct {
 	cancel context.CancelFunc
 
 	initialized chan struct{}
+	stakeSynced chan struct{}
 
 	synced int32
 
 	forkBlockEvent chan *prototype.Block
-	bq *blockQueue
+	bq             *blockQueue
 }
 
 func (s *Service) Start() {
 	go s.stateListener()
-
-	<-s.initialized
-
-	s.cfg.P2P.AddConnectionHandlers(func(ctx context.Context, id peer.ID) error {
+	go s.cfg.P2P.AddConnectionHandlers(func(ctx context.Context, id peer.ID) error {
 		return s.metaRequest(ctx, id)
 	}, func(_ context.Context, _ peer.ID) error {
 		return nil
@@ -124,6 +128,9 @@ func (s *Service) Start() {
 	// wait for local database synced
 	<-s.initialized
 
+	// Wait for the stake pool to sync
+	<-s.stakeSynced
+
 	// start block queue watcher
 	go s.forkWatcher()
 
@@ -134,7 +141,7 @@ func (s *Service) Start() {
 
 	// sync state with network
 	if !s.cfg.DisableSync && !slot.Ticker().GenesisAfter() {
-		err := s.syncWithNetwork()
+		err := s.SyncWithNetwork()
 		if err != nil {
 			panic(err)
 		}
@@ -211,10 +218,14 @@ func (s *Service) stateListener() {
 			switch st {
 			case state.Initialized:
 				s.initialized <- struct{}{}
+			case state.StakePoolInitialized:
+				close(s.stakeSynced)
 			case state.LocalSynced:
 				close(s.initialized)
 				return
 			case state.ConnectionHandlersReady:
+				// do nothing
+			case state.Synced:
 				// do nothing
 			default:
 				log.Errorf("Unknown state event %d", st)
@@ -298,8 +309,8 @@ func (s *Service) addStreamHandler(topic string, handle streamHandler) {
 		defer cancel()
 
 		defer func() {
-			_ = stream.Reset()
-			log.Warnf("Reset stream on response for %s", string(stream.Protocol()))
+			_ = stream.Close()
+			log.Debugf("Close stream on response for %s", string(stream.Protocol()))
 		}()
 
 		log := log.WithField("peer", stream.Conn().RemotePeer().Pretty()).WithField("topic", string(stream.Protocol()))
@@ -333,4 +344,8 @@ func (s *Service) addStreamHandler(topic string, handle streamHandler) {
 			log.Errorf("Could not handle p2p RPC: %s", err)
 		}
 	})
+}
+
+func GetMainService() *Service {
+	return MainService
 }

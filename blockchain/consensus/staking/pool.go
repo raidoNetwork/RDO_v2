@@ -1,6 +1,8 @@
 package staking
 
 import (
+	"math/big"
+	"math/rand"
 	"sync"
 	"unicode/utf8"
 
@@ -28,7 +30,6 @@ type StakingPool struct {
 	validators         map[string]*ValidatorStakeData
 	electors           map[string]map[string]struct{}
 	cumulativeStake    uint64
-	rewardPerBlock     uint64
 	stakeAmountPerSlot uint64
 	slotsLimit         int
 	slotsFilled        int
@@ -367,28 +368,30 @@ func (p *StakingPool) GetRewardMap(proposer string) map[string]uint64 {
 		blockReward := params.RaidoConfig().ProposerReward
 		stakeData := p.validators[proposer]
 
-		if len(stakeData.Electors) > 0 {
-			validatorReward := blockReward * params.RaidoConfig().ChosenValidatorRewardPercent / 100
-			electorsReward := blockReward - validatorReward
-			electorsStake := stakeData.CumulativeStake - stakeData.SelfStake
-			for elector, stakeAmount := range stakeData.Electors {
-				reward := stakeAmount * electorsReward / electorsStake
-				if reward == 0 {
-					continue
-				}
+		validatorReward := blockReward * params.RaidoConfig().ChosenValidatorRewardPercent / 100
+		electorsReward := blockReward - validatorReward
+		electorsStake := stakeData.CumulativeStake - stakeData.SelfStake
+		for elector, stakeAmount := range stakeData.Electors {
+			// We must use big ints; otherwise, we will face an overflow
+			bigStake := big.NewInt(int64(stakeAmount))
+			bigElectorsReward := big.NewInt(int64(electorsReward))
+			bigElectorsStake := big.NewInt(int64(electorsStake))
 
-				rewards[elector] += reward
+			res1 := big.Int{}
+			res2 := big.Int{}
+			res1.Mul(bigStake, bigElectorsReward)
+			res2.Div(&res1, bigElectorsStake)
+
+			reward := uint64(res2.Int64())
+			if reward == 0 {
+				continue
 			}
-			rewards[proposer] += validatorReward
+
+			rewards[elector] += reward
 		}
+		rewards[proposer] += validatorReward
 	}
 
-	// divide rewards among all validator slots
-	rewardPerSlot := p.rewardPerBlock / uint64(p.slotsFilled)
-	for validator, stakeData := range p.validators {
-		validatorReward := rewardPerSlot * uint64(stakeData.SlotsFilled)
-		rewards[validator] += validatorReward
-	}
 	p.mu.Unlock()
 	return rewards
 }
@@ -403,10 +406,6 @@ func (p *StakingPool) GetRewardOutputs(proposer string) []*prototype.TxOutput {
 	}
 
 	return outs
-}
-
-func (p *StakingPool) GetRewardPerSlot(slots uint64) uint64 {
-	return p.rewardPerBlock / slots
 }
 
 func (p *StakingPool) HasElector(validator, elector string) bool {
@@ -441,14 +440,13 @@ func (p *StakingPool) ValidatorStakeMap() map[string]uint64 {
 	return stakeMap
 }
 
-func NewPool(blockchain consensus.BlockchainReader, slotsLimit int, reward uint64, stakeAmount uint64) consensus.StakePool {
+func NewPool(blockchain consensus.BlockchainReader, slotsLimit int, stakeAmount uint64) consensus.StakePool {
 	return &StakingPool{
 		validators:         map[string]*ValidatorStakeData{},
 		electors:           map[string]map[string]struct{}{},
 		blockchain:         blockchain,
 		slotsLimit:         slotsLimit,
 		stakeAmountPerSlot: stakeAmount,
-		rewardPerBlock:     reward,
 	}
 }
 
@@ -460,4 +458,61 @@ func (s *StakingPool) GetElectorsOfValidator(validator string) (map[string]uint6
 		return nil, errors.Errorf("Such validator does not exists")
 	}
 	return stakeData.Electors, nil
+}
+
+func (s *StakingPool) NumberStakers(validator string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if data, exists := s.validators[validator]; !exists {
+		return 0
+	} else {
+		return len(data.Electors)
+	}
+}
+
+func (s *StakingPool) DetermineProposer(seed int64) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	weights := make(map[string]uint64, 0)
+
+	slotUnit := params.RaidoConfig().StakeSlotUnit
+	coefficient := params.RaidoConfig().ElectorsCoefficient
+
+	var cumulative uint64
+
+	for validator, stakeData := range s.validators {
+		electorsStake := stakeData.CumulativeStake - stakeData.SelfStake
+		w := stakeData.SelfStake/slotUnit*100 + electorsStake/slotUnit*uint64(100*coefficient)
+
+		weights[validator] = w
+		cumulative += w
+	}
+
+	// If cumulative is zero, select the first validator in the validators list
+	cfg := params.ConsensusConfig()
+	proposers := cfg.Proposers
+	if cumulative == 0 {
+		proposer := proposers[0]
+		return proposer
+	}
+
+	rand.Seed(seed)
+	random := uint64(rand.Int63n(int64(cumulative))) + 1
+	var sum uint64
+	var leader string
+
+	for _, validator := range proposers {
+		weight, exists := weights[validator]
+		if !exists {
+			continue
+		}
+		if weight+sum >= random {
+			leader = validator
+			break
+		}
+
+		sum += weight
+	}
+
+	return leader
 }

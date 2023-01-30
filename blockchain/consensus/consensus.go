@@ -15,6 +15,12 @@ type PoA interface {
 	IsValidator(address common.Address) bool
 }
 
+type PoS interface {
+	IsLeader(address common.Address, seed int64) bool
+
+	IsValidator(address common.Address) bool
+}
+
 func IsEnoughVotes(approvers, slashers int) error {
 	commiteeSize := float64(params.RaidoConfig().CommitteeSize)
 	votedCount := approvers + slashers

@@ -3,6 +3,13 @@ package node
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"sync"
+	"syscall"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/attestation"
@@ -26,12 +33,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/validator"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"strings"
-	"sync"
-	"syscall"
 )
 
 var log = logrus.WithField("prefix", "node")
@@ -50,6 +51,7 @@ type RDONode struct {
 	stateFeed events.Bus
 	blockFeed events.Bus
 	txFeed    events.Bus
+	seedFeed  events.Bus
 	// validator events
 	proposeFeed     events.Bus
 	attestationFeed events.Bus
@@ -174,6 +176,7 @@ func (r *RDONode) InitValidatorService() error {
 		AttestationFeed: &r.attestationFeed,
 		BlockFeed:       &r.blockFeed,
 		StateFeed:       &r.stateFeed,
+		SeedFeed:        &r.seedFeed,
 		Context:         r.ctx,
 	}
 
@@ -194,6 +197,10 @@ func (r *RDONode) registerCoreService() error {
 
 	var attestationService *attestation.Service
 	err = r.services.FetchService(&attestationService)
+	if err != nil {
+		return err
+	}
+
 	if err != nil {
 		return err
 	}
@@ -229,7 +236,7 @@ func (r *RDONode) registerRPCservice() error {
 	host := r.cliCtx.String(flags.RPCHost.Name)
 	port := r.cliCtx.String(flags.RPCPort.Name)
 
-	genService := generator.NewService(blockchainService)
+	genService := generator.NewService(blockchainService, attestationService)
 
 	srv := rpc.NewService(r.ctx, &rpc.Config{
 		Host:               host,
@@ -343,6 +350,7 @@ func (r *RDONode) registerSyncService() error {
 		Validator: rsync.ValidatorCfg{
 			ProposeFeed:     &r.proposeFeed,
 			AttestationFeed: &r.attestationFeed,
+			SeedFeed:        &r.seedFeed,
 		},
 	}
 	srv := rsync.NewService(r.ctx, &cfg)

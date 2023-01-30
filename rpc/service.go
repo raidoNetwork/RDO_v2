@@ -3,8 +3,13 @@ package rpc
 import (
 	"context"
 	"fmt"
+	"net"
+	runtimeDebug "runtime/debug"
+	"strings"
+	"sync"
+
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	"github.com/grpc-ecosystem/go-grpc-prometheus"
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/rpc/api"
 	"github.com/raidoNetwork/RDO_v2/rpc/attestation"
@@ -15,10 +20,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
-	"net"
-	runtimeDebug "runtime/debug"
-	"strings"
-	"sync"
 )
 
 var log = logrus.WithField("prefix", "RPC")
@@ -40,7 +41,7 @@ type Service struct {
 	grpcServer          *grpc.Server
 	connectionMu        sync.RWMutex
 	connectedRPCClients map[net.Addr]bool
-	startFailure 		error
+	startFailure        error
 }
 
 func NewService(ctx context.Context, cfg *Config) *Service {
@@ -94,8 +95,9 @@ func (s *Service) Start() {
 	}
 
 	generatorServer := &generator.Server{
-		Server:  s.grpcServer,
-		Backend: s.cfg.GeneratorService,
+		Server:      s.grpcServer,
+		Backend:     s.cfg.GeneratorService,
+		Attestation: s.cfg.AttestationService,
 	}
 
 	prototype.RegisterRaidoChainServer(s.grpcServer, chainServer)
@@ -171,13 +173,13 @@ func (s *Service) recoveryInterceptor(ctx context.Context,
 	req interface{},
 	_ *grpc.UnaryServerInfo,
 	handler grpc.UnaryHandler,
-) (res interface{}, err error)  {
+) (res interface{}, err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("gRPC handler panic: %v\n%v", x, string(runtimeDebug.Stack()))
 			err = status.Error(17, "Server Internal Error")
 		}
-	} ()
+	}()
 
 	return handler(ctx, req)
 }
