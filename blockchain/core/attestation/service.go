@@ -21,8 +21,8 @@ import (
 var _ shared.Service = (*Service)(nil)
 
 type Config struct {
-	TxFeed        events.Feed
-	StateFeed     events.Feed
+	TxFeed        *events.Feed
+	StateFeed     *events.Feed
 	EnableMetrics bool
 	Blockchain    *rdochain.Service
 }

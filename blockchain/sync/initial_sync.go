@@ -39,7 +39,7 @@ func (s *Service) SyncWithNetwork() error {
 
 	// node is synced
 	if s.cfg.Blockchain.GetHeadBlockNum() == s.cfg.P2P.PeerStore().Scorers().PeerHeadBlock.Get() {
-		return nil
+		return ErrAlreadySynced
 	}
 
 	// sync to max known block
@@ -137,7 +137,7 @@ func (s *Service) syncToBestKnownBlock() error {
 
 	if startBlockNum >= remoteHeadBlockNum {
 		log.Info("Node is already synced")
-		return nil
+		return ErrAlreadySynced
 	}
 
 	// wait for peers to synced

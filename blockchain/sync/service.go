@@ -27,10 +27,9 @@ var _ shared.Service = (*Service)(nil)
 var MainService *Service
 
 const (
-	txGossipCount            = 2000
-	blockGossipCount         = 1000
-	stateCount               = 10
-	notificationsGossipCount = txGossipCount + blockGossipCount
+	txGossipCount    = 400
+	blockGossipCount = 200
+	stateCount       = 1
 
 	ttfbTimeout = 5 * time.Second
 
@@ -42,16 +41,16 @@ var (
 )
 
 type ValidatorCfg struct {
-	ProposeFeed     events.Feed
-	AttestationFeed events.Feed
-	SeedFeed        events.Feed
+	ProposeFeed     *events.Feed
+	AttestationFeed *events.Feed
+	SeedFeed        *events.Feed
 	Enabled         bool
 }
 
 type Config struct {
-	BlockFeed    events.Feed
-	TxFeed       events.Feed
-	StateFeed    events.Feed
+	BlockFeed    *events.Feed
+	TxFeed       *events.Feed
+	StateFeed    *events.Feed
 	Blockchain   BlockchainInfo
 	Storage      BlockStorage
 	P2P          P2P
@@ -63,16 +62,17 @@ type Config struct {
 func NewService(ctx context.Context, cfg *Config) *Service {
 	ctx, cancel := context.WithCancel(ctx)
 	srv := &Service{
-		cfg:          cfg,
-		txEvent:      make(chan *types.Transaction, txGossipCount),
-		blockEvent:   make(chan *prototype.Block, blockGossipCount),
-		stateEvent:   make(chan state.State, stateCount),
-		notification: make(chan p2p.Notty, notificationsGossipCount),
-		ctx:          ctx,
-		cancel:       cancel,
-		initialized:  make(chan struct{}),
-		stakeSynced:  make(chan struct{}),
-		synced:       0,
+		cfg:               cfg,
+		txEvent:           make(chan *types.Transaction, txGossipCount),
+		blockEvent:        make(chan *prototype.Block, blockGossipCount),
+		stateEvent:        make(chan state.State, stateCount),
+		notificationBlock: make(chan p2p.Notty, blockGossipCount),
+		notificationTx:    make(chan p2p.Notty, txGossipCount),
+		ctx:               ctx,
+		cancel:            cancel,
+		initialized:       make(chan struct{}),
+		stakeSynced:       make(chan struct{}),
+		synced:            0,
 	}
 
 	// subscribe on new events
@@ -86,10 +86,11 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 type Service struct {
 	cfg *Config
 
-	txEvent      chan *types.Transaction
-	blockEvent   chan *prototype.Block
-	stateEvent   chan state.State
-	notification chan p2p.Notty
+	txEvent           chan *types.Transaction
+	blockEvent        chan *prototype.Block
+	stateEvent        chan state.State
+	notificationBlock chan p2p.Notty
+	notificationTx    chan p2p.Notty
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -147,7 +148,7 @@ func (s *Service) Start() {
 	// sync state with network
 	if !s.cfg.DisableSync && !slot.Ticker().GenesisAfter() {
 		err := s.SyncWithNetwork()
-		if err != ErrAlreadySynced {
+		if err != nil && err != ErrAlreadySynced {
 			panic(err)
 		}
 	}
@@ -245,44 +246,39 @@ func (s *Service) listenIncoming() {
 		select {
 		case <-s.ctx.Done():
 			return
-		case notty := <-s.notification:
-			switch notty.Topic {
-			case p2p.BlockTopic:
-				block, err := serialize.UnmarshalBlock(notty.Data)
-				if err != nil {
-					log.Errorf("Error unmarshaling block: %s", err)
-					break
-				}
-
-				if atomic.LoadInt32(&s.synced) == 0 {
-					s.forkBlockEvent <- block
-				} else {
-					bQueue := s.freeQueue()
-					for b := range bQueue {
-						s.cfg.BlockFeed.Send(b)
-					}
-
-					s.cfg.BlockFeed.Send(block)
-				}
-
-				receivedMessages.WithLabelValues(p2p.BlockTopic).Inc()
-			case p2p.TxTopic:
-				// skip tx processing while synscing
-				if atomic.LoadInt32(&s.synced) == 0 {
-					continue
-				}
-
-				tx, err := serialize.UnmarshalTx(notty.Data)
-				if err != nil {
-					log.Errorf("Error unmarshaling transaction: %s", err)
-					break
-				}
-
-				s.cfg.TxFeed.Send(types.NewTransaction(tx))
-				receivedMessages.WithLabelValues(p2p.TxTopic).Inc()
-			default:
-				log.Warnf("Unsupported notification %s", notty.Topic)
+		case notty := <-s.notificationBlock:
+			block, err := serialize.UnmarshalBlock(notty.Data)
+			if err != nil {
+				log.Errorf("Error unmarshaling block: %s", err)
+				break
 			}
+
+			if atomic.LoadInt32(&s.synced) == 0 {
+				s.forkBlockEvent <- block
+			} else {
+				bQueue := s.freeQueue()
+				for b := range bQueue {
+					s.cfg.BlockFeed.Send(b)
+				}
+
+				s.cfg.BlockFeed.Send(block)
+			}
+
+			receivedMessages.WithLabelValues(p2p.BlockTopic).Inc()
+		case notty := <-s.notificationTx:
+			// skip tx processing while synscing
+			if atomic.LoadInt32(&s.synced) == 0 {
+				continue
+			}
+
+			tx, err := serialize.UnmarshalTx(notty.Data)
+			if err != nil {
+				log.Errorf("Error unmarshaling transaction: %s", err)
+				break
+			}
+
+			s.cfg.TxFeed.Send(types.NewTransaction(tx))
+			receivedMessages.WithLabelValues(p2p.TxTopic).Inc()
 		}
 	}
 }
@@ -297,7 +293,8 @@ func (s *Service) pushStateEvent(st state.State) {
 
 // subscribeEvents on updates
 func (s *Service) subscribeEvents() {
-	s.cfg.P2P.Notifier().Subscribe(s.notification)
+	s.cfg.P2P.NotifierTx().Subscribe(s.notificationTx)
+	s.cfg.P2P.NotifierBlock().Subscribe(s.notificationBlock)
 	s.cfg.TxFeed.Subscribe(s.txEvent)
 	s.cfg.BlockFeed.Subscribe(s.blockEvent)
 }

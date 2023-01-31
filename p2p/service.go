@@ -41,7 +41,7 @@ type Config struct {
 	Port                int
 	BootstrapNodes      []string
 	DataDir             string
-	StateFeed           events.Feed
+	StateFeed           *events.Feed
 	EnableNAT           bool
 	ListenValidatorData bool
 }
@@ -130,8 +130,12 @@ type Service struct {
 
 	startFail error
 
-	notifier          events.Bus
-	validatorNotifier events.Bus
+	// Notifiers for both the validator and node
+	notifierTx       events.Feed
+	notifierBlock    events.Feed
+	notifierSeed     events.Feed
+	notifierAtt      events.Feed
+	notifierProposal events.Feed
 
 	// discovery
 	dht *dht.IpfsDHT
@@ -365,6 +369,7 @@ func (s *Service) Publish(topicName string, message []byte) error {
 	failCounter := 0
 	for {
 		if len(topic.ListPeers()) > 0 {
+			time.Sleep(10 * time.Microsecond)
 			return topic.Publish(s.ctx, message)
 		}
 
@@ -401,20 +406,41 @@ func (s *Service) receiveMessage(msg *pubsub.Message, isValidatorMessage bool) {
 		From:  msg.ReceivedFrom.String(),
 	}
 
-	// send event
-	if isValidatorMessage {
-		s.validatorNotifier.Send(n)
-	} else {
-		s.notifier.Send(n)
+	// send the event to the corresponding feed
+	switch n.Topic {
+	case BlockTopic:
+		s.notifierBlock.Send(n)
+	case TxTopic:
+		s.notifierTx.Send(n)
+	case ProposalTopic:
+		s.notifierProposal.Send(n)
+	case SeedTopic:
+		s.notifierSeed.Send(n)
+	case AttestationTopic:
+		s.notifierAtt.Send(n)
+	default:
+		log.Errorf("Topic %s is not supported", n.Topic)
 	}
 }
 
-func (s *Service) Notifier() *events.Bus {
-	return &s.notifier
+func (s *Service) NotifierTx() *events.Feed {
+	return &s.notifierTx
 }
 
-func (s *Service) ValidatorNotifier() *events.Bus {
-	return &s.validatorNotifier
+func (s *Service) NotifierBlock() *events.Feed {
+	return &s.notifierBlock
+}
+
+func (s *Service) ValidatorSeedNotifier() *events.Feed {
+	return &s.notifierSeed
+}
+
+func (s *Service) ValidatorProposalNotifier() *events.Feed {
+	return &s.notifierProposal
+}
+
+func (s *Service) ValidatorAttNotifier() *events.Feed {
+	return &s.notifierAtt
 }
 
 func (s *Service) AddConnectionHandlers(connectHandler, disconnectHandler ConnectionHandler) {

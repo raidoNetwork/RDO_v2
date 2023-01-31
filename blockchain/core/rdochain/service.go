@@ -26,7 +26,7 @@ var (
 	ErrNotForgedBlock = errors.New("Given block number is not forged yet.")
 )
 
-func NewService(kv db.BlockStorage, sql db.OutputStorage, stateFeed events.Feed, repairDB bool) (*Service, error) {
+func NewService(kv db.BlockStorage, sql db.OutputStorage, stateFeed *events.Feed, repairDB bool) (*Service, error) {
 	cfg := params.RaidoConfig()
 
 	// create blockchain instance
@@ -48,7 +48,7 @@ func NewService(kv db.BlockStorage, sql db.OutputStorage, stateFeed events.Feed,
 type Service struct {
 	bc           *BlockChain
 	outm         *OutputManager
-	stateFeed    events.Feed
+	stateFeed    *events.Feed
 	mu           sync.Mutex
 	ready        bool
 	statusErr    error

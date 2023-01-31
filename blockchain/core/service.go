@@ -30,8 +30,8 @@ const (
 type Config struct {
 	BlockFinalizer  consensus.BlockFinalizer
 	AttestationPool consensus.AttestationPool
-	StateFeed       events.Feed
-	BlockFeed       events.Feed
+	StateFeed       *events.Feed
+	BlockFeed       *events.Feed
 	Context         context.Context
 }
 
@@ -51,8 +51,8 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		receivedBlock: &prototype.Block{},
 
 		// events
-		blockEvent: make(chan *prototype.Block, 10),
-		stateEvent: make(chan state.State, 10),
+		blockEvent: make(chan *prototype.Block, 5),
+		stateEvent: make(chan state.State, 1),
 
 		// feeds
 		blockFeed: cfg.BlockFeed,
@@ -84,8 +84,8 @@ type Service struct {
 	stateEvent chan state.State
 	blockEvent chan *prototype.Block
 
-	blockFeed events.Feed
-	stateFeed events.Feed
+	blockFeed *events.Feed
+	stateFeed *events.Feed
 }
 
 // Start service work
@@ -108,6 +108,7 @@ func (s *Service) mainLoop() {
 		case block := <-s.blockEvent:
 			s.mu.Lock()
 			if bytes.Equal(block.Hash, s.receivedBlock.Hash) {
+				s.mu.Unlock()
 				continue
 			}
 			s.mu.Unlock()
@@ -122,13 +123,17 @@ func (s *Service) mainLoop() {
 					log.Errorf("Error fetching syncService: %s", err)
 					continue
 				}
-				err = syncService.SyncWithNetwork()
-				if err != nil {
+				errSync := syncService.SyncWithNetwork()
+				if errSync != nil && errSync != rsync.ErrAlreadySynced {
 					log.Errorf("Error syncing: %s", err)
-					<-time.After(syncInterval)
+					time.Sleep(syncInterval)
 					continue
 				}
 				err = s.FinalizeBlock(block)
+				if err != nil && errSync == rsync.ErrAlreadySynced {
+					time.Sleep(syncInterval)
+					continue
+				}
 			}
 
 			if err != nil {

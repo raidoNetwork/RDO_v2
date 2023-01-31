@@ -55,7 +55,7 @@ type Forger struct {
 // ForgeBlock create block from tx pool data
 func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 	start := time.Now()
-	bn := start.Unix()
+	bn := m.bf.GetBlockCount()
 	totalSize := 0 // current size of block in bytes
 
 	// lock pool
@@ -76,7 +76,7 @@ func (m *Forger) ForgeBlock() (*prototype.Block, error) {
 
 	pendingTxCounter.Set(float64(txQueueLen)) // todo remove metrics to the core service
 
-	// create reward transaction for current block
+	// create reward transactions for current block
 	// txBatch, collapseBatch, totalSize, err := m.addRewardTxToBatch(m.cfg.Proposer.Addr().Hex(), txBatch, collapseBatch, totalSize, bn)
 	txBatch, collapseBatch, totalSize, err := m.addRewardsTxToBatch(m.cfg.Proposer.Addr().Hex(), txBatch, collapseBatch, totalSize, bn)
 	if err != nil {
@@ -281,7 +281,7 @@ MAINLOOP:
 	return block, nil
 }
 
-func (m *Forger) addRewardsTxToBatch(proposer string, txBatch []*prototype.Transaction, collapseBatch []*prototype.Transaction, totalSize int, bn int64) ([]*prototype.Transaction, []*prototype.Transaction, int, error) {
+func (m *Forger) addRewardsTxToBatch(proposer string, txBatch []*prototype.Transaction, collapseBatch []*prototype.Transaction, totalSize int, bn uint64) ([]*prototype.Transaction, []*prototype.Transaction, int, error) {
 	rewardTxs, err := m.createRewardTxs(m.bf.GetBlockCount(), proposer)
 	if err != nil {
 		if errors.Is(err, consensus.ErrNoStakers) {

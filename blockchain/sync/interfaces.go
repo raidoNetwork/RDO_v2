@@ -15,11 +15,14 @@ import (
 
 type GossipPublisher interface {
 	Publish(string, []byte) error
-	Notifier() *events.Bus
+	NotifierTx() *events.Feed
+	NotifierBlock() *events.Feed
 }
 
 type ValidatorGossipPublisher interface {
-	ValidatorNotifier() *events.Bus
+	ValidatorAttNotifier() *events.Feed
+	ValidatorSeedNotifier() *events.Feed
+	ValidatorProposalNotifier() *events.Feed
 }
 
 type BlockchainInfo interface {
