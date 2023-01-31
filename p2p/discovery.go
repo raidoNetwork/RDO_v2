@@ -1,15 +1,16 @@
 package p2p
 
 import (
-	"github.com/libp2p/go-libp2p-core/peer"
+	"time"
+
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	"github.com/libp2p/go-libp2p/core/peer"
 	discovery "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	discoveryUtil "github.com/libp2p/go-libp2p/p2p/discovery/util"
-	"time"
 )
 
 const (
-	discoveryTag = "rdo-node-net"
+	discoveryTag      = "rdo-node-net"
 	discoveryProtocol = "rdo-world"
 )
 
@@ -28,7 +29,7 @@ func (s *Service) setupDiscovery() error {
 	return nil
 }
 
-func (s *Service) findPeers(routing *discovery.RoutingDiscovery){
+func (s *Service) findPeers(routing *discovery.RoutingDiscovery) {
 	peers, err := routing.FindPeers(s.ctx, discoveryTag)
 	if err != nil {
 		log.WithError(err).Error("Error peer search.")
@@ -40,7 +41,7 @@ func (s *Service) findPeers(routing *discovery.RoutingDiscovery){
 	}
 }
 
-func (s *Service) HandlePeerFound(p peer.AddrInfo){
+func (s *Service) HandlePeerFound(p peer.AddrInfo) {
 	if p.ID == s.host.ID() {
 		return
 	}

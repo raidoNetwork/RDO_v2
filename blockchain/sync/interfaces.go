@@ -2,17 +2,18 @@ package sync
 
 import (
 	"context"
+	"io"
+
 	ssz "github.com/ferranbt/fastssz"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/raidoNetwork/RDO_v2/events"
 	"github.com/raidoNetwork/RDO_v2/p2p"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
-	"io"
 )
 
-type GossipPublisher interface{
+type GossipPublisher interface {
 	Publish(string, []byte) error
 	Notifier() *events.Bus
 }
@@ -21,7 +22,7 @@ type ValidatorGossipPublisher interface {
 	ValidatorNotifier() *events.Bus
 }
 
-type BlockchainInfo interface{
+type BlockchainInfo interface {
 	GetBlockCount() uint64
 	GetHeadBlockNum() uint64
 	GetHeadBlock() (*prototype.Block, error)

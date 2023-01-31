@@ -2,14 +2,15 @@ package sync
 
 import (
 	"context"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"io"
+	"time"
+
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/p2p"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
-	"io"
-	"time"
 )
 
 const (
@@ -40,7 +41,7 @@ func (s *Service) blockRangeHandler(ctx context.Context, msg interface{}, stream
 
 	step := req.Step
 	startSlot := req.StartSlot
-	endReqSlot := startSlot + req.Count * step
+	endReqSlot := startSlot + req.Count*step
 	endSlot := startSlot + blocksPerRequest
 
 	log.Debugf("Write blocks from %d to %d", startSlot, endReqSlot)
@@ -125,7 +126,7 @@ func (s *Service) sendBlockRangeRequest(ctx context.Context, req *prototype.Bloc
 	}
 
 	blocks := make([]*prototype.Block, 0)
-	totalCount := req.Count * req.Step + 1
+	totalCount := req.Count*req.Step + 1
 
 	endSlot := req.StartSlot + totalCount
 	var prevNum uint64
@@ -152,7 +153,7 @@ func (s *Service) sendBlockRangeRequest(ctx context.Context, req *prototype.Bloc
 			prevNum = req.StartSlot
 		}
 
-		if (prevNum >= block.Num || (block.Num - prevNum) % req.Step != 0) && i != 0  {
+		if (prevNum >= block.Num || (block.Num-prevNum)%req.Step != 0) && i != 0 {
 			return nil, errors.New("Not ordered response")
 		}
 
@@ -179,7 +180,7 @@ func (s *Service) receiveBlock(stream network.Stream) (*prototype.Block, error) 
 
 	block := &prototype.Block{}
 	err = s.cfg.P2P.DecodeStream(stream, block)
-	if err != nil  {
+	if err != nil {
 		return nil, err
 	}
 

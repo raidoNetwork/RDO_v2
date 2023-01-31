@@ -7,8 +7,8 @@ import (
 	"time"
 
 	ssz "github.com/ferranbt/fastssz"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/blockchain/state"
 	"github.com/raidoNetwork/RDO_v2/events"

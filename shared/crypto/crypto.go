@@ -8,19 +8,20 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/raidoNetwork/RDO_v2/shared/common"
-	"github.com/raidoNetwork/RDO_v2/shared/math"
 	"hash"
 	"io"
 	"io/ioutil"
 	"math/big"
 	"os"
 
-	pcrypto "github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/raidoNetwork/RDO_v2/shared/common"
+	"github.com/raidoNetwork/RDO_v2/shared/math"
+
+	pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"golang.org/x/crypto/sha3"
 )
 
-//SignatureLength indicates the byte length required to carry a signature with recovery id.
+// SignatureLength indicates the byte length required to carry a signature with recovery id.
 const SignatureLength = 64 + 1 // 64 bytes ECDSA signature + 1 byte recovery id
 
 // RecoveryIDOffset points to the byte offset within the signature that contains the recovery id.
@@ -121,7 +122,7 @@ func HexToECDSA(hexkey string) (*ecdsa.PrivateKey, error) {
 	return ToECDSA(b)
 }
 
-func loadKey(file string, size int) ([]byte, error){
+func loadKey(file string, size int) ([]byte, error) {
 	fd, err := os.Open(file)
 	if err != nil {
 		return nil, err
