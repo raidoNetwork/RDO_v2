@@ -9,6 +9,7 @@ import (
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/blockchain/state"
 	"github.com/raidoNetwork/RDO_v2/events"
@@ -34,6 +35,10 @@ const (
 	ttfbTimeout = 5 * time.Second
 
 	blocksPerRequest = 64
+)
+
+var (
+	ErrAlreadySynced = errors.New("The node is already synced with network")
 )
 
 type ValidatorCfg struct {
@@ -142,7 +147,7 @@ func (s *Service) Start() {
 	// sync state with network
 	if !s.cfg.DisableSync && !slot.Ticker().GenesisAfter() {
 		err := s.SyncWithNetwork()
-		if err != nil {
+		if err != ErrAlreadySynced {
 			panic(err)
 		}
 	}
