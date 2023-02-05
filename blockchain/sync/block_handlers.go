@@ -8,7 +8,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/p2p"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 )
@@ -79,7 +78,7 @@ func (s *Service) validateBlockRangeHandler(blockReq *prototype.BlockRequest) er
 		return errors.New("Invalid block step")
 	}
 
-	end := slot.Ticker().Slot()
+	end := s.cfg.Blockchain.GetBlockCount()
 	if blockReq.StartSlot > end {
 		return errors.New("Invalid block slot")
 	}

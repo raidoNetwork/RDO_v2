@@ -306,7 +306,7 @@ func (s *Service) GetBlockBySlot(slot uint64) (*prototype.Block, error) {
 }
 
 func (s *Service) GetBlocksRange(ctx context.Context, start uint64, end uint64) ([]*prototype.Block, error) {
-	count := int(end - start)
+	count := int(end - start + 1)
 	blocks := make([]*prototype.Block, 0, count)
 
 	for num := start; num <= end; num++ {

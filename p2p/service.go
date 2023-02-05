@@ -109,6 +109,8 @@ func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
 		return nil, err
 	}
 
+	srv.sub = srv.cfg.StateFeed.Subscribe(srv.stateEvent)
+
 	srv.pubsub = gs
 	return srv, nil
 }
@@ -127,6 +129,7 @@ type Service struct {
 	topicLock sync.Mutex
 
 	cfg *Config
+	sub events.Subscription
 
 	startFail error
 
@@ -167,6 +170,7 @@ func (s *Service) Start() {
 		s.updateMetrics()
 	})
 
+	s.cfg.StateFeed.Send(state.Connected)
 	// wait full sync
 	<-s.initialized
 
@@ -564,8 +568,7 @@ func (s *Service) CreateStream(ctx context.Context, msg ssz.Marshaler, topic str
 }
 
 func (s *Service) stateListener() {
-	sub := s.cfg.StateFeed.Subscribe(s.stateEvent)
-	defer sub.Unsubscribe()
+	defer s.sub.Unsubscribe()
 
 	for {
 		select {

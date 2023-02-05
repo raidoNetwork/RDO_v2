@@ -31,6 +31,17 @@ func (s *Service) waitMinimumPeersForSync(findWithMaxBlock bool) {
 }
 
 func (s *Service) SyncWithNetwork() error {
+	select {
+	case <-s.syncLock:
+		break
+	default:
+		return nil
+	}
+
+	defer func() {
+		s.syncLock <- struct{}{}
+	}()
+
 	// sync to most known block
 	err := s.syncToBestKnownBlock()
 	if err != nil {

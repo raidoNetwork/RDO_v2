@@ -58,6 +58,9 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		blockFeed: cfg.BlockFeed,
 		stateFeed: cfg.StateFeed,
 
+		// synced indicated whether the initial sync is complete
+		synced: false,
+
 		bc: cfg.BlockFinalizer,
 	}
 
@@ -76,6 +79,9 @@ type Service struct {
 	ticker *slot.SlotTicker
 
 	mu sync.Mutex
+
+	// synced indicated whether the initial sync is complete
+	synced bool
 
 	// Recorded block
 	receivedBlock *prototype.Block
@@ -116,23 +122,25 @@ func (s *Service) mainLoop() {
 			start := time.Now()
 
 			err := s.FinalizeBlock(block)
-			for err == attestation.ErrPreviousBlockNotExists {
-				log.Infof("Previous block for given block does not exist. Try syncing")
-				syncService := rsync.GetMainService()
-				if syncService == nil {
-					log.Errorf("Error fetching syncService: %s", err)
-					continue
-				}
-				errSync := syncService.SyncWithNetwork()
-				if errSync != nil && errSync != rsync.ErrAlreadySynced {
-					log.Errorf("Error syncing: %s", err)
-					time.Sleep(syncInterval)
-					continue
-				}
-				err = s.FinalizeBlock(block)
-				if err != nil && errSync == rsync.ErrAlreadySynced {
-					time.Sleep(syncInterval)
-					continue
+			if s.synced {
+				for err == attestation.ErrPreviousBlockNotExists {
+					log.Infof("Previous block for given block does not exist. Try syncing")
+					syncService := rsync.GetMainService()
+					if syncService == nil {
+						log.Errorf("Error fetching syncService: %s", err)
+						continue
+					}
+					errSync := syncService.SyncWithNetwork()
+					if errSync != nil && errSync != rsync.ErrAlreadySynced {
+						log.Errorf("Error syncing: %s", err)
+						time.Sleep(syncInterval)
+						continue
+					}
+					err = s.FinalizeBlock(block)
+					if err != nil && errSync == rsync.ErrAlreadySynced {
+						time.Sleep(syncInterval)
+						continue
+					}
 				}
 			}
 
@@ -187,6 +195,7 @@ func (s *Service) waitInitialized() {
 					panic("Zero Genesis time")
 				}
 			case state.Synced:
+				s.synced = true
 				return
 			}
 		}

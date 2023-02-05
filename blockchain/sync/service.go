@@ -17,7 +17,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
-	"github.com/raidoNetwork/RDO_v2/utils/async"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	"github.com/sirupsen/logrus"
 )
@@ -72,6 +71,8 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		cancel:            cancel,
 		initialized:       make(chan struct{}),
 		stakeSynced:       make(chan struct{}),
+		connected:         make(chan struct{}),
+		syncLock:          make(chan struct{}, 1),
 		synced:            0,
 	}
 
@@ -97,6 +98,8 @@ type Service struct {
 
 	initialized chan struct{}
 	stakeSynced chan struct{}
+	connected   chan struct{}
+	syncLock    chan struct{}
 
 	synced int32
 
@@ -116,19 +119,6 @@ func (s *Service) Start() {
 	s.addStreamHandler(p2p.MetaProtocol, s.metaHandler)
 	s.addStreamHandler(p2p.BlockRangeProtocol, s.blockRangeHandler)
 
-	async.WithInterval(s.ctx, p2p.PeerMetaUpdateInterval, func() {
-		peers := s.cfg.P2P.PeerStore().Connected()
-		for _, data := range peers {
-			if time.Since(data.LastUpdate) < p2p.PeerMetaUpdateInterval {
-				continue
-			}
-
-			if err := s.metaRequest(s.ctx, data.Id); err != nil {
-				log.Error(err)
-			}
-		}
-	})
-
 	s.pushStateEvent(state.ConnectionHandlersReady)
 
 	// wait for local database synced
@@ -136,6 +126,11 @@ func (s *Service) Start() {
 
 	// Wait for the stake pool to sync
 	<-s.stakeSynced
+
+	log.Info("Block on connected state")
+	<-s.connected
+
+	s.metaReq()
 
 	// start block queue watcher
 	go s.forkWatcher()
@@ -146,6 +141,7 @@ func (s *Service) Start() {
 	log.Info("Start blockchain synced...")
 
 	// sync state with network
+	s.syncLock <- struct{}{}
 	if !s.cfg.DisableSync && !slot.Ticker().GenesisAfter() {
 		err := s.SyncWithNetwork()
 		if err != nil && err != ErrAlreadySynced {
@@ -159,6 +155,7 @@ func (s *Service) Start() {
 
 	// gossip new blocks and transactions
 	go s.gossipEvents()
+	go s.maintainSync()
 
 	if s.cfg.Validator.Enabled {
 		go s.listenValidatorTopics()
@@ -223,12 +220,13 @@ func (s *Service) stateListener() {
 		case st := <-s.stateEvent:
 			switch st {
 			case state.Initialized:
-				s.initialized <- struct{}{}
+				// do nothing
 			case state.StakePoolInitialized:
 				close(s.stakeSynced)
+			case state.Connected:
+				close(s.connected)
 			case state.LocalSynced:
 				close(s.initialized)
-				return
 			case state.ConnectionHandlersReady:
 				// do nothing
 			case state.Synced:
@@ -350,4 +348,31 @@ func (s *Service) addStreamHandler(topic string, handle streamHandler) {
 
 func GetMainService() *Service {
 	return MainService
+}
+
+func (s *Service) metaReq() {
+	peers := s.cfg.P2P.PeerStore().Connected()
+	for _, data := range peers {
+		if time.Since(data.LastUpdate) < p2p.PeerMetaUpdateInterval {
+			continue
+		}
+
+		if err := s.metaRequest(s.ctx, data.Id); err != nil {
+			log.Error(err)
+		}
+	}
+}
+
+func (s *Service) maintainSync() {
+	tick := time.NewTicker(p2p.PeerMetaUpdateInterval)
+	for {
+		select {
+		case <-tick.C:
+			s.metaReq()
+			err := s.SyncWithNetwork()
+			if err != nil && err != ErrAlreadySynced {
+				log.Errorf("Error while maintaining sync: %s", err)
+			}
+		}
+	}
 }
