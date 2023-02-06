@@ -372,3 +372,11 @@ func (s *Service) maintainSync() {
 		}
 	}
 }
+
+func (s *Service) SyncLock() {
+	<-s.syncLock
+}
+
+func (s *Service) SyncUnlock() {
+	s.syncLock <- struct{}{}
+}

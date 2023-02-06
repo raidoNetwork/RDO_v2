@@ -105,6 +105,8 @@ func (s *Service) Start() {
 
 // mainLoop is main loop of service
 func (s *Service) mainLoop() {
+	syncService := rsync.GetMainService()
+
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -112,9 +114,11 @@ func (s *Service) mainLoop() {
 		case <-s.ticker.C():
 			updateCoreMetrics()
 		case block := <-s.blockEvent:
+			syncService.SyncLock()
 			s.mu.Lock()
 			if bytes.Equal(block.Hash, s.receivedBlock.Hash) {
 				s.mu.Unlock()
+				syncService.SyncUnlock()
 				continue
 			}
 			s.mu.Unlock()
@@ -122,10 +126,10 @@ func (s *Service) mainLoop() {
 			start := time.Now()
 
 			err := s.FinalizeBlock(block)
+			syncService.SyncUnlock()
 			if s.synced {
 				for err == attestation.ErrPreviousBlockNotExists {
 					log.Infof("Previous block for given block does not exist. Try syncing")
-					syncService := rsync.GetMainService()
 					if syncService == nil {
 						log.Errorf("Error fetching syncService: %s", err)
 						continue
