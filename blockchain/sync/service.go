@@ -127,7 +127,6 @@ func (s *Service) Start() {
 	// Wait for the stake pool to sync
 	<-s.stakeSynced
 
-	log.Info("Block on connected state")
 	<-s.connected
 
 	s.metaReq()
