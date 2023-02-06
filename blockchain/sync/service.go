@@ -363,15 +363,12 @@ func (s *Service) metaReq() {
 }
 
 func (s *Service) maintainSync() {
-	tick := time.NewTicker(p2p.PeerMetaUpdateInterval)
 	for {
-		select {
-		case <-tick.C:
-			s.metaReq()
-			err := s.SyncWithNetwork()
-			if err != nil && err != ErrAlreadySynced {
-				log.Errorf("Error while maintaining sync: %s", err)
-			}
+		time.Sleep(p2p.PeerMetaUpdateInterval)
+		s.metaReq()
+		err := s.SyncWithNetwork()
+		if err != nil && err != ErrAlreadySynced {
+			log.Errorf("Error while maintaining sync: %s", err)
 		}
 	}
 }
