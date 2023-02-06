@@ -147,7 +147,7 @@ func (s *Service) syncToBestKnownBlock() error {
 	}
 
 	if startBlockNum >= remoteHeadBlockNum {
-		log.Info("Node is already synced")
+		log.Debug("Node is already synced")
 		return ErrAlreadySynced
 	}
 
