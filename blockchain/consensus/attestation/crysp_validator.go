@@ -398,6 +398,29 @@ func (cv *CryspValidator) validateTxStructBase(tx *types.Transaction) error {
 		}
 	}
 
+	// If the system has type ValidatorsUnstakeTxType, then it should have
+	// inputs with the same node and one output
+	if tx.Type() == common.ValidatorsUnstakeTxType {
+		// Should have only one output
+		if len(tx.Outputs()) != 1 {
+			return errors.New("ValidatorsUnstakeTx should have only one output")
+		}
+
+		// Checking inputs have the same type.
+		// Each address in the inputs should be equal to the address in the output
+		node := tx.Inputs()[0].Node().Hex()
+		outAddr := tx.Outputs()[0].Address().Hex()
+		for _, in := range tx.Inputs() {
+			if in.Node().Hex() != node {
+				return errors.New("All inputs should have the same node parameter")
+			}
+
+			if in.Address().Hex() != outAddr {
+				return errors.New("Each input's address should be equal to the output's address")
+			}
+		}
+	}
+
 	// check that inputs and outputs balance with fee are equal
 	var inputsBalance uint64
 	for _, in := range tx.Inputs() {
@@ -584,61 +607,36 @@ func (cv *CryspValidator) validateSystemUnstakeTx(tx *types.Transaction, block *
 		return err
 	}
 
-	// Collect senders balances
-	senderBalances := make(map[string]uint64)
+	var sumIn uint64
+	var overflow bool
 	for _, in := range tx.Inputs() {
-		key := in.Address().Hex()
-		if b, exists := senderBalances[key]; exists {
-			result, overflow := math.Add64(senderBalances[key], b)
-			if overflow {
-				return errors.Errorf("Balance overflow for %s", in.Address().Hex())
-			}
-			senderBalances[key] = result
-		} else {
-			senderBalances[key] = in.Amount()
+		sumIn, overflow = math.Add64(sumIn, in.Amount())
+		if overflow {
+			return errors.Errorf("Balance overflow for %s", in.Address().Hex())
 		}
 	}
 
 	// We have one output per staker. We want to make sure
 	// that the sum of inputs for a particular staker is
 	// equal to the amount in the output
-	seenOuts := make(map[string]struct{})
-	for _, out := range tx.Outputs() {
-		// the node parameter should be nil
-		if out.Node().Bytes() != nil {
-			return errors.Errorf("Node should be nil in SystemUnstakeTx's outputs")
-		}
-
-		address := out.Address().Hex()
-		if _, exists := seenOuts[address]; exists {
-			return errors.Errorf("More than one output for a staker")
-		}
-		seenOuts[address] = struct{}{}
-		amountOut := out.Amount()
-		sumIn, exists := senderBalances[address]
-		if !exists {
-			// Recipient without sender
-			return errors.Errorf("Recipient without sender")
-		}
-		if amountOut != sumIn {
-			return errors.Errorf("Balance inconsistency in transaction: %s", tx.Hash().Hex())
-		}
+	sumOut := tx.Outputs()[0].Amount()
+	if sumOut != sumIn {
+		return errors.Errorf("Balance inconsistency in transaction: %s", tx.Hash().Hex())
 	}
 
 	// Finally, check that the utxos correspond to the inputs
 	// get all utxo
 	spentOutputsMap := map[string]*types.Input{}
-	for addr := range senderBalances {
-		utxo, err := cv.bc.FindStakeDepositsOfAddress(addr, "all")
-		if err != nil {
-			return err
-		}
+	addr := tx.Outputs()[0].Address().Hex()
+	deposits, err := cv.bc.FindStakeDepositsOfAddress(addr, "all")
+	if err != nil {
+		return err
+	}
 
-		for _, uo := range utxo {
-			input := uo.ToInput()
-			inputKey := serialize.GenKeyFromInput(input)
-			spentOutputsMap[inputKey] = input
-		}
+	for _, uo := range deposits {
+		input := uo.ToInput()
+		inputKey := serialize.GenKeyFromInput(input)
+		spentOutputsMap[inputKey] = input
 	}
 
 	// validate each input
@@ -648,7 +646,7 @@ func (cv *CryspValidator) validateSystemUnstakeTx(tx *types.Transaction, block *
 		return err
 	}
 	if len(alreadySpent) != len(tx.Inputs()) {
-		err = errors.New("ValidateSystemUnstakeTx: Inputs do not correspond to utxos")
+		err = errors.New("ValidateSystemUnstakeTx: Inputs do not correspond to deposits")
 		log.Error(err)
 		return err
 	}

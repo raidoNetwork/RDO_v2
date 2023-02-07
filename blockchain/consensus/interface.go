@@ -131,6 +131,13 @@ type StakePool interface {
 	// GetElectorsOfValidator returns electors' data of a validator
 	GetElectorsOfValidator(string) (map[string]uint64, error)
 
+	// GetFullyUnstaked returns electors' data of fully unstaked validators
+	// that need to be fully unstaked, too (from that particular validator)
+	GetFullyUnstaked() map[string]map[string]struct{}
+
+	// MarkFullUnstake records a full unstake of the specified validator
+	MarkFullUnstake(string)
+
 	// Init load initial pool data
 	Init() error
 
