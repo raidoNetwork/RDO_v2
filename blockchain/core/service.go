@@ -143,8 +143,8 @@ func (s *Service) mainLoop() {
 					syncService.SyncLock()
 					err = s.FinalizeBlock(block)
 					if err != nil && errSync == rsync.ErrAlreadySynced {
-						time.Sleep(syncInterval)
 						syncService.SyncUnlock()
+						time.Sleep(syncInterval)
 						continue
 					}
 					syncService.SyncUnlock()
