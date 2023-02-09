@@ -19,7 +19,6 @@ import (
 var (
 	ErrReadingBlock           = errors.New("Error reading block from database")
 	ErrPreviousBlockNotExists = errors.New("Previous block for given block does not exist")
-	feeSizeAllowance          = 1000
 )
 
 // checkBlockBalance count block inputs and outputs sum and check that all inputs in block are unique.
@@ -109,8 +108,9 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, countSign bool) 
 	start := time.Now()
 
 	// Validate size of the block
-	// Allow for fee transaction
-	if block.SizeSSZ() > cv.cfg.BlockSize+feeSizeAllowance {
+	// We are only counting transactions' size (except the fee transactions)
+	size := getTransactionsSize(block)
+	if size > cv.cfg.BlockSize {
 		return nil, errors.Errorf("The block size is: %d, exceeds: %d", block.SizeSSZ(), cv.cfg.BlockSize)
 	}
 
@@ -167,6 +167,18 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, countSign bool) 
 
 	start = time.Now()
 
+	prevBlockByNum, err := cv.bc.GetBlockByNum(block.Num - 1)
+	if err != nil && !errors.Is(err, rdochain.ErrNotForgedBlock) {
+		log.Debugf("Error reading previous block by num %s", err)
+		return nil, ErrReadingBlock
+	}
+
+	// If prevBlockNum does not exist, then synchronize
+	if prevBlockByNum == nil {
+		log.Debug("Previous block does not exist")
+		return nil, ErrPreviousBlockNotExists
+	}
+
 	// find prevBlock
 	prevBlock, err := cv.bc.GetBlockByHash(block.Parent)
 	if err != nil {
@@ -179,8 +191,8 @@ func (cv *CryspValidator) ValidateBlock(block *prototype.Block, countSign bool) 
 	}
 
 	if prevBlock == nil {
-		log.Errorf("ValidateBlock: Previous Block #%d for given block #%d is not exists.", block.Num-1, block.Num)
-		return nil, ErrPreviousBlockNotExists
+		log.Error("ValidateBlock: Previous Block's hash does not equal to given block's parent hash.")
+		return nil, errors.Errorf("Parent block hash is not valid: %s", common.BytesToAddress(block.Parent))
 	}
 
 	if prevBlock.Timestamp >= block.Timestamp {
@@ -295,4 +307,15 @@ func (cv *CryspValidator) countValidSigns(block *prototype.Block, signatures []*
 	}
 
 	return validCount
+}
+
+// Summing all transactoins' size and returning the result
+func getTransactionsSize(block *prototype.Block) int {
+	var total int
+	for _, tx := range block.GetTransactions() {
+		if tx.Type != common.FeeTxType {
+			total += tx.SizeSSZ()
+		}
+	}
+	return total
 }

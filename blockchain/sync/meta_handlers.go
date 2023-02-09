@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/p2p"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -52,11 +52,11 @@ func (s *Service) validateMetaHandler(meta *prototype.Metadata) error {
 		return errors.Wrap(err, "Error parsing self meta")
 	}
 
-	if selfMeta.HeadSlot == meta.HeadSlot {
-		if selfMeta.HeadBlockNum != meta.HeadBlockNum {
-			return ErrDiffHeadBlock
-		}
+	if selfMeta.GetHeadBlockNum() == 0 {
+		return nil
+	}
 
+	if selfMeta.HeadBlockNum == meta.HeadBlockNum {
 		if !bytes.Equal(selfMeta.HeadBlockHash, meta.HeadBlockHash) {
 			return ErrDiffHeadBlock
 		}

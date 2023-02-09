@@ -11,16 +11,16 @@ import (
 	"time"
 
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/libp2p/go-libp2p-pubsub/timecache"
 
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/discovery"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/discovery"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 
 	logging "github.com/ipfs/go-log"
-	"github.com/whyrusleeping/timecache"
 )
 
 // DefaultMaximumMessageSize is 1mb.
@@ -30,6 +30,10 @@ var (
 	// TimeCacheDuration specifies how long a message ID will be remembered as seen.
 	// Use WithSeenMessagesTTL to configure this per pubsub instance, instead of overriding the global default.
 	TimeCacheDuration = 120 * time.Second
+
+	// TimeCacheStrategy specifies which type of lookup/cleanup strategy is used by the seen messages cache.
+	// Use WithSeenMessagesStrategy to configure this per pubsub instance, instead of overriding the global default.
+	TimeCacheStrategy = timecache.Strategy_FirstSeen
 
 	// ErrSubscriptionCancelled may be returned when a subscription Next() is called after the
 	// subscription has been cancelled.
@@ -148,9 +152,10 @@ type PubSub struct {
 	inboundStreamsMx sync.Mutex
 	inboundStreams   map[peer.ID]network.Stream
 
-	seenMessagesMx sync.Mutex
-	seenMessages   *timecache.TimeCache
-	seenMsgTTL     time.Duration
+	seenMessagesMx  sync.Mutex
+	seenMessages    timecache.TimeCache
+	seenMsgTTL      time.Duration
+	seenMsgStrategy timecache.Strategy
 
 	// generator used to compute the ID for a message
 	idGen *msgIDGenerator
@@ -170,6 +175,12 @@ type PubSub struct {
 	protoMatchFunc ProtocolMatchFn
 
 	ctx context.Context
+
+	// appSpecificRpcInspector is an auxiliary that may be set by the application to inspect incoming RPCs prior to
+	// processing them. The inspector is invoked on an accepted RPC right prior to handling it.
+	// The return value of the inspector function is an error indicating whether the RPC should be processed or not.
+	// If the error is nil, the RPC is processed as usual. If the error is non-nil, the RPC is dropped.
+	appSpecificRpcInspector func(peer.ID, *RPC) error
 }
 
 // PubSubRouter is the message router component of PubSub.
@@ -221,6 +232,7 @@ type Message struct {
 	ID            string
 	ReceivedFrom  peer.ID
 	ValidatorData interface{}
+	Local         bool
 }
 
 func (m *Message) GetFrom() peer.ID {
@@ -279,6 +291,7 @@ func NewPubSub(ctx context.Context, h host.Host, rt PubSubRouter, opts ...Option
 		blacklist:             NewMapBlacklist(),
 		blacklistPeer:         make(chan peer.ID),
 		seenMsgTTL:            TimeCacheDuration,
+		seenMsgStrategy:       TimeCacheStrategy,
 		idGen:                 newMsgIdGenerator(),
 		counter:               uint64(time.Now().UnixNano()),
 	}
@@ -300,7 +313,7 @@ func NewPubSub(ctx context.Context, h host.Host, rt PubSubRouter, opts ...Option
 		}
 	}
 
-	ps.seenMessages = timecache.NewTimeCache(ps.seenMsgTTL)
+	ps.seenMessages = timecache.NewTimeCacheWithStrategy(ps.seenMsgStrategy, ps.seenMsgTTL)
 
 	if err := ps.disc.Start(ps); err != nil {
 		return nil, err
@@ -526,6 +539,25 @@ func WithSeenMessagesTTL(ttl time.Duration) Option {
 	}
 }
 
+// WithSeenMessagesStrategy configures which type of lookup/cleanup strategy is used by the seen messages cache
+func WithSeenMessagesStrategy(strategy timecache.Strategy) Option {
+	return func(ps *PubSub) error {
+		ps.seenMsgStrategy = strategy
+		return nil
+	}
+}
+
+// WithAppSpecificRpcInspector sets a hook that inspect incomings RPCs prior to
+// processing them.  The inspector is invoked on an accepted RPC just before it
+// is handled.  If inspector's error is nil, the RPC is handled. Otherwise, it
+// is dropped.
+func WithAppSpecificRpcInspector(inspector func(peer.ID, *RPC) error) Option {
+	return func(ps *PubSub) error {
+		ps.appSpecificRpcInspector = inspector
+		return nil
+	}
+}
+
 // processLoop handles all inputs arriving on the channels
 func (p *PubSub) processLoop(ctx context.Context) {
 	defer func() {
@@ -695,6 +727,16 @@ func (p *PubSub) handleDeadPeers() {
 		}
 
 		close(ch)
+		delete(p.peers, pid)
+
+		for t, tmap := range p.topics {
+			if _, ok := tmap[pid]; ok {
+				delete(tmap, pid)
+				p.notifyLeave(t, pid)
+			}
+		}
+
+		p.rt.RemovePeer(pid)
 
 		if p.host.Network().Connectedness(pid) == network.Connected {
 			backoffDelay, err := p.deadPeerBackoff.updateAndGet(pid)
@@ -708,20 +750,9 @@ func (p *PubSub) handleDeadPeers() {
 			log.Debugf("peer declared dead but still connected; respawning writer: %s", pid)
 			messages := make(chan *RPC, p.peerOutboundQueueSize)
 			messages <- p.getHelloPacket()
-			go p.handleNewPeerWithBackoff(p.ctx, pid, backoffDelay, messages)
 			p.peers[pid] = messages
-			continue
+			go p.handleNewPeerWithBackoff(p.ctx, pid, backoffDelay, messages)
 		}
-
-		delete(p.peers, pid)
-		for t, tmap := range p.topics {
-			if _, ok := tmap[pid]; ok {
-				delete(tmap, pid)
-				p.notifyLeave(t, pid)
-			}
-		}
-
-		p.rt.RemovePeer(pid)
 	}
 }
 
@@ -1005,6 +1036,15 @@ func (p *PubSub) notifyLeave(topic string, pid peer.ID) {
 }
 
 func (p *PubSub) handleIncomingRPC(rpc *RPC) {
+	// pass the rpc through app specific validation (if any available).
+	if p.appSpecificRpcInspector != nil {
+		// check if the RPC is allowed by the external inspector
+		if err := p.appSpecificRpcInspector(rpc.from, rpc); err != nil {
+			log.Debugf("application-specific inspection failed, rejecting incoming rpc: %s", err)
+			return // reject the RPC
+		}
+	}
+
 	p.tracer.RecvRPC(rpc)
 
 	subs := rpc.GetSubscriptions()
@@ -1066,7 +1106,7 @@ func (p *PubSub) handleIncomingRPC(rpc *RPC) {
 				continue
 			}
 
-			p.pushMsg(&Message{pmsg, "", rpc.from, nil})
+			p.pushMsg(&Message{pmsg, "", rpc.from, nil, false})
 		}
 	}
 
@@ -1165,7 +1205,9 @@ func (p *PubSub) checkSigningPolicy(msg *Message) error {
 func (p *PubSub) publishMessage(msg *Message) {
 	p.tracer.DeliverMessage(msg)
 	p.notifySubs(msg)
-	p.rt.Publish(msg)
+	if !msg.Local {
+		p.rt.Publish(msg)
+	}
 }
 
 type addTopicReq struct {
