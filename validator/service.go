@@ -35,20 +35,20 @@ var _ shared.Service = (*Service)(nil)
 const (
 	votingDuration    = 3 * time.Second
 	seedTimer         = 2 * time.Second
-	attestationsCount = 50
-	seedCount         = 50
-	proposeCount      = 50
+	attestationsCount = 100
+	seedCount         = 100
+	proposeCount      = 5
 	seedPrime         = 4294967291 // prime number closest to 2**32-1
 )
 
 type Config struct {
 	BlockFinalizer  consensus.BlockFinalizer
 	AttestationPool consensus.AttestationPool
-	ProposeFeed     events.Feed
-	AttestationFeed events.Feed
-	BlockFeed       events.Feed
-	StateFeed       events.Feed
-	SeedFeed        events.Feed
+	ProposeFeed     *events.Feed
+	AttestationFeed *events.Feed
+	BlockFeed       *events.Feed
+	StateFeed       *events.Feed
+	SeedFeed        *events.Feed
 	Context         context.Context
 }
 
@@ -71,11 +71,11 @@ type Service struct {
 	attestationEvent chan *types.Attestation
 	seedEvent        chan *prototype.Seed
 
-	proposeFeed     events.Feed
-	attestationFeed events.Feed
-	seedFeed        events.Feed
-	blockFeed       events.Feed
-	stateFeed       events.Feed
+	proposeFeed     *events.Feed
+	attestationFeed *events.Feed
+	seedFeed        *events.Feed
+	blockFeed       *events.Feed
+	stateFeed       *events.Feed
 
 	// consensus Engine
 	backend consensus.PoS
@@ -88,8 +88,8 @@ type Service struct {
 	votingIsFinished bool
 	blockVoting      map[string]*voting
 	seedMap          map[string]*prototype.Seed
-	finishVoting     <-chan time.Time
-	waitSeed         <-chan time.Time
+	finishVoting     chan struct{}
+	waitSeed         chan struct{}
 
 	// seed
 	seed int64
@@ -201,11 +201,11 @@ func (s *Service) subscribeEvents() {
 	}
 }
 
-func (s *Service) ProposeFeed() events.Feed {
+func (s *Service) ProposeFeed() *events.Feed {
 	return s.proposeFeed
 }
 
-func (s *Service) AttestationFeed() events.Feed {
+func (s *Service) AttestationFeed() *events.Feed {
 	return s.attestationFeed
 }
 
@@ -342,7 +342,7 @@ func (s *Service) forgeBlock() {
 
 	s.mu.Lock()
 	// Check node is leader now
-	log.Debugf("%s is leader: %b", s.proposer.Addr().Hex(), s.backend.IsLeader(s.proposer.Addr(), s.seed))
+	log.Debugf("%s is leader: %t", s.proposer.Addr().Hex(), s.backend.IsLeader(s.proposer.Addr(), s.seed))
 	if !s.backend.IsLeader(s.proposer.Addr(), s.seed) {
 		s.mu.Unlock()
 		return
@@ -370,7 +370,11 @@ func (s *Service) forgeBlock() {
 	// push block to events
 	s.proposeFeed.Send(block)
 
-	s.finishVoting = time.After(votingDuration)
+	go func() {
+		time.Sleep(votingDuration)
+		s.finishVoting <- struct{}{}
+	}()
+
 	s.votingIsFinished = false
 
 	log.Debugf("Block #%d forged in %d ms", block.Num, time.Since(start).Milliseconds())
@@ -393,7 +397,11 @@ func (s *Service) generateSeed() {
 
 	// Push the generated seed to events
 	s.seedFeed.Send(seed)
-	s.waitSeed = time.After(seedTimer)
+
+	go func() {
+		time.Sleep(seedTimer)
+		s.waitSeed <- struct{}{}
+	}()
 }
 
 // reseive the seed & calculate the resulting seed
@@ -479,6 +487,10 @@ func New(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		proposeEvent:     make(chan *prototype.Block, proposeCount),
 		attestationEvent: make(chan *types.Attestation, attestationsCount),
 		seedEvent:        make(chan *prototype.Seed, seedCount),
+
+		// timeout channels
+		waitSeed:     make(chan struct{}, 1),
+		finishVoting: make(chan struct{}, 1),
 
 		// feeds
 		proposeFeed:     cfg.ProposeFeed,

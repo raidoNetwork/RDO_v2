@@ -30,8 +30,8 @@ const (
 type Config struct {
 	BlockFinalizer  consensus.BlockFinalizer
 	AttestationPool consensus.AttestationPool
-	StateFeed       events.Feed
-	BlockFeed       events.Feed
+	StateFeed       *events.Feed
+	BlockFeed       *events.Feed
 	Context         context.Context
 }
 
@@ -58,6 +58,9 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		blockFeed: cfg.BlockFeed,
 		stateFeed: cfg.StateFeed,
 
+		// synced indicated whether the initial sync is complete
+		synced: false,
+
 		bc: cfg.BlockFinalizer,
 	}
 
@@ -77,6 +80,9 @@ type Service struct {
 
 	mu sync.Mutex
 
+	// synced indicated whether the initial sync is complete
+	synced bool
+
 	// Recorded block
 	receivedBlock *prototype.Block
 
@@ -84,8 +90,8 @@ type Service struct {
 	stateEvent chan state.State
 	blockEvent chan *prototype.Block
 
-	blockFeed events.Feed
-	stateFeed events.Feed
+	blockFeed *events.Feed
+	stateFeed *events.Feed
 }
 
 // Start service work
@@ -99,6 +105,8 @@ func (s *Service) Start() {
 
 // mainLoop is main loop of service
 func (s *Service) mainLoop() {
+	syncService := rsync.GetMainService()
+
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -106,8 +114,11 @@ func (s *Service) mainLoop() {
 		case <-s.ticker.C():
 			updateCoreMetrics()
 		case block := <-s.blockEvent:
+			syncService.SyncLock()
 			s.mu.Lock()
 			if bytes.Equal(block.Hash, s.receivedBlock.Hash) {
+				s.mu.Unlock()
+				syncService.SyncUnlock()
 				continue
 			}
 			s.mu.Unlock()
@@ -115,20 +126,29 @@ func (s *Service) mainLoop() {
 			start := time.Now()
 
 			err := s.FinalizeBlock(block)
-			for err == attestation.ErrPreviousBlockNotExists {
-				log.Infof("Previous block for given block does not exist. Try syncing")
-				syncService := rsync.GetMainService()
-				if syncService == nil {
-					log.Errorf("Error fetching syncService: %s", err)
-					continue
+			syncService.SyncUnlock()
+			if s.synced {
+				for err == attestation.ErrPreviousBlockNotExists {
+					log.Infof("Previous block for given block does not exist. Try syncing")
+					if syncService == nil {
+						log.Errorf("Error fetching syncService: %s", err)
+						continue
+					}
+					errSync := syncService.SyncWithNetwork()
+					if errSync != nil && errSync != rsync.ErrAlreadySynced {
+						log.Errorf("Error syncing: %s", err)
+						time.Sleep(syncInterval)
+						continue
+					}
+					syncService.SyncLock()
+					err = s.FinalizeBlock(block)
+					if err != nil && errSync == rsync.ErrAlreadySynced {
+						syncService.SyncUnlock()
+						time.Sleep(syncInterval)
+						continue
+					}
+					syncService.SyncUnlock()
 				}
-				err = syncService.SyncWithNetwork()
-				if err != nil {
-					log.Errorf("Error syncing: %s", err)
-					<-time.After(syncInterval)
-					continue
-				}
-				err = s.FinalizeBlock(block)
 			}
 
 			if err != nil {
@@ -182,6 +202,7 @@ func (s *Service) waitInitialized() {
 					panic("Zero Genesis time")
 				}
 			case state.Synced:
+				s.synced = true
 				return
 			}
 		}

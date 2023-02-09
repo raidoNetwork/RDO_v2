@@ -7,8 +7,9 @@ import (
 	"time"
 
 	ssz "github.com/ferranbt/fastssz"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/core/slot"
 	"github.com/raidoNetwork/RDO_v2/blockchain/state"
 	"github.com/raidoNetwork/RDO_v2/events"
@@ -16,7 +17,6 @@ import (
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared"
 	"github.com/raidoNetwork/RDO_v2/shared/types"
-	"github.com/raidoNetwork/RDO_v2/utils/async"
 	"github.com/raidoNetwork/RDO_v2/utils/serialize"
 	"github.com/sirupsen/logrus"
 )
@@ -26,27 +26,30 @@ var _ shared.Service = (*Service)(nil)
 var MainService *Service
 
 const (
-	txGossipCount            = 2000
-	blockGossipCount         = 1000
-	stateCount               = 10
-	notificationsGossipCount = txGossipCount + blockGossipCount
+	txGossipCount    = 400
+	blockGossipCount = 200
+	stateCount       = 1
 
 	ttfbTimeout = 5 * time.Second
 
 	blocksPerRequest = 64
 )
 
+var (
+	ErrAlreadySynced = errors.New("The node is already synced with network")
+)
+
 type ValidatorCfg struct {
-	ProposeFeed     events.Feed
-	AttestationFeed events.Feed
-	SeedFeed        events.Feed
+	ProposeFeed     *events.Feed
+	AttestationFeed *events.Feed
+	SeedFeed        *events.Feed
 	Enabled         bool
 }
 
 type Config struct {
-	BlockFeed    events.Feed
-	TxFeed       events.Feed
-	StateFeed    events.Feed
+	BlockFeed    *events.Feed
+	TxFeed       *events.Feed
+	StateFeed    *events.Feed
 	Blockchain   BlockchainInfo
 	Storage      BlockStorage
 	P2P          P2P
@@ -58,16 +61,19 @@ type Config struct {
 func NewService(ctx context.Context, cfg *Config) *Service {
 	ctx, cancel := context.WithCancel(ctx)
 	srv := &Service{
-		cfg:          cfg,
-		txEvent:      make(chan *types.Transaction, txGossipCount),
-		blockEvent:   make(chan *prototype.Block, blockGossipCount),
-		stateEvent:   make(chan state.State, stateCount),
-		notification: make(chan p2p.Notty, notificationsGossipCount),
-		ctx:          ctx,
-		cancel:       cancel,
-		initialized:  make(chan struct{}),
-		stakeSynced:  make(chan struct{}),
-		synced:       0,
+		cfg:               cfg,
+		txEvent:           make(chan *types.Transaction, txGossipCount),
+		blockEvent:        make(chan *prototype.Block, blockGossipCount),
+		stateEvent:        make(chan state.State, stateCount),
+		notificationBlock: make(chan p2p.Notty, blockGossipCount),
+		notificationTx:    make(chan p2p.Notty, txGossipCount),
+		ctx:               ctx,
+		cancel:            cancel,
+		initialized:       make(chan struct{}),
+		stakeSynced:       make(chan struct{}),
+		connected:         make(chan struct{}),
+		syncLock:          make(chan struct{}, 1),
+		synced:            0,
 	}
 
 	// subscribe on new events
@@ -81,16 +87,19 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 type Service struct {
 	cfg *Config
 
-	txEvent      chan *types.Transaction
-	blockEvent   chan *prototype.Block
-	stateEvent   chan state.State
-	notification chan p2p.Notty
+	txEvent           chan *types.Transaction
+	blockEvent        chan *prototype.Block
+	stateEvent        chan state.State
+	notificationBlock chan p2p.Notty
+	notificationTx    chan p2p.Notty
 
 	ctx    context.Context
 	cancel context.CancelFunc
 
 	initialized chan struct{}
 	stakeSynced chan struct{}
+	connected   chan struct{}
+	syncLock    chan struct{}
 
 	synced int32
 
@@ -110,19 +119,6 @@ func (s *Service) Start() {
 	s.addStreamHandler(p2p.MetaProtocol, s.metaHandler)
 	s.addStreamHandler(p2p.BlockRangeProtocol, s.blockRangeHandler)
 
-	async.WithInterval(s.ctx, p2p.PeerMetaUpdateInterval, func() {
-		peers := s.cfg.P2P.PeerStore().Connected()
-		for _, data := range peers {
-			if time.Since(data.LastUpdate) < p2p.PeerMetaUpdateInterval {
-				continue
-			}
-
-			if err := s.metaRequest(s.ctx, data.Id); err != nil {
-				log.Error(err)
-			}
-		}
-	})
-
 	s.pushStateEvent(state.ConnectionHandlersReady)
 
 	// wait for local database synced
@@ -130,6 +126,10 @@ func (s *Service) Start() {
 
 	// Wait for the stake pool to sync
 	<-s.stakeSynced
+
+	<-s.connected
+
+	s.metaReq()
 
 	// start block queue watcher
 	go s.forkWatcher()
@@ -140,9 +140,10 @@ func (s *Service) Start() {
 	log.Info("Start blockchain synced...")
 
 	// sync state with network
+	s.syncLock <- struct{}{}
 	if !s.cfg.DisableSync && !slot.Ticker().GenesisAfter() {
 		err := s.SyncWithNetwork()
-		if err != nil {
+		if err != nil && err != ErrAlreadySynced {
 			panic(err)
 		}
 	}
@@ -153,6 +154,7 @@ func (s *Service) Start() {
 
 	// gossip new blocks and transactions
 	go s.gossipEvents()
+	go s.maintainSync()
 
 	if s.cfg.Validator.Enabled {
 		go s.listenValidatorTopics()
@@ -217,12 +219,13 @@ func (s *Service) stateListener() {
 		case st := <-s.stateEvent:
 			switch st {
 			case state.Initialized:
-				s.initialized <- struct{}{}
+				// do nothing
 			case state.StakePoolInitialized:
 				close(s.stakeSynced)
+			case state.Connected:
+				close(s.connected)
 			case state.LocalSynced:
 				close(s.initialized)
-				return
 			case state.ConnectionHandlersReady:
 				// do nothing
 			case state.Synced:
@@ -240,44 +243,39 @@ func (s *Service) listenIncoming() {
 		select {
 		case <-s.ctx.Done():
 			return
-		case notty := <-s.notification:
-			switch notty.Topic {
-			case p2p.BlockTopic:
-				block, err := serialize.UnmarshalBlock(notty.Data)
-				if err != nil {
-					log.Errorf("Error unmarshaling block: %s", err)
-					break
-				}
-
-				if atomic.LoadInt32(&s.synced) == 0 {
-					s.forkBlockEvent <- block
-				} else {
-					bQueue := s.freeQueue()
-					for b := range bQueue {
-						s.cfg.BlockFeed.Send(b)
-					}
-
-					s.cfg.BlockFeed.Send(block)
-				}
-
-				receivedMessages.WithLabelValues(p2p.BlockTopic).Inc()
-			case p2p.TxTopic:
-				// skip tx processing while synscing
-				if atomic.LoadInt32(&s.synced) == 0 {
-					continue
-				}
-
-				tx, err := serialize.UnmarshalTx(notty.Data)
-				if err != nil {
-					log.Errorf("Error unmarshaling transaction: %s", err)
-					break
-				}
-
-				s.cfg.TxFeed.Send(types.NewTransaction(tx))
-				receivedMessages.WithLabelValues(p2p.TxTopic).Inc()
-			default:
-				log.Warnf("Unsupported notification %s", notty.Topic)
+		case notty := <-s.notificationBlock:
+			block, err := serialize.UnmarshalBlock(notty.Data)
+			if err != nil {
+				log.Errorf("Error unmarshaling block: %s", err)
+				break
 			}
+
+			if atomic.LoadInt32(&s.synced) == 0 {
+				s.forkBlockEvent <- block
+			} else {
+				bQueue := s.freeQueue()
+				for b := range bQueue {
+					s.cfg.BlockFeed.Send(b)
+				}
+
+				s.cfg.BlockFeed.Send(block)
+			}
+
+			receivedMessages.WithLabelValues(p2p.BlockTopic).Inc()
+		case notty := <-s.notificationTx:
+			// skip tx processing while synscing
+			if atomic.LoadInt32(&s.synced) == 0 {
+				continue
+			}
+
+			tx, err := serialize.UnmarshalTx(notty.Data)
+			if err != nil {
+				log.Errorf("Error unmarshaling transaction: %s", err)
+				break
+			}
+
+			s.cfg.TxFeed.Send(types.NewTransaction(tx))
+			receivedMessages.WithLabelValues(p2p.TxTopic).Inc()
 		}
 	}
 }
@@ -292,7 +290,8 @@ func (s *Service) pushStateEvent(st state.State) {
 
 // subscribeEvents on updates
 func (s *Service) subscribeEvents() {
-	s.cfg.P2P.Notifier().Subscribe(s.notification)
+	s.cfg.P2P.NotifierTx().Subscribe(s.notificationTx)
+	s.cfg.P2P.NotifierBlock().Subscribe(s.notificationBlock)
 	s.cfg.TxFeed.Subscribe(s.txEvent)
 	s.cfg.BlockFeed.Subscribe(s.blockEvent)
 }
@@ -348,4 +347,36 @@ func (s *Service) addStreamHandler(topic string, handle streamHandler) {
 
 func GetMainService() *Service {
 	return MainService
+}
+
+func (s *Service) metaReq() {
+	peers := s.cfg.P2P.PeerStore().Connected()
+	for _, data := range peers {
+		if time.Since(data.LastUpdate) < p2p.PeerMetaUpdateInterval {
+			continue
+		}
+
+		if err := s.metaRequest(s.ctx, data.Id); err != nil {
+			log.Error(err)
+		}
+	}
+}
+
+func (s *Service) maintainSync() {
+	for {
+		time.Sleep(p2p.PeerMetaUpdateInterval)
+		s.metaReq()
+		err := s.SyncWithNetwork()
+		if err != nil && err != ErrAlreadySynced {
+			log.Errorf("Error while maintaining sync: %s", err)
+		}
+	}
+}
+
+func (s *Service) SyncLock() {
+	<-s.syncLock
+}
+
+func (s *Service) SyncUnlock() {
+	s.syncLock <- struct{}{}
 }

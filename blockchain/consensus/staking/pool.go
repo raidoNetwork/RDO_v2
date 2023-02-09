@@ -29,6 +29,7 @@ type ValidatorStakeData struct {
 type StakingPool struct {
 	validators         map[string]*ValidatorStakeData
 	electors           map[string]map[string]struct{}
+	unstakedSnapshot   map[string]map[string]uint64
 	cumulativeStake    uint64
 	stakeAmountPerSlot uint64
 	slotsLimit         int
@@ -115,6 +116,7 @@ func (p *StakingPool) cancelValidatorStake(validator string, amount uint64) erro
 	validatorData := p.validators[validator]
 
 	if validatorData.SlotsFilled == slotsCount {
+		p.MarkFullUnstake(validator)
 		delete(p.validators, validator)
 	} else {
 		validatorData.SelfStake -= amount
@@ -132,8 +134,9 @@ func (p *StakingPool) registerElectorStake(elector, validator string, amount uin
 	defer p.mu.Unlock()
 
 	if _, exists := p.validators[validator]; !exists {
-		log.Debugf("Not found validator %s with elector %s", validator, elector)
-		return errors.New("Not found validator")
+		log.Debugf("Not found validator %s with elector %s; unstaking", validator, elector)
+		p.SystemUnstakeElector(validator, elector, amount)
+		return nil
 	}
 
 	validatorData := p.validators[validator]
@@ -162,6 +165,15 @@ func (p *StakingPool) cancelElectorStake(elector, validator string, amount uint6
 	validatorData := p.validators[validator]
 	if _, exists := validatorData.Electors[elector]; !exists {
 		return errors.New("Not found elector")
+	}
+
+	unstake, unstakeNeeded := p.unstakedSnapshot[validator][elector]
+	if unstakeNeeded {
+		if unstake > amount {
+			p.unstakedSnapshot[validator][elector] -= amount
+		} else {
+			delete(p.unstakedSnapshot[validator], elector)
+		}
 	}
 
 	if validatorData.Electors[elector] == amount {
@@ -267,7 +279,7 @@ func (p *StakingPool) processStakeTx(tx *types.Transaction) error {
 	return nil
 }
 
-func (p *StakingPool) processValidatorsUnstakeTx(tx *types.Transaction) (err error) {
+func (p *StakingPool) processUnstakeTx(tx *types.Transaction) (err error) {
 	stakeNode := ""
 	var amount uint64 // count tx stake amount
 	for _, in := range tx.Inputs() {
@@ -308,25 +320,38 @@ func (p *StakingPool) processValidatorsUnstakeTx(tx *types.Transaction) (err err
 }
 
 func (p *StakingPool) processSystemUnstakeTx(tx *types.Transaction) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	// Calculate the inputs amounts for each address
 	// record the corresponding node address
-	unstakeNodes := make(map[string][]string)
-	for _, in := range tx.Inputs() {
-		address := in.Address().Hex()
-		unstakeNodes[address] = append(unstakeNodes[address], in.Node().Hex())
+	if len(tx.Outputs()) != 1 {
+		return errors.New("The length of systemUnstakeTx's outputs is not 1")
 	}
 
-	// For each address, cancel the stake
-	for address, validators := range unstakeNodes {
-		for _, validator := range validators {
-			amount := p.validators[validator].Electors[address]
-			err := p.cancelElectorStake(address, validator, amount)
-			if err != nil {
-				log.Errorf("Error processing SystemUnstakeTx: %s", err)
-				return err
-			}
-		}
+	if len(tx.Inputs()) < 1 {
+		return errors.New("The length of systemUnstakeTx's inputs is less than 1")
 	}
+
+	elector := tx.Outputs()[0].Address().Hex()
+	amount := tx.Outputs()[0].Amount()
+	validator := tx.Inputs()[0].Node().Hex()
+
+	staked, exists := p.unstakedSnapshot[validator][elector]
+	if !exists {
+		log.Debugf("Not found validator %s with elector %s", validator, elector)
+		return errors.New("Not found elector in the snapshot")
+	}
+
+	// Updating snapshop
+	if staked == amount {
+		// Remove from unstakeSnapshop if needed
+		delete(p.unstakedSnapshot[validator], elector)
+	} else {
+		p.unstakedSnapshot[validator][elector] -= amount
+	}
+
+	p.cumulativeStake -= amount
 	return nil
 }
 
@@ -342,7 +367,7 @@ func (p *StakingPool) FinalizeStaking(batch []*types.Transaction) error {
 		case common.StakeTxType:
 			err = p.processStakeTx(tx)
 		case common.UnstakeTxType:
-			err = p.processValidatorsUnstakeTx(tx)
+			err = p.processUnstakeTx(tx)
 		case common.ValidatorsUnstakeTxType:
 			err = p.processSystemUnstakeTx(tx)
 		}
@@ -444,6 +469,7 @@ func NewPool(blockchain consensus.BlockchainReader, slotsLimit int, stakeAmount 
 	return &StakingPool{
 		validators:         map[string]*ValidatorStakeData{},
 		electors:           map[string]map[string]struct{}{},
+		unstakedSnapshot:   make(map[string]map[string]uint64),
 		blockchain:         blockchain,
 		slotsLimit:         slotsLimit,
 		stakeAmountPerSlot: stakeAmount,
@@ -515,4 +541,44 @@ func (s *StakingPool) DetermineProposer(seed int64) string {
 	}
 
 	return leader
+}
+
+func (s *StakingPool) GetFullyUnstaked() map[string]map[string]struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result := make(map[string]map[string]struct{})
+	for key1, map1 := range s.unstakedSnapshot {
+		result[key1] = make(map[string]struct{})
+		for key2 := range map1 {
+			result[key1][key2] = struct{}{}
+		}
+	}
+	return result
+}
+
+// MarkFullUnstake marks the validator as one performing full unstake
+// Need to acquire lock outside.
+func (s *StakingPool) MarkFullUnstake(validator string) {
+	for elector := range s.validators[validator].Electors {
+		if _, exists := s.unstakedSnapshot[validator][elector]; !exists {
+			if _, exists := s.unstakedSnapshot[validator]; !exists {
+				s.unstakedSnapshot[validator] = make(map[string]uint64)
+			}
+
+			s.unstakedSnapshot[validator][elector] = s.validators[validator].Electors[elector]
+		}
+	}
+}
+
+// SystemUnstakeElector unstakes elector if there is no validator found.
+// Need to acquire lock outside.
+func (s *StakingPool) SystemUnstakeElector(validator, elector string, amount uint64) {
+	if _, exists := s.unstakedSnapshot[validator]; !exists {
+		s.unstakedSnapshot[validator] = make(map[string]uint64)
+	}
+	if _, exists := s.unstakedSnapshot[validator][elector]; !exists {
+		s.unstakedSnapshot[validator][elector] = amount
+	} else {
+		s.unstakedSnapshot[validator][elector] += amount
+	}
 }

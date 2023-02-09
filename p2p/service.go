@@ -10,12 +10,12 @@ import (
 
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/libp2p/go-libp2p"
-	phost "github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	phost "github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/protocol/identify"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/state"
@@ -41,7 +41,7 @@ type Config struct {
 	Port                int
 	BootstrapNodes      []string
 	DataDir             string
-	StateFeed           events.Feed
+	StateFeed           *events.Feed
 	EnableNAT           bool
 	ListenValidatorData bool
 }
@@ -109,6 +109,8 @@ func NewService(ctx context.Context, cfg *Config) (srv *Service, err error) {
 		return nil, err
 	}
 
+	srv.sub = srv.cfg.StateFeed.Subscribe(srv.stateEvent)
+
 	srv.pubsub = gs
 	return srv, nil
 }
@@ -127,11 +129,16 @@ type Service struct {
 	topicLock sync.Mutex
 
 	cfg *Config
+	sub events.Subscription
 
 	startFail error
 
-	notifier          events.Bus
-	validatorNotifier events.Bus
+	// Notifiers for both the validator and node
+	notifierTx       events.Feed
+	notifierBlock    events.Feed
+	notifierSeed     events.Feed
+	notifierAtt      events.Feed
+	notifierProposal events.Feed
 
 	// discovery
 	dht *dht.IpfsDHT
@@ -163,6 +170,7 @@ func (s *Service) Start() {
 		s.updateMetrics()
 	})
 
+	s.cfg.StateFeed.Send(state.Connected)
 	// wait full sync
 	<-s.initialized
 
@@ -365,6 +373,7 @@ func (s *Service) Publish(topicName string, message []byte) error {
 	failCounter := 0
 	for {
 		if len(topic.ListPeers()) > 0 {
+			time.Sleep(10 * time.Microsecond)
 			return topic.Publish(s.ctx, message)
 		}
 
@@ -401,20 +410,41 @@ func (s *Service) receiveMessage(msg *pubsub.Message, isValidatorMessage bool) {
 		From:  msg.ReceivedFrom.String(),
 	}
 
-	// send event
-	if isValidatorMessage {
-		s.validatorNotifier.Send(n)
-	} else {
-		s.notifier.Send(n)
+	// send the event to the corresponding feed
+	switch n.Topic {
+	case BlockTopic:
+		s.notifierBlock.Send(n)
+	case TxTopic:
+		s.notifierTx.Send(n)
+	case ProposalTopic:
+		s.notifierProposal.Send(n)
+	case SeedTopic:
+		s.notifierSeed.Send(n)
+	case AttestationTopic:
+		s.notifierAtt.Send(n)
+	default:
+		log.Errorf("Topic %s is not supported", n.Topic)
 	}
 }
 
-func (s *Service) Notifier() *events.Bus {
-	return &s.notifier
+func (s *Service) NotifierTx() *events.Feed {
+	return &s.notifierTx
 }
 
-func (s *Service) ValidatorNotifier() *events.Bus {
-	return &s.validatorNotifier
+func (s *Service) NotifierBlock() *events.Feed {
+	return &s.notifierBlock
+}
+
+func (s *Service) ValidatorSeedNotifier() *events.Feed {
+	return &s.notifierSeed
+}
+
+func (s *Service) ValidatorProposalNotifier() *events.Feed {
+	return &s.notifierProposal
+}
+
+func (s *Service) ValidatorAttNotifier() *events.Feed {
+	return &s.notifierAtt
 }
 
 func (s *Service) AddConnectionHandlers(connectHandler, disconnectHandler ConnectionHandler) {
@@ -538,8 +568,7 @@ func (s *Service) CreateStream(ctx context.Context, msg ssz.Marshaler, topic str
 }
 
 func (s *Service) stateListener() {
-	sub := s.cfg.StateFeed.Subscribe(s.stateEvent)
-	defer sub.Unsubscribe()
+	defer s.sub.Unsubscribe()
 
 	for {
 		select {

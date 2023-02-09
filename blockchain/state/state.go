@@ -10,6 +10,7 @@ Chain state
 	Synced - blockchain is synced with network
 	ConnectionHandlersReady - p2p connection handlers attached
 	StakePoolInitialized - Stake Pool is initialized with blockchain
+	Connected - connected to peers (should precede initial synchronization)
 */
 const (
 	Initialized State = iota + 1
@@ -17,4 +18,5 @@ const (
 	Synced
 	ConnectionHandlersReady
 	StakePoolInitialized
+	Connected
 )

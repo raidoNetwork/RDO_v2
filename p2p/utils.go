@@ -1,12 +1,13 @@
 package p2p
 
 import (
-	"github.com/libp2p/go-libp2p-core/crypto"
+	"net"
+	"path"
+
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/pkg/errors"
 	rcrypto "github.com/raidoNetwork/RDO_v2/shared/crypto"
 	"github.com/raidoNetwork/RDO_v2/utils/file"
-	"net"
-	"path"
 )
 
 const keyPath = "node-keys"
