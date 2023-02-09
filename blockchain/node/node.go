@@ -48,13 +48,13 @@ type RDONode struct {
 	stop      chan struct{} // Channel to wait for termination notifications.
 	kvStore   db.Database
 	outDB     db.OutputDatabase
-	stateFeed events.Bus
-	blockFeed events.Bus
-	txFeed    events.Bus
-	seedFeed  events.Bus
+	stateFeed events.Feed
+	blockFeed events.Feed
+	txFeed    events.Feed
+	seedFeed  events.Feed
 	// validator events
-	proposeFeed     events.Bus
-	attestationFeed events.Bus
+	proposeFeed     events.Feed
+	attestationFeed events.Feed
 }
 
 // New creates a new node instance, sets up configuration options, and registers
@@ -486,14 +486,14 @@ func (r *RDONode) startDB(cliCtx *cli.Context) error {
 	return nil
 }
 
-func (r *RDONode) BlockFeed() *events.Bus {
+func (r *RDONode) BlockFeed() *events.Feed {
 	return &r.blockFeed
 }
 
-func (r *RDONode) StateFeed() *events.Bus {
+func (r *RDONode) StateFeed() *events.Feed {
 	return &r.stateFeed
 }
 
-func (r *RDONode) TxFeed() *events.Bus {
+func (r *RDONode) TxFeed() *events.Feed {
 	return &r.txFeed
 }

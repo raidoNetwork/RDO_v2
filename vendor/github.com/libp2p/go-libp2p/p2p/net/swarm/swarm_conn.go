@@ -8,10 +8,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	ic "github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/transport"
+	ic "github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/transport"
 
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -176,6 +176,12 @@ func (c *Conn) LocalPrivateKey() ic.PrivKey {
 // RemotePublicKey is the public key of the peer on the remote side
 func (c *Conn) RemotePublicKey() ic.PubKey {
 	return c.conn.RemotePublicKey()
+}
+
+// ConnState is the security connection state. including early data result.
+// Empty if not supported.
+func (c *Conn) ConnState() network.ConnectionState {
+	return c.conn.ConnState()
 }
 
 // Stat returns metadata pertaining to this connection

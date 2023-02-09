@@ -264,7 +264,8 @@ func (p *Pool) Finalize(txarr []*types.Transaction) {
 			validatorsUnstakes = append(validatorsUnstakes, tx)
 		}
 
-		if utypes.IsSystemTx(tx) && tx.Type() != common.CollapseTxType {
+		if utypes.IsSystemTx(tx) && tx.Type() != common.CollapseTxType &&
+			tx.Type() != common.ValidatorsUnstakeTxType {
 			continue
 		}
 
@@ -291,6 +292,13 @@ func (p *Pool) Finalize(txarr []*types.Transaction) {
 func (p *Pool) findPoolTransaction(tx *types.Transaction) (*types.Transaction, int, error) {
 	_, exists := p.txHashMap[tx.Hash().Hex()]
 	senderTx, senderExists := p.txSenderMap[tx.From().Hex()]
+
+	// If this is a systemUnstakeTx, we want to look through
+	// all pool transactions and remove stake and unstake txs
+	if tx.Type() == common.ValidatorsUnstakeTxType {
+		address := tx.Inputs()[0].Address().Hex()
+		senderTx, senderExists = p.txSenderMap[address]
+	}
 
 	log.Debugf("Looking for Tx %s HashMap %v SenderMap %v Sender %s", tx.Hash().Hex(), exists, senderExists, tx.From().Hex())
 
@@ -340,6 +348,10 @@ func (p *Pool) findProblematicStakeTx(address, node string) (*types.Transaction,
 		return nil, -1, errors.Errorf("No problematic transaction found in tx pool")
 	}
 
+	if tx.Type() != common.StakeTxType && tx.Type() != common.UnstakeTxType {
+		return nil, -1, errors.Errorf("No problematic transaction found in tx pool")
+	}
+
 	// Checking if the transaction is a stake transaction on the specified node
 	for _, out := range tx.Outputs() {
 		if out.Node().Hex() == node {
@@ -362,20 +374,18 @@ func (p *Pool) findProblematicStakeTx(address, node string) (*types.Transaction,
 func (p *Pool) cleanUpSystemUnstake(tx *types.Transaction) {
 	// For address, remove the corresponding stake and unstake transactions
 	// from the transaction pool
-	for _, in := range tx.Inputs() {
-		address := in.Address().Hex()
-		node := in.Node().Hex()
-		rtx, index, err := p.findProblematicStakeTx(address, node)
-		if err != nil {
-			log.Debugf("Error in cleanUpSystemUnstake: %s\n", err)
-			continue
-		}
-		p.queueLock.Lock()
-		p.pending = p.pending.SwapAndRemove(index)
-		p.queueLock.Unlock()
-
-		p.cleanTransactionMap(rtx)
+	in := tx.Inputs()[0]
+	address := in.Address().Hex()
+	node := in.Node().Hex()
+	rtx, index, err := p.findProblematicStakeTx(address, node)
+	if err != nil {
+		return
 	}
+	p.queueLock.Lock()
+	p.pending = p.pending.SwapAndRemove(index)
+	p.queueLock.Unlock()
+
+	p.cleanTransactionMap(rtx)
 }
 
 func (p *Pool) DeleteTransaction(tx *types.Transaction) error {

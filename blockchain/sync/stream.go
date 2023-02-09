@@ -2,15 +2,16 @@ package sync
 
 import (
 	"context"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/pkg/errors"
-	"github.com/raidoNetwork/RDO_v2/shared/params"
 	"strings"
 	"time"
+
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/pkg/errors"
+	"github.com/raidoNetwork/RDO_v2/shared/params"
 )
 
 var (
-	respTimeout = time.Duration(params.RaidoConfig().ResponseTimeout) * time.Second
+	respTimeout   = time.Duration(params.RaidoConfig().ResponseTimeout) * time.Second
 	writeDuration = respTimeout
 )
 

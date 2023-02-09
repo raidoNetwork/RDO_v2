@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/network"
+	"github.com/libp2p/go-libp2p/core/canonicallog"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/transport"
 
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -33,6 +35,31 @@ func (s *Swarm) Listen(addrs ...ma.Multiaddr) error {
 	}
 
 	return nil
+}
+
+// ListenClose stop and delete listeners for all of the given addresses. If an
+// any address belongs to one of the addreses a Listener provides, then the
+// Listener will close for *all* addresses it provides. For example if you close
+// and address with `/quic`, then the QUIC listener will close and also close
+// any `/quic-v1` address.
+func (s *Swarm) ListenClose(addrs ...ma.Multiaddr) {
+	listenersToClose := make(map[transport.Listener]struct{}, len(addrs))
+
+	s.listeners.Lock()
+	for l := range s.listeners.m {
+		if !containsMultiaddr(addrs, l.Multiaddr()) {
+			continue
+		}
+
+		delete(s.listeners.m, l)
+		listenersToClose[l] = struct{}{}
+	}
+	s.listeners.cacheEOL = time.Time{}
+	s.listeners.Unlock()
+
+	for l := range listenersToClose {
+		l.Close()
+	}
 }
 
 // AddListenAddr tells the swarm to listen on a single address. Unlike Listen,
@@ -78,11 +105,18 @@ func (s *Swarm) AddListenAddr(a ma.Multiaddr) error {
 
 	go func() {
 		defer func() {
-			list.Close()
 			s.listeners.Lock()
-			delete(s.listeners.m, list)
-			s.listeners.cacheEOL = time.Time{}
+			_, ok := s.listeners.m[list]
+			if ok {
+				delete(s.listeners.m, list)
+				s.listeners.cacheEOL = time.Time{}
+			}
 			s.listeners.Unlock()
+
+			if ok {
+				list.Close()
+				log.Errorf("swarm listener unintentionally closed")
+			}
 
 			// signal to our notifiees on listen close.
 			s.notifyAll(func(n network.Notifiee) {
@@ -93,14 +127,11 @@ func (s *Swarm) AddListenAddr(a ma.Multiaddr) error {
 		for {
 			c, err := list.Accept()
 			if err != nil {
-				if s.ctx.Err() == nil {
-					// only log if the swarm is still running.
-					log.Errorf("swarm listener accept error: %s", err)
-				}
 				return
 			}
+			canonicallog.LogPeerStatus(100, c.RemotePeer(), c.RemoteMultiaddr(), "connection_status", "established", "dir", "inbound")
 
-			log.Debugf("swarm listener accepted connection: %s", c)
+			log.Debugf("swarm listener accepted connection: %s <-> %s", c.LocalMultiaddr(), c.RemoteMultiaddr())
 			s.refs.Add(1)
 			go func() {
 				defer s.refs.Done()
@@ -118,4 +149,13 @@ func (s *Swarm) AddListenAddr(a ma.Multiaddr) error {
 		}
 	}()
 	return nil
+}
+
+func containsMultiaddr(addrs []ma.Multiaddr, addr ma.Multiaddr) bool {
+	for _, a := range addrs {
+		if addr == a {
+			return true
+		}
+	}
+	return false
 }

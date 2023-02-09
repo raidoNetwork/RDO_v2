@@ -26,7 +26,7 @@ var (
 	ErrNotForgedBlock = errors.New("Given block number is not forged yet.")
 )
 
-func NewService(kv db.BlockStorage, sql db.OutputStorage, stateFeed events.Feed, repairDB bool) (*Service, error) {
+func NewService(kv db.BlockStorage, sql db.OutputStorage, stateFeed *events.Feed, repairDB bool) (*Service, error) {
 	cfg := params.RaidoConfig()
 
 	// create blockchain instance
@@ -48,7 +48,7 @@ func NewService(kv db.BlockStorage, sql db.OutputStorage, stateFeed events.Feed,
 type Service struct {
 	bc           *BlockChain
 	outm         *OutputManager
-	stateFeed    events.Feed
+	stateFeed    *events.Feed
 	mu           sync.Mutex
 	ready        bool
 	statusErr    error
@@ -306,7 +306,7 @@ func (s *Service) GetBlockBySlot(slot uint64) (*prototype.Block, error) {
 }
 
 func (s *Service) GetBlocksRange(ctx context.Context, start uint64, end uint64) ([]*prototype.Block, error) {
-	count := int(end - start)
+	count := int(end - start + 1)
 	blocks := make([]*prototype.Block, 0, count)
 
 	for num := start; num <= end; num++ {

@@ -4,7 +4,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/consensus"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
@@ -31,6 +31,17 @@ func (s *Service) waitMinimumPeersForSync(findWithMaxBlock bool) {
 }
 
 func (s *Service) SyncWithNetwork() error {
+	select {
+	case <-s.syncLock:
+		break
+	default:
+		return nil
+	}
+
+	defer func() {
+		s.syncLock <- struct{}{}
+	}()
+
 	// sync to most known block
 	err := s.syncToBestKnownBlock()
 	if err != nil {
@@ -39,7 +50,7 @@ func (s *Service) SyncWithNetwork() error {
 
 	// node is synced
 	if s.cfg.Blockchain.GetHeadBlockNum() == s.cfg.P2P.PeerStore().Scorers().PeerHeadBlock.Get() {
-		return nil
+		return ErrAlreadySynced
 	}
 
 	// sync to max known block
@@ -136,8 +147,8 @@ func (s *Service) syncToBestKnownBlock() error {
 	}
 
 	if startBlockNum >= remoteHeadBlockNum {
-		log.Info("Node is already synced")
-		return nil
+		log.Debug("Node is already synced")
+		return ErrAlreadySynced
 	}
 
 	// wait for peers to synced

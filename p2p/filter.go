@@ -1,10 +1,11 @@
 package p2p
 
 import (
-	"github.com/libp2p/go-libp2p-core/peer"
+	"strings"
+
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
-	"strings"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 const subscriptionsLimit = 10
@@ -28,12 +29,10 @@ func (s *Service) CanSubscribe(topic string) bool {
 	return exists
 }
 
-func(s *Service) FilterIncomingSubscriptions(id peer.ID, subs []*pb.RPC_SubOpts) ([]*pb.RPC_SubOpts, error){
+func (s *Service) FilterIncomingSubscriptions(id peer.ID, subs []*pb.RPC_SubOpts) ([]*pb.RPC_SubOpts, error) {
 	if len(subs) > subscriptionsLimit {
 		return nil, pubsub.ErrTooManySubscriptions
 	}
 
 	return pubsub.FilterSubscriptions(subs, s.CanSubscribe), nil
 }
-
-
