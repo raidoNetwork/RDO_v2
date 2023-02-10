@@ -51,8 +51,8 @@ func NewService(cliCtx *cli.Context, cfg *Config) (*Service, error) {
 		receivedBlock: &prototype.Block{},
 
 		// events
-		blockEvent: make(chan *prototype.Block, 5),
-		stateEvent: make(chan state.State, 1),
+		blockEvent: make(chan *prototype.Block, 10),
+		stateEvent: make(chan state.State, 10),
 
 		// feeds
 		blockFeed: cfg.BlockFeed,
