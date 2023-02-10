@@ -169,6 +169,8 @@ func (s *Service) loop() {
 			log.Warn("Finish validation process...")
 			return
 		case <-s.finishVoting:
+			s.mu.Lock()
+
 			s.votingIsFinished = true
 
 			// gossip to network
@@ -180,6 +182,7 @@ func (s *Service) loop() {
 
 			delete(s.blockVoting, common.Encode(s.proposedBlock.Hash))
 			s.proposedBlock = nil
+			s.mu.Unlock()
 		case <-clearInterval.C:
 			clearVoting()
 		}
