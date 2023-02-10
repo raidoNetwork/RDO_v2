@@ -34,7 +34,7 @@ type Service struct {
 	blackHole   []byte
 }
 
-func (s *Service) GenerateTx(outputs []*prototype.TxOutput, fee uint64, hexKey string) (*prototype.Transaction, error) {
+func (s *Service) GenerateUnsafeTx(outputs []*prototype.TxOutput, fee uint64, hexKey string) (*prototype.Transaction, error) {
 	// get address and private key from hex
 	address, key, err := s.getAddress(hexKey)
 	if err != nil {
@@ -44,7 +44,7 @@ func (s *Service) GenerateTx(outputs []*prototype.TxOutput, fee uint64, hexKey s
 	return s.createTx(address, key, outputs, fee, common.NormalTxType)
 }
 
-func (s *Service) GenerateStakeTx(fee uint64, hexKey string, amount uint64, node string) (*prototype.Transaction, error) {
+func (s *Service) GenerateUnsafeStakeTx(fee uint64, hexKey string, amount uint64, node string) (*prototype.Transaction, error) {
 	if amount%s.stakeAmount != 0 && (node == "" || node == common.BlackHoleAddress) {
 		return nil, errors.New("Wrong stake amount given.")
 	}
@@ -83,7 +83,7 @@ func (s *Service) GenerateStakeTx(fee uint64, hexKey string, amount uint64, node
 	return transaction, err
 }
 
-func (s *Service) GenerateUnstakeTx(fee uint64, hexKey string, amount uint64, node string) (*prototype.Transaction, error) {
+func (s *Service) GenerateUnsafeUnstakeTx(fee uint64, hexKey string, amount uint64, node string) (*prototype.Transaction, error) {
 	if amount%s.stakeAmount != 0 {
 		return nil, errors.New("Wrong unstake amount given.")
 	}
@@ -156,6 +156,124 @@ func (s *Service) GenerateUnstakeTx(fee uint64, hexKey string, amount uint64, no
 	opts.Outputs[0].Amount -= realFee
 
 	tx, err := types.NewPbTransaction(opts, key)
+	if err != nil {
+		return nil, err
+	}
+
+	return tx, nil
+}
+
+func (s *Service) GenerateTx(outputs []*prototype.TxOutput, fee uint64, address string) (*prototype.Transaction, error) {
+	addr := common.HexToAddress(address)
+	return s.createTx(addr, nil, outputs, fee, common.NormalTxType)
+}
+
+func (s *Service) GenerateStakeTx(fee uint64, addr string, amount uint64, node string) (*prototype.Transaction, error) {
+	if amount%s.stakeAmount != 0 && (node == "" || node == common.BlackHoleAddress) {
+		return nil, errors.New("Wrong stake amount given.")
+	}
+
+	// get address and private key from hex
+	address := common.HexToAddress(addr)
+
+	nodeAddress := s.blackHole
+	if node != "" {
+		nodeAddress = common.HexToAddress(node).Bytes()
+	}
+
+	outputs := []*prototype.TxOutput{
+		types.NewOutput(
+			address.Bytes(),
+			amount,
+			nodeAddress,
+		),
+	}
+
+	transaction, err := s.createTx(address, nil, outputs, fee, common.StakeTxType)
+	if err != nil {
+		return transaction, err
+	}
+
+	if transaction.Type == common.StakeTxType {
+		typedTx := types.NewTransaction(transaction)
+		err := s.attestation.StakersLimitReached(typedTx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return transaction, err
+}
+
+func (s *Service) GenerateUnstakeTx(fee uint64, addr string, amount uint64, node string) (*prototype.Transaction, error) {
+	if amount%s.stakeAmount != 0 {
+		return nil, errors.New("Wrong unstake amount given.")
+	}
+
+	// get address and private key from hex
+	address := common.HexToAddress(addr)
+
+	// get stake deposits of address
+	utxo, err := s.chain.GetStakeDeposits(address.Hex(), node)
+	if err != nil {
+		return nil, err
+	}
+
+	utxoSize := len(utxo)
+	if utxoSize == 0 {
+		return nil, errors.New("No stake deposits on your address.")
+	}
+
+	var balance uint64
+
+	inputsArr := make([]*prototype.TxInput, 0, len(utxo))
+	for _, uo := range utxo {
+		inputsArr = append(inputsArr, uo.ToPbInput())
+		balance += uo.Amount
+	}
+
+	if balance < amount {
+		return nil, errors.New("Not enough stake deposits.")
+	}
+
+	stakeLeft := balance - amount
+
+	if stakeLeft%s.stakeAmount != 0 {
+		return nil, errors.New("Bad stake amount.")
+	}
+
+	outputs := []*prototype.TxOutput{
+		types.NewOutput(address.Bytes(), amount, nil), // unstake
+	}
+
+	if stakeLeft > 0 {
+		nodeAddress := s.blackHole
+		if node != "" {
+			nodeAddress = common.HexToAddress(node).Bytes()
+		}
+
+		outputs = append(outputs, types.NewOutput(address.Bytes(), stakeLeft, nodeAddress)) // stake deposits
+	}
+
+	nonce, err := s.chain.GetTransactionsCountHex(address.Hex())
+	if err != nil {
+		return nil, err
+	}
+
+	opts := types.TxOptions{
+		Num:     nonce + 1,
+		Inputs:  inputsArr,
+		Outputs: outputs,
+		Fee:     fee,
+		Data:    []byte{},
+		Type:    common.UnstakeTxType,
+	}
+
+	// realFee - tx fee
+	realFee, _ := types.CountTxFee(opts)
+
+	opts.Outputs[0].Amount -= realFee
+
+	tx, err := types.NewPbTransaction(opts, nil)
 	if err != nil {
 		return nil, err
 	}

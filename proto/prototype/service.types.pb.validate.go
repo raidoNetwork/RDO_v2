@@ -106,6 +106,7 @@ func (m *BlockValue) validate(all bool) error {
 	if len(errors) > 0 {
 		return BlockValueMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -333,6 +334,7 @@ func (m *TxValue) validate(all bool) error {
 	if len(errors) > 0 {
 		return TxValueMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -470,6 +472,7 @@ func (m *TxInputValue) validate(all bool) error {
 	if len(errors) > 0 {
 		return TxInputValueMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -593,6 +596,7 @@ func (m *TxOutputValue) validate(all bool) error {
 	if len(errors) > 0 {
 		return TxOutputValueMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -733,6 +737,7 @@ func (m *SignedTxValue) validate(all bool) error {
 	if len(errors) > 0 {
 		return SignedTxValueMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -807,6 +812,147 @@ var _ interface {
 	ErrorName() string
 } = SignedTxValueValidationError{}
 
+// Validate checks the field values on NotSignedTxValue with the rules defined
+// in the proto definition for this message. If any rules are violated, the
+// first error encountered is returned, or nil if there are no violations.
+func (m *NotSignedTxValue) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on NotSignedTxValue with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// NotSignedTxValueMultiError, or nil if none found.
+func (m *NotSignedTxValue) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *NotSignedTxValue) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if all {
+		switch v := interface{}(m.GetData()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, NotSignedTxValueValidationError{
+					field:  "Data",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, NotSignedTxValueValidationError{
+					field:  "Data",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetData()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return NotSignedTxValueValidationError{
+				field:  "Data",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if utf8.RuneCountInString(m.GetSignature()) != 0 {
+		err := NotSignedTxValueValidationError{
+			field:  "Signature",
+			reason: "value length must be 0 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+
+	}
+
+	if len(errors) > 0 {
+		return NotSignedTxValueMultiError(errors)
+	}
+
+	return nil
+}
+
+// NotSignedTxValueMultiError is an error wrapping multiple validation errors
+// returned by NotSignedTxValue.ValidateAll() if the designated constraints
+// aren't met.
+type NotSignedTxValueMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m NotSignedTxValueMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m NotSignedTxValueMultiError) AllErrors() []error { return m }
+
+// NotSignedTxValueValidationError is the validation error returned by
+// NotSignedTxValue.Validate if the designated constraints aren't met.
+type NotSignedTxValueValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e NotSignedTxValueValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e NotSignedTxValueValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e NotSignedTxValueValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e NotSignedTxValueValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e NotSignedTxValueValidationError) ErrorName() string { return "NotSignedTxValueValidationError" }
+
+// Error satisfies the builtin error interface
+func (e NotSignedTxValueValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sNotSignedTxValue.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = NotSignedTxValueValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = NotSignedTxValueValidationError{}
+
 // Validate checks the field values on UTxO with the rules defined in the proto
 // definition for this message. If any rules are violated, the first error
 // encountered is returned, or nil if there are no violations.
@@ -849,6 +995,7 @@ func (m *UTxO) validate(all bool) error {
 	if len(errors) > 0 {
 		return UTxOMultiError(errors)
 	}
+
 	return nil
 }
 

@@ -2,19 +2,23 @@ package sync
 
 import (
 	"context"
-	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"sync"
 	"time"
+
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 )
 
 const (
-	maxRequestHandlers = 10
+	maxRequestHandlers     = 10
 	responseHandlerTimeout = 200 * time.Millisecond
-	aheadBlocksCount = 10
+	aheadBlocksCount       = 10
+	dataBufferLength       = 10
 )
 
 type blockResponse struct {
-	blocks []*prototype.Block
+	blocks     []*prototype.Block
+	peer       peer.ID
 	start, end uint64
 }
 
@@ -24,35 +28,36 @@ type blockRequest struct {
 
 type fetcher struct {
 	start, end uint64
-	s *Service
-	ctx context.Context
-	cancel context.CancelFunc
+	s          *Service
+	ctx        context.Context
+	cancel     context.CancelFunc
 
-	errCh chan error
-	requestCh chan blockRequest
+	dataBuffer chan struct{}
+	errCh      chan error
+	requestCh  chan blockRequest
 	responseCh chan *blockResponse
-	data map[uint64]*blockResponse
+	data       map[uint64]*blockResponse
 
-	mu sync.Mutex
+	mu           sync.Mutex
 	maxBlockMode bool
 }
-
 
 func NewFetcher(pctx context.Context, from, to uint64, s *Service, maxBlockMode bool) *fetcher {
 	ctx, cancel := context.WithCancel(pctx)
 
 	f := &fetcher{
-		start:           from,
-		end:             to,
-		s:               s,
-		ctx:             ctx,
-		cancel:          cancel,
-		errCh:           make(chan error),
-		responseCh:      make(chan *blockResponse),
-		data: 			 map[uint64]*blockResponse{},
-		mu:				 sync.Mutex{},
-		requestCh: 		 make(chan blockRequest),
-		maxBlockMode: 	 maxBlockMode,
+		start:        from,
+		end:          to,
+		s:            s,
+		ctx:          ctx,
+		cancel:       cancel,
+		errCh:        make(chan error),
+		responseCh:   make(chan *blockResponse),
+		dataBuffer:   make(chan struct{}, dataBufferLength),
+		data:         map[uint64]*blockResponse{},
+		mu:           sync.Mutex{},
+		requestCh:    make(chan blockRequest),
+		maxBlockMode: maxBlockMode,
 	}
 
 	go f.mainLoop()
@@ -68,6 +73,11 @@ func (f *fetcher) mainLoop() {
 
 	// start response handler
 	go f.handleResponse()
+
+	// fill the dataBuffer channel
+	for i := 0; i < 10; i++ {
+		f.dataBuffer <- struct{}{}
+	}
 
 	// start request workers
 	for i := 0; i < maxRequestHandlers; i++ {
@@ -90,7 +100,7 @@ func (f *fetcher) mainLoop() {
 
 			f.requestCh <- blockRequest{
 				start: start,
-				end: end,
+				end:   end,
 			}
 		}
 	}
@@ -117,6 +127,8 @@ func (f *fetcher) requestHandlers(wg *sync.WaitGroup) {
 }
 
 func (f *fetcher) request(start, end uint64) {
+	// wait for the sync
+	<-f.dataBuffer
 	request := &prototype.BlockRequest{
 		StartSlot: start,
 		Count:     end - start + aheadBlocksCount,
@@ -128,7 +140,7 @@ func (f *fetcher) request(start, end uint64) {
 	}
 
 	peers, _ := f.s.findPeers(f.maxBlockMode)
-	blocks, err := f.s.requestBlocks(request, peers)
+	blocks, peer, err := f.s.requestBlocks(request, peers)
 	if err != nil {
 		f.errCh <- err
 		return
@@ -137,8 +149,9 @@ func (f *fetcher) request(start, end uint64) {
 	f.mu.Lock()
 	f.data[start] = &blockResponse{
 		blocks: blocks,
-		start: start,
-		end: end,
+		peer:   peer,
+		start:  start,
+		end:    end,
 	}
 	f.mu.Unlock()
 }
@@ -171,9 +184,10 @@ func (f *fetcher) handleResponse() {
 		}
 
 		f.mu.Lock()
-		log.Infof("Wait for block batch from slot #%d. Blocks stored: %d", targetSlot, len(f.data) * blocksPerRequest)
+		log.Infof("Wait for block batch from slot #%d. Blocks stored: %d", targetSlot, len(f.data)*blocksPerRequest)
+		time.Sleep(200 * time.Millisecond)
 		f.mu.Unlock()
-		<-time.After(responseHandlerTimeout)
+		// add some kind of sync
 	}
 
 	close(f.responseCh)

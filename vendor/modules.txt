@@ -1,3 +1,6 @@
+# cloud.google.com/go v0.65.0
+## explicit; go 1.11
+cloud.google.com/go/compute/metadata
 # github.com/BurntSushi/toml v0.3.1
 ## explicit
 github.com/BurntSushi/toml
@@ -57,6 +60,9 @@ github.com/flynn/noise
 # github.com/francoispqt/gojay v1.2.13
 ## explicit; go 1.12
 github.com/francoispqt/gojay
+# github.com/ghodss/yaml v1.0.0
+## explicit
+github.com/ghodss/yaml
 # github.com/go-sql-driver/mysql v1.7.0
 ## explicit; go 1.13
 github.com/go-sql-driver/mysql
@@ -71,6 +77,9 @@ github.com/godbus/dbus/v5
 github.com/gogo/protobuf/gogoproto
 github.com/gogo/protobuf/proto
 github.com/gogo/protobuf/protoc-gen-gogo/descriptor
+# github.com/golang/glog v1.0.0
+## explicit; go 1.11
+github.com/golang/glog
 # github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
 ## explicit
 github.com/golang/groupcache/lru
@@ -80,7 +89,9 @@ github.com/golang/mock/mockgen
 github.com/golang/mock/mockgen/model
 # github.com/golang/protobuf v1.5.2
 ## explicit; go 1.9
+github.com/golang/protobuf/descriptor
 github.com/golang/protobuf/proto
+github.com/golang/protobuf/protoc-gen-go/descriptor
 github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
@@ -97,6 +108,9 @@ github.com/google/pprof/profile
 # github.com/google/uuid v1.3.0
 ## explicit
 github.com/google/uuid
+# github.com/googleapis/gax-go/v2 v2.0.5
+## explicit
+github.com/googleapis/gax-go/v2
 # github.com/gorilla/websocket v1.5.0
 ## explicit; go 1.12
 github.com/gorilla/websocket
@@ -108,7 +122,17 @@ github.com/grpc-ecosystem/go-grpc-middleware
 github.com/grpc-ecosystem/go-grpc-prometheus
 # github.com/grpc-ecosystem/grpc-gateway/v2 v2.6.0
 ## explicit; go 1.14
+github.com/grpc-ecosystem/grpc-gateway/v2/internal/casing
+github.com/grpc-ecosystem/grpc-gateway/v2/internal/codegenerator
+github.com/grpc-ecosystem/grpc-gateway/v2/internal/descriptor
+github.com/grpc-ecosystem/grpc-gateway/v2/internal/descriptor/apiconfig
+github.com/grpc-ecosystem/grpc-gateway/v2/internal/descriptor/openapiconfig
+github.com/grpc-ecosystem/grpc-gateway/v2/internal/generator
 github.com/grpc-ecosystem/grpc-gateway/v2/internal/httprule
+github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway
+github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway/internal/gengateway
+github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2
+github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/internal/genopenapi
 github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options
 github.com/grpc-ecosystem/grpc-gateway/v2/runtime
 github.com/grpc-ecosystem/grpc-gateway/v2/utilities
@@ -521,6 +545,8 @@ go.opencensus.io/internal/tagencoding
 go.opencensus.io/metric/metricdata
 go.opencensus.io/metric/metricproducer
 go.opencensus.io/plugin/ocgrpc
+go.opencensus.io/plugin/ochttp
+go.opencensus.io/plugin/ochttp/propagation/b3
 go.opencensus.io/resource
 go.opencensus.io/stats
 go.opencensus.io/stats/internal
@@ -588,6 +614,7 @@ golang.org/x/mod/semver
 ## explicit; go 1.17
 golang.org/x/net/bpf
 golang.org/x/net/context
+golang.org/x/net/context/ctxhttp
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2
 golang.org/x/net/http2/hpack
@@ -599,6 +626,15 @@ golang.org/x/net/ipv4
 golang.org/x/net/ipv6
 golang.org/x/net/route
 golang.org/x/net/trace
+# golang.org/x/oauth2 v0.0.0-20220223155221-ee480838109b
+## explicit; go 1.11
+golang.org/x/oauth2
+golang.org/x/oauth2/authhandler
+golang.org/x/oauth2/google
+golang.org/x/oauth2/google/internal/externalaccount
+golang.org/x/oauth2/internal
+golang.org/x/oauth2/jws
+golang.org/x/oauth2/jwt
 # golang.org/x/sync v0.1.0
 ## explicit
 golang.org/x/sync/errgroup
@@ -637,6 +673,31 @@ golang.org/x/tools/internal/packagesinternal
 golang.org/x/tools/internal/pkgbits
 golang.org/x/tools/internal/typeparams
 golang.org/x/tools/internal/typesinternal
+# google.golang.org/api v0.30.0
+## explicit; go 1.11
+google.golang.org/api/googleapi
+google.golang.org/api/googleapi/transport
+google.golang.org/api/internal
+google.golang.org/api/internal/gensupport
+google.golang.org/api/internal/third_party/uritemplates
+google.golang.org/api/option
+google.golang.org/api/option/internaloption
+google.golang.org/api/servicecontrol/v2
+google.golang.org/api/transport/cert
+google.golang.org/api/transport/http
+google.golang.org/api/transport/http/internal/propagation
+# google.golang.org/appengine v1.6.6
+## explicit; go 1.11
+google.golang.org/appengine
+google.golang.org/appengine/internal
+google.golang.org/appengine/internal/app_identity
+google.golang.org/appengine/internal/base
+google.golang.org/appengine/internal/datastore
+google.golang.org/appengine/internal/log
+google.golang.org/appengine/internal/modules
+google.golang.org/appengine/internal/remote_api
+google.golang.org/appengine/internal/urlfetch
+google.golang.org/appengine/urlfetch
 # google.golang.org/genproto v0.0.0-20211102202547-e9cf271f7f2c
 ## explicit; go 1.11
 google.golang.org/genproto/googleapis/api/annotations
@@ -690,8 +751,14 @@ google.golang.org/grpc/serviceconfig
 google.golang.org/grpc/stats
 google.golang.org/grpc/status
 google.golang.org/grpc/tap
+# google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.2.0
+## explicit; go 1.9
+google.golang.org/grpc/cmd/protoc-gen-go-grpc
 # google.golang.org/protobuf v1.28.1
 ## explicit; go 1.11
+google.golang.org/protobuf/cmd/protoc-gen-go
+google.golang.org/protobuf/cmd/protoc-gen-go/internal_gengo
+google.golang.org/protobuf/compiler/protogen
 google.golang.org/protobuf/encoding/protojson
 google.golang.org/protobuf/encoding/prototext
 google.golang.org/protobuf/encoding/protowire
@@ -728,6 +795,7 @@ google.golang.org/protobuf/types/known/fieldmaskpb
 google.golang.org/protobuf/types/known/structpb
 google.golang.org/protobuf/types/known/timestamppb
 google.golang.org/protobuf/types/known/wrapperspb
+google.golang.org/protobuf/types/pluginpb
 # gopkg.in/yaml.v2 v2.4.0
 ## explicit; go 1.15
 gopkg.in/yaml.v2

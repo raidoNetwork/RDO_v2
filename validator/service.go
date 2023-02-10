@@ -175,6 +175,7 @@ func (s *Service) loop() {
 
 			// gossip to network
 			if s.proposedBlock == nil {
+				s.mu.Unlock()
 				continue
 			}
 

@@ -70,6 +70,20 @@ service RaidoChain {
     };
   }
 
+  // GetBlocksStartCount gets a number of blocks starting from a specific block
+  rpc GetBlocksStartCount(BlocksStartCountRequest) returns (BlocksStartCountResponse) {
+    option (google.api.http) = {
+      post: "/rdo/v1/chain/blocks/range",
+      body: "*"
+    };
+  }
+
+  // ListValidators returns validator addresses
+  rpc ListValidators(google.protobuf.Empty) returns (ValidatorAddressesResponse) {
+    option (google.api.http) = {
+      get: "/rdo/v1/chain/list/validators",
+    };
+  }
 }
 
 // Attestation add new transactions to the pool and gossip transaction to known peers.
@@ -125,26 +139,50 @@ service Attestation {
 
 // Generator service creating new signed transactions.
 service Generator {
-  // CreateTx generates signed transaction with given options.
-  rpc CreateTx(TxOptionsRequest) returns (TxBodyResponse) {
+  // UnsafeSend generates signed transaction with given options.
+  rpc UnsafeSend(TxOptionsUnsafeRequest) returns (TxBodyUnsafeResponse) {
     option (google.api.http) = {
-      post: "/rdo/v1/generate/transaction/legacy"
+      post: "/rdo/v1/generate/transaction/unsafe/send"
       body: "*"
     };
   }
 
   // CreateStakeTx generates signed stake transaction with given options.
-  rpc CreateStakeTx(TxOptionsStakeRequest) returns (TxBodyResponse) {
+  rpc UnsafeStakeTx(TxOptionsStakeUnsafeRequest) returns (TxBodyUnsafeResponse) {
     option (google.api.http) = {
-      post: "/rdo/v1/generate/transaction/stake"
+      post: "/rdo/v1/generate/transaction/unsafe/stake"
       body: "*"
     };
   }
 
   // CreateUnstakeTx generate signed unstake transaction with given options.
-  rpc CreateUnstakeTx(TxOptionsStakeRequest) returns (TxBodyResponse) {
+  rpc UnsafeUnstakeTx(TxOptionsStakeUnsafeRequest) returns (TxBodyUnsafeResponse) {
     option (google.api.http) = {
-      post: "/rdo/v1/generate/transaction/unstake"
+      post: "/rdo/v1/generate/transaction/unsafe/unstake"
+      body: "*"
+    };
+  }
+
+  // CreateSend generates signed transaction with given options.
+  rpc Send(TxOptionsRequest) returns (TxBodyResponse) {
+    option (google.api.http) = {
+      post: "/rdo/v1/generate/transaction/generate/send"
+      body: "*"
+    };
+  }
+
+  // CreateStakeTx generates signed stake transaction with given options.
+  rpc StakeTx(TxOptionsStakeRequest) returns (TxBodyResponse) {
+    option (google.api.http) = {
+      post: "/rdo/v1/generate/transaction/generate/stake"
+      body: "*"
+    };
+  }
+
+  // CreateUnstakeTx generate signed unstake transaction with given options.
+  rpc UnstakeTx(TxOptionsStakeRequest) returns (TxBodyResponse) {
+    option (google.api.http) = {
+      post: "/rdo/v1/generate/transaction/generate/unstake"
       body: "*"
     };
   }
@@ -160,6 +198,16 @@ message NumRequest{
 
 message HashRequest {
   string hash = 1 [(validate.rules).string.len = 66];
+}
+
+message BlocksStartCountRequest {
+  int64 start = 1;
+  uint32 limit = 2;
+}
+
+message BlocksStartCountResponse {
+  repeated rdo.service.types.BlockValue blocks = 1;
+  string error = 2;
 }
 
 message UTxOResponse{
@@ -199,25 +247,46 @@ message NumberResponse {
   string error = 2;
 }
 
-message TxOptionsRequest {
+message TxOptionsUnsafeRequest {
    uint64 fee = 1;
    repeated rdo.service.types.TxOutputValue outputs = 2;
    string key = 3 [(validate.rules).string.len = 66];
 }
 
-message TxOptionsStakeRequest {
+message TxOptionsRequest {
+  uint64 fee = 1;
+  string address = 2 [(validate.rules).string.len = 42];
+  repeated rdo.service.types.TxOutputValue outputs = 3;
+}
+
+message TxOptionsStakeUnsafeRequest {
   uint64 fee = 1;
   string key = 2 [(validate.rules).string.len = 66];
   uint64 amount = 3 [(validate.rules).uint64.gt = 0];
   string node = 4 [(validate.rules).string.ignore_empty = true];
 }
 
-message TxBodyResponse {
+message TxOptionsStakeRequest {
+  uint64 fee = 1;
+  string address = 2 [(validate.rules).string.len = 42];
+  uint64 amount = 3 [(validate.rules).uint64.gt = 0];
+  string node = 4 [(validate.rules).string.ignore_empty = true];
+}
+
+message TxBodyUnsafeResponse {
   rdo.service.types.SignedTxValue tx = 1;
+}
+
+message TxBodyResponse {
+  rdo.service.types.NotSignedTxValue tx = 1;
 }
 
 message RawTxRequest {
   string data = 1;
+}
+
+message ValidatorAddressesResponse {
+  repeated string nodes = 1;
 }
 
 option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {

@@ -20,7 +20,16 @@ func (s *Service) waitMinimumPeersForSync(findWithMaxBlock bool) {
 		default:
 			peers, _ := s.findPeers(findWithMaxBlock)
 
-			if len(peers) >= s.cfg.MinSyncPeers {
+			var goodPeers int
+			s.mu.Lock()
+			for _, peer := range peers {
+				if _, exists := s.maliciousPeers[peer]; !exists {
+					goodPeers += 1
+				}
+			}
+			s.mu.Unlock()
+
+			if goodPeers >= s.cfg.MinSyncPeers {
 				return
 			}
 
@@ -64,21 +73,27 @@ func (s *Service) filterPeers(peers []peer.ID) {
 	})
 }
 
-func (s *Service) requestBlocks(request *prototype.BlockRequest, peers []peer.ID) ([]*prototype.Block, error) {
+func (s *Service) requestBlocks(request *prototype.BlockRequest, peers []peer.ID) ([]*prototype.Block, peer.ID, error) {
 	// filter peers
 	s.filterPeers(peers)
 
 	for _, peer := range peers {
+		s.mu.Lock()
+		if _, exists := s.maliciousPeers[peer]; exists {
+			s.mu.Unlock()
+			continue
+		}
+		s.mu.Unlock()
 		if blocks, err := s.sendBlockRangeRequest(s.ctx, request, peer); err == nil {
 			s.cfg.P2P.PeerStore().AddBlockParse(peer)
-			return blocks, nil
+			return blocks, peer, nil
 		} else {
 			log.Error(errors.Wrap(err, "Block request error"))
 			log.Errorf("Peers len %d", len(peers))
 		}
 	}
 
-	return nil, errors.New("No peers to handle request")
+	return nil, "", errors.New("No peers to handle request")
 }
 
 func (s *Service) findPeersForSync(localHeadBlockNum uint64) ([]peer.ID, uint64) {
@@ -88,6 +103,12 @@ func (s *Service) findPeersForSync(localHeadBlockNum uint64) ([]peer.ID, uint64)
 	nums := make(map[peer.ID]uint64, len(connected))
 
 	for _, data := range connected {
+		s.mu.Lock()
+		if _, exists := s.maliciousPeers[data.Id]; exists {
+			s.mu.Unlock()
+			continue
+		}
+		s.mu.Unlock()
 		if data.HeadBlockNum > localHeadBlockNum {
 			bestBlockNum[data.HeadBlockNum]++
 			peers = append(peers, data.Id)
@@ -193,12 +214,22 @@ func (s *Service) requestData(startBlockNum, targetBlockNum uint64, peers []peer
 			for _, b := range res.blocks {
 				err := s.cfg.Storage.FinalizeBlock(b)
 				if err != nil && !errors.Is(err, consensus.ErrKnownBlock) {
+					// Mark the peer as malicious
+					peer := res.peer
+
+					s.mu.Lock()
+					s.maliciousPeers[peer] = struct{}{}
+					s.mu.Unlock()
+
+					log.Infof("Marked peer %s as malicious", peer)
+
 					s.cancel()
 					return errors.Wrap(err, "Error processing block batch")
 				}
 
 				log.Infof("Sync and save block %d / %d", b.Num, targetBlockNum)
 			}
+			f.dataBuffer <- struct{}{}
 		case err := <-f.Error():
 			return err
 		}

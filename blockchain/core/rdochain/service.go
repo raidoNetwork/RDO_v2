@@ -350,3 +350,7 @@ func (s *Service) PingSQL() {
 		}
 	}()
 }
+
+func (s *Service) GetBlocksStartCount(start int64, limit uint32) ([]*prototype.Block, error) {
+	return s.bc.GetBlocksStartCount(start, limit)
+}
