@@ -48,6 +48,11 @@ message SignedTxValue {
   string signature = 2 [(validate.rules).string.len = 132];
 }
 
+message NotSignedTxValue {
+  TxValue data = 1;
+  string signature = 2 [(validate.rules).string.len=0];
+}
+
 message UTxO{
   uint64 blockNum = 1;
   string hash = 2;

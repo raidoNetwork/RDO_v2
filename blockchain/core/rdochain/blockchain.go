@@ -2,18 +2,20 @@ package rdochain
 
 import (
 	"bytes"
+	"sync"
+	"time"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db"
 	"github.com/raidoNetwork/RDO_v2/blockchain/db/kv"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/shared/common"
 	"github.com/raidoNetwork/RDO_v2/shared/params"
-	"sync"
-	"time"
 )
 
 const (
 	GenesisBlockNum = 0
+	limitFetch      = 1000
 )
 
 func NewBlockChain(db db.BlockStorage, cfg *params.RDOBlockChainConfig) *BlockChain {
@@ -23,7 +25,7 @@ func NewBlockChain(db db.BlockStorage, cfg *params.RDOBlockChainConfig) *BlockCh
 		db:             db,
 		prevHash:       genesisHash,
 		headBlockNum:   GenesisBlockNum,
-		futureBlockNum: GenesisBlockNum + 1,          // block num for the future block
+		futureBlockNum: GenesisBlockNum + 1, // block num for the future block
 		genesisHash:    genesisHash,
 		cfg:            cfg,
 	}
@@ -34,7 +36,7 @@ func NewBlockChain(db db.BlockStorage, cfg *params.RDOBlockChainConfig) *BlockCh
 type BlockChain struct {
 	db db.BlockStorage
 
-	prevHash     common.Hash
+	prevHash common.Hash
 
 	futureBlockNum uint64
 	headBlockNum   uint64
@@ -284,4 +286,43 @@ func (bc *BlockChain) GetAmountStats() (uint64, uint64, uint64) {
 // GetBlockBySlot returns block associated with given slot
 func (bc *BlockChain) GetBlockBySlot(slot uint64) (*prototype.Block, error) {
 	return bc.db.GetBlockBySlot(slot)
+}
+
+// GetBlocksStartCount returns a number of blocks from start
+// Negative start value signifies backward direction
+func (bc *BlockChain) GetBlocksStartCount(start int64, limit uint32) ([]*prototype.Block, error) {
+	if start > 0 && uint64(start) > bc.GetHeadBlockNum() {
+		return nil, errors.New("start index is too far off")
+	}
+
+	if start < 0 && uint64(-start) > bc.GetHeadBlockNum() {
+		return nil, errors.New("start index is too far off")
+	}
+
+	if limit > limitFetch {
+		return nil, errors.New("the limit is too large")
+	}
+
+	res := make([]*prototype.Block, 0)
+
+	var index uint64
+
+	if start < 0 {
+		start = -start
+		// starting from the back
+		index = bc.GetHeadBlockNum() - uint64(start) + 1
+	} else {
+		index = uint64(start)
+	}
+
+	var i uint32
+	for i = 0; i < limit; i++ {
+		block, err := bc.GetBlockByNum(index)
+		if err == ErrNotForgedBlock {
+			break
+		}
+		res = append(res, block)
+		index += 1
+	}
+	return res, nil
 }

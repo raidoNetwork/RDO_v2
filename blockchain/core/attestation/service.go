@@ -186,3 +186,7 @@ func (s *Service) waitSyncing() error {
 func (s *Service) StakersLimitReached(tx *types.Transaction) error {
 	return s.txPool.CheckMaxStakers(tx)
 }
+
+func (s *Service) ListValidators() []string {
+	return s.stakePool.ListValidators()
+}

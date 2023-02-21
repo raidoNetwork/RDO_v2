@@ -149,6 +149,14 @@ func SignedTxValue(tx *prototype.Transaction) *prototype.SignedTxValue {
 	return txv
 }
 
+func NotSignedTxValue(tx *prototype.Transaction) *prototype.NotSignedTxValue {
+	var txv prototype.NotSignedTxValue
+	txv.Data = TxValue(tx)
+	txv.Signature = "sign_here"
+
+	return &txv
+}
+
 func TxFromTxValue(txv *prototype.SignedTxValue) *prototype.Transaction {
 	if txv == nil || txv.Data == nil {
 		return nil

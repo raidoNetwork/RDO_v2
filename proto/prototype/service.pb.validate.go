@@ -72,6 +72,7 @@ func (m *AddressRequest) validate(all bool) error {
 	if len(errors) > 0 {
 		return AddressRequestMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -182,6 +183,7 @@ func (m *NumRequest) validate(all bool) error {
 	if len(errors) > 0 {
 		return NumRequestMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -292,6 +294,7 @@ func (m *HashRequest) validate(all bool) error {
 	if len(errors) > 0 {
 		return HashRequestMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -365,6 +368,250 @@ var _ interface {
 	ErrorName() string
 } = HashRequestValidationError{}
 
+// Validate checks the field values on BlocksStartCountRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *BlocksStartCountRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on BlocksStartCountRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// BlocksStartCountRequestMultiError, or nil if none found.
+func (m *BlocksStartCountRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *BlocksStartCountRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Start
+
+	// no validation rules for Limit
+
+	if len(errors) > 0 {
+		return BlocksStartCountRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// BlocksStartCountRequestMultiError is an error wrapping multiple validation
+// errors returned by BlocksStartCountRequest.ValidateAll() if the designated
+// constraints aren't met.
+type BlocksStartCountRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m BlocksStartCountRequestMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m BlocksStartCountRequestMultiError) AllErrors() []error { return m }
+
+// BlocksStartCountRequestValidationError is the validation error returned by
+// BlocksStartCountRequest.Validate if the designated constraints aren't met.
+type BlocksStartCountRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e BlocksStartCountRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e BlocksStartCountRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e BlocksStartCountRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e BlocksStartCountRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e BlocksStartCountRequestValidationError) ErrorName() string {
+	return "BlocksStartCountRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e BlocksStartCountRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sBlocksStartCountRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = BlocksStartCountRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = BlocksStartCountRequestValidationError{}
+
+// Validate checks the field values on BlocksStartCountResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *BlocksStartCountResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on BlocksStartCountResponse with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// BlocksStartCountResponseMultiError, or nil if none found.
+func (m *BlocksStartCountResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *BlocksStartCountResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	for idx, item := range m.GetBlocks() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, BlocksStartCountResponseValidationError{
+						field:  fmt.Sprintf("Blocks[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, BlocksStartCountResponseValidationError{
+						field:  fmt.Sprintf("Blocks[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return BlocksStartCountResponseValidationError{
+					field:  fmt.Sprintf("Blocks[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	// no validation rules for Error
+
+	if len(errors) > 0 {
+		return BlocksStartCountResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// BlocksStartCountResponseMultiError is an error wrapping multiple validation
+// errors returned by BlocksStartCountResponse.ValidateAll() if the designated
+// constraints aren't met.
+type BlocksStartCountResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m BlocksStartCountResponseMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m BlocksStartCountResponseMultiError) AllErrors() []error { return m }
+
+// BlocksStartCountResponseValidationError is the validation error returned by
+// BlocksStartCountResponse.Validate if the designated constraints aren't met.
+type BlocksStartCountResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e BlocksStartCountResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e BlocksStartCountResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e BlocksStartCountResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e BlocksStartCountResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e BlocksStartCountResponseValidationError) ErrorName() string {
+	return "BlocksStartCountResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e BlocksStartCountResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sBlocksStartCountResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = BlocksStartCountResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = BlocksStartCountResponseValidationError{}
+
 // Validate checks the field values on UTxOResponse with the rules defined in
 // the proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
@@ -424,6 +671,7 @@ func (m *UTxOResponse) validate(all bool) error {
 	if len(errors) > 0 {
 		return UTxOResponseMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -526,6 +774,7 @@ func (m *StatusResponse) validate(all bool) error {
 	if len(errors) > 0 {
 		return StatusResponseMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -654,6 +903,7 @@ func (m *SendTxRequest) validate(all bool) error {
 	if len(errors) > 0 {
 		return SendTxRequestMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -755,6 +1005,7 @@ func (m *ErrorResponse) validate(all bool) error {
 	if len(errors) > 0 {
 		return ErrorResponseMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -885,6 +1136,7 @@ func (m *BlockResponse) validate(all bool) error {
 	if len(errors) > 0 {
 		return BlockResponseMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -1015,6 +1267,7 @@ func (m *TransactionResponse) validate(all bool) error {
 	if len(errors) > 0 {
 		return TransactionResponseMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -1152,6 +1405,7 @@ func (m *TransactionsResponse) validate(all bool) error {
 	if len(errors) > 0 {
 		return TransactionsResponseMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -1257,6 +1511,7 @@ func (m *NumberResponse) validate(all bool) error {
 	if len(errors) > 0 {
 		return NumberResponseMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -1331,6 +1586,156 @@ var _ interface {
 	ErrorName() string
 } = NumberResponseValidationError{}
 
+// Validate checks the field values on TxOptionsUnsafeRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *TxOptionsUnsafeRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on TxOptionsUnsafeRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// TxOptionsUnsafeRequestMultiError, or nil if none found.
+func (m *TxOptionsUnsafeRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *TxOptionsUnsafeRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Fee
+
+	for idx, item := range m.GetOutputs() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, TxOptionsUnsafeRequestValidationError{
+						field:  fmt.Sprintf("Outputs[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, TxOptionsUnsafeRequestValidationError{
+						field:  fmt.Sprintf("Outputs[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return TxOptionsUnsafeRequestValidationError{
+					field:  fmt.Sprintf("Outputs[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if utf8.RuneCountInString(m.GetKey()) != 66 {
+		err := TxOptionsUnsafeRequestValidationError{
+			field:  "Key",
+			reason: "value length must be 66 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+
+	}
+
+	if len(errors) > 0 {
+		return TxOptionsUnsafeRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// TxOptionsUnsafeRequestMultiError is an error wrapping multiple validation
+// errors returned by TxOptionsUnsafeRequest.ValidateAll() if the designated
+// constraints aren't met.
+type TxOptionsUnsafeRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m TxOptionsUnsafeRequestMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m TxOptionsUnsafeRequestMultiError) AllErrors() []error { return m }
+
+// TxOptionsUnsafeRequestValidationError is the validation error returned by
+// TxOptionsUnsafeRequest.Validate if the designated constraints aren't met.
+type TxOptionsUnsafeRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e TxOptionsUnsafeRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e TxOptionsUnsafeRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e TxOptionsUnsafeRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e TxOptionsUnsafeRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e TxOptionsUnsafeRequestValidationError) ErrorName() string {
+	return "TxOptionsUnsafeRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e TxOptionsUnsafeRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sTxOptionsUnsafeRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = TxOptionsUnsafeRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = TxOptionsUnsafeRequestValidationError{}
+
 // Validate checks the field values on TxOptionsRequest with the rules defined
 // in the proto definition for this message. If any rules are violated, the
 // first error encountered is returned, or nil if there are no violations.
@@ -1354,6 +1759,18 @@ func (m *TxOptionsRequest) validate(all bool) error {
 	var errors []error
 
 	// no validation rules for Fee
+
+	if utf8.RuneCountInString(m.GetAddress()) != 42 {
+		err := TxOptionsRequestValidationError{
+			field:  "Address",
+			reason: "value length must be 42 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+
+	}
 
 	for idx, item := range m.GetOutputs() {
 		_, _ = idx, item
@@ -1389,21 +1806,10 @@ func (m *TxOptionsRequest) validate(all bool) error {
 
 	}
 
-	if utf8.RuneCountInString(m.GetKey()) != 66 {
-		err := TxOptionsRequestValidationError{
-			field:  "Key",
-			reason: "value length must be 66 runes",
-		}
-		if !all {
-			return err
-		}
-		errors = append(errors, err)
-
-	}
-
 	if len(errors) > 0 {
 		return TxOptionsRequestMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -1478,6 +1884,138 @@ var _ interface {
 	ErrorName() string
 } = TxOptionsRequestValidationError{}
 
+// Validate checks the field values on TxOptionsStakeUnsafeRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *TxOptionsStakeUnsafeRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on TxOptionsStakeUnsafeRequest with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// TxOptionsStakeUnsafeRequestMultiError, or nil if none found.
+func (m *TxOptionsStakeUnsafeRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *TxOptionsStakeUnsafeRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Fee
+
+	if utf8.RuneCountInString(m.GetKey()) != 66 {
+		err := TxOptionsStakeUnsafeRequestValidationError{
+			field:  "Key",
+			reason: "value length must be 66 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+
+	}
+
+	if m.GetAmount() <= 0 {
+		err := TxOptionsStakeUnsafeRequestValidationError{
+			field:  "Amount",
+			reason: "value must be greater than 0",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
+	}
+
+	if m.GetNode() != "" {
+
+	}
+
+	if len(errors) > 0 {
+		return TxOptionsStakeUnsafeRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// TxOptionsStakeUnsafeRequestMultiError is an error wrapping multiple
+// validation errors returned by TxOptionsStakeUnsafeRequest.ValidateAll() if
+// the designated constraints aren't met.
+type TxOptionsStakeUnsafeRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m TxOptionsStakeUnsafeRequestMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m TxOptionsStakeUnsafeRequestMultiError) AllErrors() []error { return m }
+
+// TxOptionsStakeUnsafeRequestValidationError is the validation error returned
+// by TxOptionsStakeUnsafeRequest.Validate if the designated constraints
+// aren't met.
+type TxOptionsStakeUnsafeRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e TxOptionsStakeUnsafeRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e TxOptionsStakeUnsafeRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e TxOptionsStakeUnsafeRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e TxOptionsStakeUnsafeRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e TxOptionsStakeUnsafeRequestValidationError) ErrorName() string {
+	return "TxOptionsStakeUnsafeRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e TxOptionsStakeUnsafeRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sTxOptionsStakeUnsafeRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = TxOptionsStakeUnsafeRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = TxOptionsStakeUnsafeRequestValidationError{}
+
 // Validate checks the field values on TxOptionsStakeRequest with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, the first error encountered is returned, or nil if there are no violations.
@@ -1502,10 +2040,10 @@ func (m *TxOptionsStakeRequest) validate(all bool) error {
 
 	// no validation rules for Fee
 
-	if utf8.RuneCountInString(m.GetKey()) != 66 {
+	if utf8.RuneCountInString(m.GetAddress()) != 42 {
 		err := TxOptionsStakeRequestValidationError{
-			field:  "Key",
-			reason: "value length must be 66 runes",
+			field:  "Address",
+			reason: "value length must be 42 runes",
 		}
 		if !all {
 			return err
@@ -1532,6 +2070,7 @@ func (m *TxOptionsStakeRequest) validate(all bool) error {
 	if len(errors) > 0 {
 		return TxOptionsStakeRequestMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -1608,6 +2147,137 @@ var _ interface {
 	ErrorName() string
 } = TxOptionsStakeRequestValidationError{}
 
+// Validate checks the field values on TxBodyUnsafeResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *TxBodyUnsafeResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on TxBodyUnsafeResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// TxBodyUnsafeResponseMultiError, or nil if none found.
+func (m *TxBodyUnsafeResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *TxBodyUnsafeResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if all {
+		switch v := interface{}(m.GetTx()).(type) {
+		case interface{ ValidateAll() error }:
+			if err := v.ValidateAll(); err != nil {
+				errors = append(errors, TxBodyUnsafeResponseValidationError{
+					field:  "Tx",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		case interface{ Validate() error }:
+			if err := v.Validate(); err != nil {
+				errors = append(errors, TxBodyUnsafeResponseValidationError{
+					field:  "Tx",
+					reason: "embedded message failed validation",
+					cause:  err,
+				})
+			}
+		}
+	} else if v, ok := interface{}(m.GetTx()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return TxBodyUnsafeResponseValidationError{
+				field:  "Tx",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return TxBodyUnsafeResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// TxBodyUnsafeResponseMultiError is an error wrapping multiple validation
+// errors returned by TxBodyUnsafeResponse.ValidateAll() if the designated
+// constraints aren't met.
+type TxBodyUnsafeResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m TxBodyUnsafeResponseMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m TxBodyUnsafeResponseMultiError) AllErrors() []error { return m }
+
+// TxBodyUnsafeResponseValidationError is the validation error returned by
+// TxBodyUnsafeResponse.Validate if the designated constraints aren't met.
+type TxBodyUnsafeResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e TxBodyUnsafeResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e TxBodyUnsafeResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e TxBodyUnsafeResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e TxBodyUnsafeResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e TxBodyUnsafeResponseValidationError) ErrorName() string {
+	return "TxBodyUnsafeResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e TxBodyUnsafeResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sTxBodyUnsafeResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = TxBodyUnsafeResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = TxBodyUnsafeResponseValidationError{}
+
 // Validate checks the field values on TxBodyResponse with the rules defined in
 // the proto definition for this message. If any rules are violated, the first
 // error encountered is returned, or nil if there are no violations.
@@ -1662,6 +2332,7 @@ func (m *TxBodyResponse) validate(all bool) error {
 	if len(errors) > 0 {
 		return TxBodyResponseMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -1763,6 +2434,7 @@ func (m *RawTxRequest) validate(all bool) error {
 	if len(errors) > 0 {
 		return RawTxRequestMultiError(errors)
 	}
+
 	return nil
 }
 
@@ -1835,3 +2507,105 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = RawTxRequestValidationError{}
+
+// Validate checks the field values on ValidatorAddressesResponse with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ValidatorAddressesResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ValidatorAddressesResponse with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ValidatorAddressesResponseMultiError, or nil if none found.
+func (m *ValidatorAddressesResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ValidatorAddressesResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	if len(errors) > 0 {
+		return ValidatorAddressesResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// ValidatorAddressesResponseMultiError is an error wrapping multiple
+// validation errors returned by ValidatorAddressesResponse.ValidateAll() if
+// the designated constraints aren't met.
+type ValidatorAddressesResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ValidatorAddressesResponseMultiError) Error() string {
+	var msgs []string
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ValidatorAddressesResponseMultiError) AllErrors() []error { return m }
+
+// ValidatorAddressesResponseValidationError is the validation error returned
+// by ValidatorAddressesResponse.Validate if the designated constraints aren't met.
+type ValidatorAddressesResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ValidatorAddressesResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ValidatorAddressesResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ValidatorAddressesResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ValidatorAddressesResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ValidatorAddressesResponseValidationError) ErrorName() string {
+	return "ValidatorAddressesResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ValidatorAddressesResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sValidatorAddressesResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ValidatorAddressesResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ValidatorAddressesResponseValidationError{}

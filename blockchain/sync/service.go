@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"runtime/debug"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -73,6 +74,7 @@ func NewService(ctx context.Context, cfg *Config) *Service {
 		stakeSynced:       make(chan struct{}),
 		connected:         make(chan struct{}),
 		syncLock:          make(chan struct{}, 1),
+		maliciousPeers:    make(map[peer.ID]struct{}),
 		synced:            0,
 	}
 
@@ -95,11 +97,15 @@ type Service struct {
 
 	ctx    context.Context
 	cancel context.CancelFunc
+	mu     sync.Mutex
 
 	initialized chan struct{}
 	stakeSynced chan struct{}
 	connected   chan struct{}
 	syncLock    chan struct{}
+
+	// Malicious peers
+	maliciousPeers map[peer.ID]struct{}
 
 	synced int32
 

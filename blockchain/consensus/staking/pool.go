@@ -496,6 +496,17 @@ func (s *StakingPool) NumberStakers(validator string) int {
 	}
 }
 
+func (s *StakingPool) ListValidators() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var res []string
+	for key := range s.validators {
+		res = append(res, key)
+	}
+	return res
+}
+
 func (s *StakingPool) DetermineProposer(seed int64) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
