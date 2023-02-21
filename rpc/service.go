@@ -85,8 +85,9 @@ func (s *Service) Start() {
 	s.connectionMu.Unlock()
 
 	chainServer := &rdochain.Server{
-		Server:  s.grpcServer,
-		Backend: s.cfg.ChainService,
+		Server:      s.grpcServer,
+		Backend:     s.cfg.ChainService,
+		Attestation: s.cfg.AttestationService,
 	}
 
 	poolServer := &attestation.Server{

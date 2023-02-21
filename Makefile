@@ -18,6 +18,15 @@ keygen:
 	@echo "Done building keygen."
 	@echo "Run \"$(GOBIN)/raido-keygen\" to generate keys."
 
+compile: 
+	protoc -I=./proto/ -I=./proto/ext/ -I=./proto/prototype/ \
+	--go_out=./proto/ --go-grpc_out=./proto/  --validate_out="lang=go:./proto/" \
+	-I=./proto/ext/protoc-gen-validate/ -I=./proto/ext/googleapis/ \
+	-I=./proto/ext/grpc-gateway/ \
+	--grpc-gateway_out=./proto/ --grpc-gateway_opt=paths=source_relative \
+	--go_opt=paths=source_relative --go-grpc_opt=paths=source_relative \
+	./proto/prototype/*.proto 
+
 all:
 		raido
 		keygen

@@ -2,6 +2,8 @@ package rdochain
 
 import (
 	"context"
+	"strconv"
+
 	"github.com/pkg/errors"
 	"github.com/raidoNetwork/RDO_v2/proto/prototype"
 	"github.com/raidoNetwork/RDO_v2/rpc/api"
@@ -10,14 +12,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
-	"strconv"
 )
 
 var log = logrus.WithField("prefix", "RPC ChainServer")
 
 type Server struct {
-	Server  *grpc.Server
-	Backend api.ChainAPI
+	Server      *grpc.Server
+	Backend     api.ChainAPI
+	Attestation api.AttestationAPI
 
 	prototype.UnimplementedRaidoChainServer
 }
@@ -231,5 +233,44 @@ func (s *Server) GetTransactionsCount(ctx context.Context, request *prototype.Ad
 
 	response.Result = nonce
 
+	return response, nil
+}
+
+// GetBlocksStartCount returns a number of blocks starting at some index.
+// Start parameter can be negative, signifying counting backwards.
+func (s *Server) GetBlocksStartCount(ctx context.Context, request *prototype.BlocksStartCountRequest) (*prototype.BlocksStartCountResponse, error) {
+	response := new(prototype.BlocksStartCountResponse)
+
+	err := request.Validate()
+	if err != nil {
+		log.Errorf("ChainAPI.GetBlocksStartCount error: %s", err)
+		response.Error = err.Error()
+		return response, err
+	}
+
+	start := request.GetStart()
+	limit := request.GetLimit()
+
+	blocks, err := s.Backend.GetBlocksStartCount(start, limit)
+	if err != nil {
+		response.Error = err.Error()
+		return response, err
+	}
+
+	blockValues := make([]*prototype.BlockValue, 0)
+	for _, b := range blocks {
+		blockValues = append(blockValues, cast.BlockValue(b))
+	}
+
+	response.Blocks = blockValues
+	return response, nil
+}
+
+// ListValidators return validators (with reserved slots) that can be staked on.
+func (s *Server) ListValidators(ctx context.Context, nothing *emptypb.Empty) (*prototype.ValidatorAddressesResponse, error) {
+	response := new(prototype.ValidatorAddressesResponse)
+	validators := s.Attestation.ListValidators()
+
+	response.Nodes = validators
 	return response, nil
 }

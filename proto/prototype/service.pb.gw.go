@@ -414,6 +414,58 @@ func local_request_RaidoChain_GetTransactionsCount_0(ctx context.Context, marsha
 
 }
 
+func request_RaidoChain_GetBlocksStartCount_0(ctx context.Context, marshaler runtime.Marshaler, client RaidoChainClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq BlocksStartCountRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := client.GetBlocksStartCount(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_RaidoChain_GetBlocksStartCount_0(ctx context.Context, marshaler runtime.Marshaler, server RaidoChainServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq BlocksStartCountRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := server.GetBlocksStartCount(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
+func request_RaidoChain_ListValidators_0(ctx context.Context, marshaler runtime.Marshaler, client RaidoChainClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq emptypb.Empty
+	var metadata runtime.ServerMetadata
+
+	msg, err := client.ListValidators(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_RaidoChain_ListValidators_0(ctx context.Context, marshaler runtime.Marshaler, server RaidoChainServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq emptypb.Empty
+	var metadata runtime.ServerMetadata
+
+	msg, err := server.ListValidators(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
 func request_Attestation_SendLegacyTx_0(ctx context.Context, marshaler runtime.Marshaler, client AttestationClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq SendTxRequest
 	var metadata runtime.ServerMetadata
@@ -586,7 +638,109 @@ func local_request_Attestation_GetPendingTransactions_0(ctx context.Context, mar
 
 }
 
-func request_Generator_CreateTx_0(ctx context.Context, marshaler runtime.Marshaler, client GeneratorClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_Generator_UnsafeSend_0(ctx context.Context, marshaler runtime.Marshaler, client GeneratorClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq TxOptionsUnsafeRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := client.UnsafeSend(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_Generator_UnsafeSend_0(ctx context.Context, marshaler runtime.Marshaler, server GeneratorServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq TxOptionsUnsafeRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := server.UnsafeSend(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
+func request_Generator_UnsafeStakeTx_0(ctx context.Context, marshaler runtime.Marshaler, client GeneratorClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq TxOptionsStakeUnsafeRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := client.UnsafeStakeTx(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_Generator_UnsafeStakeTx_0(ctx context.Context, marshaler runtime.Marshaler, server GeneratorServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq TxOptionsStakeUnsafeRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := server.UnsafeStakeTx(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
+func request_Generator_UnsafeUnstakeTx_0(ctx context.Context, marshaler runtime.Marshaler, client GeneratorClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq TxOptionsStakeUnsafeRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := client.UnsafeUnstakeTx(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_Generator_UnsafeUnstakeTx_0(ctx context.Context, marshaler runtime.Marshaler, server GeneratorServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq TxOptionsStakeUnsafeRequest
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := server.UnsafeUnstakeTx(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
+func request_Generator_Send_0(ctx context.Context, marshaler runtime.Marshaler, client GeneratorClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq TxOptionsRequest
 	var metadata runtime.ServerMetadata
 
@@ -598,12 +752,12 @@ func request_Generator_CreateTx_0(ctx context.Context, marshaler runtime.Marshal
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := client.CreateTx(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.Send(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 
 }
 
-func local_request_Generator_CreateTx_0(ctx context.Context, marshaler runtime.Marshaler, server GeneratorServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_Generator_Send_0(ctx context.Context, marshaler runtime.Marshaler, server GeneratorServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq TxOptionsRequest
 	var metadata runtime.ServerMetadata
 
@@ -615,12 +769,12 @@ func local_request_Generator_CreateTx_0(ctx context.Context, marshaler runtime.M
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := server.CreateTx(ctx, &protoReq)
+	msg, err := server.Send(ctx, &protoReq)
 	return msg, metadata, err
 
 }
 
-func request_Generator_CreateStakeTx_0(ctx context.Context, marshaler runtime.Marshaler, client GeneratorClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_Generator_StakeTx_0(ctx context.Context, marshaler runtime.Marshaler, client GeneratorClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq TxOptionsStakeRequest
 	var metadata runtime.ServerMetadata
 
@@ -632,12 +786,12 @@ func request_Generator_CreateStakeTx_0(ctx context.Context, marshaler runtime.Ma
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := client.CreateStakeTx(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.StakeTx(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 
 }
 
-func local_request_Generator_CreateStakeTx_0(ctx context.Context, marshaler runtime.Marshaler, server GeneratorServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_Generator_StakeTx_0(ctx context.Context, marshaler runtime.Marshaler, server GeneratorServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq TxOptionsStakeRequest
 	var metadata runtime.ServerMetadata
 
@@ -649,12 +803,12 @@ func local_request_Generator_CreateStakeTx_0(ctx context.Context, marshaler runt
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := server.CreateStakeTx(ctx, &protoReq)
+	msg, err := server.StakeTx(ctx, &protoReq)
 	return msg, metadata, err
 
 }
 
-func request_Generator_CreateUnstakeTx_0(ctx context.Context, marshaler runtime.Marshaler, client GeneratorClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_Generator_UnstakeTx_0(ctx context.Context, marshaler runtime.Marshaler, client GeneratorClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq TxOptionsStakeRequest
 	var metadata runtime.ServerMetadata
 
@@ -666,12 +820,12 @@ func request_Generator_CreateUnstakeTx_0(ctx context.Context, marshaler runtime.
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := client.CreateUnstakeTx(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.UnstakeTx(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 
 }
 
-func local_request_Generator_CreateUnstakeTx_0(ctx context.Context, marshaler runtime.Marshaler, server GeneratorServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_Generator_UnstakeTx_0(ctx context.Context, marshaler runtime.Marshaler, server GeneratorServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq TxOptionsStakeRequest
 	var metadata runtime.ServerMetadata
 
@@ -683,7 +837,7 @@ func local_request_Generator_CreateUnstakeTx_0(ctx context.Context, marshaler ru
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := server.CreateUnstakeTx(ctx, &protoReq)
+	msg, err := server.UnstakeTx(ctx, &protoReq)
 	return msg, metadata, err
 
 }
@@ -878,6 +1032,52 @@ func RegisterRaidoChainHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 
 	})
 
+	mux.Handle("POST", pattern_RaidoChain_GetBlocksStartCount_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBlocksStartCount", runtime.WithHTTPPathPattern("/rdo/v1/chain/blocks/range"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_RaidoChain_GetBlocksStartCount_0(rctx, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_RaidoChain_GetBlocksStartCount_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("GET", pattern_RaidoChain_ListValidators_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/ListValidators", runtime.WithHTTPPathPattern("/rdo/v1/chain/list/validators"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_RaidoChain_ListValidators_0(rctx, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_RaidoChain_ListValidators_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
 	return nil
 }
 
@@ -1034,18 +1234,18 @@ func RegisterAttestationHandlerServer(ctx context.Context, mux *runtime.ServeMux
 // Note that using this registration option will cause many gRPC library features to stop working. Consider using RegisterGeneratorHandlerFromEndpoint instead.
 func RegisterGeneratorHandlerServer(ctx context.Context, mux *runtime.ServeMux, server GeneratorServer) error {
 
-	mux.Handle("POST", pattern_Generator_CreateTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("POST", pattern_Generator_UnsafeSend_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/CreateTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/legacy"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/UnsafeSend", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unsafe/send"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_Generator_CreateTx_0(rctx, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_Generator_UnsafeSend_0(rctx, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		ctx = runtime.NewServerMetadataContext(ctx, md)
 		if err != nil {
@@ -1053,22 +1253,22 @@ func RegisterGeneratorHandlerServer(ctx context.Context, mux *runtime.ServeMux, 
 			return
 		}
 
-		forward_Generator_CreateTx_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_Generator_UnsafeSend_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
-	mux.Handle("POST", pattern_Generator_CreateStakeTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("POST", pattern_Generator_UnsafeStakeTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/CreateStakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/stake"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/UnsafeStakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unsafe/stake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_Generator_CreateStakeTx_0(rctx, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_Generator_UnsafeStakeTx_0(rctx, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		ctx = runtime.NewServerMetadataContext(ctx, md)
 		if err != nil {
@@ -1076,22 +1276,22 @@ func RegisterGeneratorHandlerServer(ctx context.Context, mux *runtime.ServeMux, 
 			return
 		}
 
-		forward_Generator_CreateStakeTx_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_Generator_UnsafeStakeTx_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
-	mux.Handle("POST", pattern_Generator_CreateUnstakeTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("POST", pattern_Generator_UnsafeUnstakeTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/CreateUnstakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unstake"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/UnsafeUnstakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unsafe/unstake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_Generator_CreateUnstakeTx_0(rctx, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_Generator_UnsafeUnstakeTx_0(rctx, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		ctx = runtime.NewServerMetadataContext(ctx, md)
 		if err != nil {
@@ -1099,7 +1299,76 @@ func RegisterGeneratorHandlerServer(ctx context.Context, mux *runtime.ServeMux, 
 			return
 		}
 
-		forward_Generator_CreateUnstakeTx_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_Generator_UnsafeUnstakeTx_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("POST", pattern_Generator_Send_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/Send", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/generate/send"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_Generator_Send_0(rctx, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_Generator_Send_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("POST", pattern_Generator_StakeTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/StakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/generate/stake"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_Generator_StakeTx_0(rctx, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_Generator_StakeTx_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("POST", pattern_Generator_UnstakeTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/UnstakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/generate/unstake"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_Generator_UnstakeTx_0(rctx, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_Generator_UnstakeTx_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -1304,6 +1573,46 @@ func RegisterRaidoChainHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 
 	})
 
+	mux.Handle("POST", pattern_RaidoChain_GetBlocksStartCount_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBlocksStartCount", runtime.WithHTTPPathPattern("/rdo/v1/chain/blocks/range"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_RaidoChain_GetBlocksStartCount_0(rctx, inboundMarshaler, client, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_RaidoChain_GetBlocksStartCount_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("GET", pattern_RaidoChain_ListValidators_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/ListValidators", runtime.WithHTTPPathPattern("/rdo/v1/chain/list/validators"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_RaidoChain_ListValidators_0(rctx, inboundMarshaler, client, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_RaidoChain_ListValidators_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
 	return nil
 }
 
@@ -1323,6 +1632,10 @@ var (
 	pattern_RaidoChain_GetStakeDeposits_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"rdo", "v1", "chain", "deposits", "address"}, ""))
 
 	pattern_RaidoChain_GetTransactionsCount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"rdo", "v1", "chain", "transaction", "count", "address"}, ""))
+
+	pattern_RaidoChain_GetBlocksStartCount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "chain", "blocks", "range"}, ""))
+
+	pattern_RaidoChain_ListValidators_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "chain", "list", "validators"}, ""))
 )
 
 var (
@@ -1341,6 +1654,10 @@ var (
 	forward_RaidoChain_GetStakeDeposits_0 = runtime.ForwardResponseMessage
 
 	forward_RaidoChain_GetTransactionsCount_0 = runtime.ForwardResponseMessage
+
+	forward_RaidoChain_GetBlocksStartCount_0 = runtime.ForwardResponseMessage
+
+	forward_RaidoChain_ListValidators_0 = runtime.ForwardResponseMessage
 )
 
 // RegisterAttestationHandlerFromEndpoint is same as RegisterAttestationHandler but
@@ -1570,63 +1887,123 @@ func RegisterGeneratorHandler(ctx context.Context, mux *runtime.ServeMux, conn *
 // "GeneratorClient" to call the correct interceptors.
 func RegisterGeneratorHandlerClient(ctx context.Context, mux *runtime.ServeMux, client GeneratorClient) error {
 
-	mux.Handle("POST", pattern_Generator_CreateTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("POST", pattern_Generator_UnsafeSend_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/CreateTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/legacy"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/UnsafeSend", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unsafe/send"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_Generator_CreateTx_0(rctx, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_Generator_UnsafeSend_0(rctx, inboundMarshaler, client, req, pathParams)
 		ctx = runtime.NewServerMetadataContext(ctx, md)
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
 
-		forward_Generator_CreateTx_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_Generator_UnsafeSend_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
-	mux.Handle("POST", pattern_Generator_CreateStakeTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("POST", pattern_Generator_UnsafeStakeTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/CreateStakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/stake"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/UnsafeStakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unsafe/stake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_Generator_CreateStakeTx_0(rctx, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_Generator_UnsafeStakeTx_0(rctx, inboundMarshaler, client, req, pathParams)
 		ctx = runtime.NewServerMetadataContext(ctx, md)
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
 
-		forward_Generator_CreateStakeTx_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_Generator_UnsafeStakeTx_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
-	mux.Handle("POST", pattern_Generator_CreateUnstakeTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("POST", pattern_Generator_UnsafeUnstakeTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/CreateUnstakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unstake"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/UnsafeUnstakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unsafe/unstake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_Generator_CreateUnstakeTx_0(rctx, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_Generator_UnsafeUnstakeTx_0(rctx, inboundMarshaler, client, req, pathParams)
 		ctx = runtime.NewServerMetadataContext(ctx, md)
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
 
-		forward_Generator_CreateUnstakeTx_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_Generator_UnsafeUnstakeTx_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("POST", pattern_Generator_Send_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/Send", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/generate/send"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_Generator_Send_0(rctx, inboundMarshaler, client, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_Generator_Send_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("POST", pattern_Generator_StakeTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/StakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/generate/stake"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_Generator_StakeTx_0(rctx, inboundMarshaler, client, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_Generator_StakeTx_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("POST", pattern_Generator_UnstakeTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/UnstakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/generate/unstake"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_Generator_UnstakeTx_0(rctx, inboundMarshaler, client, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_Generator_UnstakeTx_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -1634,17 +2011,29 @@ func RegisterGeneratorHandlerClient(ctx context.Context, mux *runtime.ServeMux, 
 }
 
 var (
-	pattern_Generator_CreateTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "generate", "transaction", "legacy"}, ""))
+	pattern_Generator_UnsafeSend_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"rdo", "v1", "generate", "transaction", "unsafe", "send"}, ""))
 
-	pattern_Generator_CreateStakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "generate", "transaction", "stake"}, ""))
+	pattern_Generator_UnsafeStakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"rdo", "v1", "generate", "transaction", "unsafe", "stake"}, ""))
 
-	pattern_Generator_CreateUnstakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "generate", "transaction", "unstake"}, ""))
+	pattern_Generator_UnsafeUnstakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"rdo", "v1", "generate", "transaction", "unsafe", "unstake"}, ""))
+
+	pattern_Generator_Send_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 2, 2, 4}, []string{"rdo", "v1", "generate", "transaction", "send"}, ""))
+
+	pattern_Generator_StakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 2, 2, 4}, []string{"rdo", "v1", "generate", "transaction", "stake"}, ""))
+
+	pattern_Generator_UnstakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 2, 2, 4}, []string{"rdo", "v1", "generate", "transaction", "unstake"}, ""))
 )
 
 var (
-	forward_Generator_CreateTx_0 = runtime.ForwardResponseMessage
+	forward_Generator_UnsafeSend_0 = runtime.ForwardResponseMessage
 
-	forward_Generator_CreateStakeTx_0 = runtime.ForwardResponseMessage
+	forward_Generator_UnsafeStakeTx_0 = runtime.ForwardResponseMessage
 
-	forward_Generator_CreateUnstakeTx_0 = runtime.ForwardResponseMessage
+	forward_Generator_UnsafeUnstakeTx_0 = runtime.ForwardResponseMessage
+
+	forward_Generator_Send_0 = runtime.ForwardResponseMessage
+
+	forward_Generator_StakeTx_0 = runtime.ForwardResponseMessage
+
+	forward_Generator_UnstakeTx_0 = runtime.ForwardResponseMessage
 )
