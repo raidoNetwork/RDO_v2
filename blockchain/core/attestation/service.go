@@ -187,6 +187,10 @@ func (s *Service) StakersLimitReached(tx *types.Transaction) error {
 	return s.txPool.CheckMaxStakers(tx)
 }
 
+func (s *Service) IsNodeValidator(tx *types.Transaction) error {
+	return s.stakePool.IsNodeValidator(tx)
+}
+
 func (s *Service) ListValidators() []string {
 	return s.stakePool.ListValidators()
 }
