@@ -602,7 +602,7 @@ func (s *StakingPool) IsNodeValidator(tx *types.Transaction) (err error) {
 	for _, out := range tx.Outputs() {
 		node := out.Node().Hex()
 		if _, exists := s.validators[node]; !exists {
-			err = errors.Errorf("there is no such validator as %s", node)
+			err = errors.Errorf("There is no such validator as %s", node)
 			break
 		}
 	}
