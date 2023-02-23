@@ -155,9 +155,9 @@ type StakePool interface {
 	// ListValidators returns all nodes with occupied slots
 	ListValidators() []string
 
-	// IsNodeValidator tells whether the node addresses in transaction's
-	// outputs are all validators
-	IsNodeValidator(*types.Transaction) error
+	// IsNodeValidator tells whether the node address
+	// is a validator
+	IsNodeValidator(node string) error
 
 	StakeDataReader
 }

@@ -68,7 +68,7 @@ type AttestationAPI interface {
 
 	// IsNodeValidator returns an error if
 	// the node is not a validator
-	IsNodeValidator(tx *types.Transaction) error
+	IsNodeValidator(node string) error
 
 	// ListValidators returns nodes that users can stake on
 	ListValidators() []string

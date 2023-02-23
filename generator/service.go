@@ -83,7 +83,7 @@ func (s *Service) GenerateUnsafeStakeTx(fee uint64, hexKey string, amount uint64
 		}
 
 		// Check if the node is a validator
-		err = s.attestation.IsNodeValidator(typedTx)
+		err = s.attestation.IsNodeValidator(node)
 		if err != nil {
 			return nil, err
 		}
@@ -212,7 +212,7 @@ func (s *Service) GenerateStakeTx(fee uint64, addr string, amount uint64, node s
 		}
 
 		// Check if the node is a validator
-		err = s.attestation.IsNodeValidator(typedTx)
+		err = s.attestation.IsNodeValidator(node)
 		if err != nil {
 			return nil, err
 		}
