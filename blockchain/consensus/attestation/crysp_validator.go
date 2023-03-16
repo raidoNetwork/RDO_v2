@@ -428,8 +428,12 @@ func (cv *CryspValidator) validateTxStructBase(tx *types.Transaction) error {
 			return errors.New("Zero amount on input.")
 		}
 
-		if tx.Type() == common.UnstakeTxType && in.Amount() < cv.cfg.StakeUnit {
-			return consensus.ErrLowStakeAmount
+		if tx.Type() == common.UnstakeTxType {
+			node := in.Node().Hex()
+			if node == common.BlackHoleAddress &&
+				in.Amount() < cv.cfg.StakeUnit {
+				return consensus.ErrLowStakeAmount
+			}
 		}
 
 		var overflow bool
