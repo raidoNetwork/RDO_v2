@@ -127,7 +127,7 @@ func (s *Service) GenerateUnsafeUnstakeTx(fee uint64, hexKey string, amount uint
 
 	stakeLeft := balance - amount
 
-	if stakeLeft%s.stakeAmount != 0 {
+	if stakeLeft%s.stakeAmount != 0 && (node == "" || node == common.BlackHoleAddress) {
 		return nil, errors.New("Bad stake amount.")
 	}
 
@@ -253,7 +253,7 @@ func (s *Service) GenerateUnstakeTx(fee uint64, addr string, amount uint64, node
 
 	stakeLeft := balance - amount
 
-	if stakeLeft%s.stakeAmount != 0 {
+	if stakeLeft%s.stakeAmount != 0 && (node == "" || node == common.BlackHoleAddress) {
 		return nil, errors.New("Bad stake amount.")
 	}
 
