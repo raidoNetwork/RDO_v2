@@ -92,8 +92,8 @@ func (s *Service) GenerateUnsafeStakeTx(fee uint64, hexKey string, amount uint64
 }
 
 func (s *Service) GenerateUnsafeUnstakeTx(fee uint64, hexKey string, amount uint64, node string) (*prototype.Transaction, error) {
-	if amount%s.stakeAmount != 0 {
-		return nil, errors.New("Wrong unstake amount given.")
+	if amount%s.stakeAmount != 0 && (node == "" || node == common.BlackHoleAddress) {
+		return nil, errors.New("Wrong stake amount given.")
 	}
 
 	// get address and private key from hex
@@ -221,8 +221,8 @@ func (s *Service) GenerateStakeTx(fee uint64, addr string, amount uint64, node s
 }
 
 func (s *Service) GenerateUnstakeTx(fee uint64, addr string, amount uint64, node string) (*prototype.Transaction, error) {
-	if amount%s.stakeAmount != 0 {
-		return nil, errors.New("Wrong unstake amount given.")
+	if amount%s.stakeAmount != 0 && (node == "" || node == common.BlackHoleAddress) {
+		return nil, errors.New("Wrong stake amount given.")
 	}
 
 	// get address and private key from hex
