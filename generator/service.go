@@ -73,9 +73,15 @@ func (s *Service) GenerateUnsafeStakeTx(fee uint64, hexKey string, amount uint64
 		return transaction, err
 	}
 
-	if transaction.Type == common.StakeTxType {
+	if node != common.BlackHoleAddress {
+		// The address is not a validator so the node has to be a validator
+		err = s.attestation.IsNodeValidator(node)
+		if err != nil {
+			return nil, err
+		}
+
 		typedTx := types.NewTransaction(transaction)
-		err := s.attestation.StakersLimitReached(typedTx)
+		err = s.attestation.StakersLimitReached(typedTx)
 		if err != nil {
 			return nil, err
 		}
@@ -84,8 +90,8 @@ func (s *Service) GenerateUnsafeStakeTx(fee uint64, hexKey string, amount uint64
 }
 
 func (s *Service) GenerateUnsafeUnstakeTx(fee uint64, hexKey string, amount uint64, node string) (*prototype.Transaction, error) {
-	if amount%s.stakeAmount != 0 {
-		return nil, errors.New("Wrong unstake amount given.")
+	if amount%s.stakeAmount != 0 && (node == "" || node == common.BlackHoleAddress) {
+		return nil, errors.New("Wrong stake amount given.")
 	}
 
 	// get address and private key from hex
@@ -119,7 +125,7 @@ func (s *Service) GenerateUnsafeUnstakeTx(fee uint64, hexKey string, amount uint
 
 	stakeLeft := balance - amount
 
-	if stakeLeft%s.stakeAmount != 0 {
+	if stakeLeft%s.stakeAmount != 0 && (node == "" || node == common.BlackHoleAddress) {
 		return nil, errors.New("Bad stake amount.")
 	}
 
@@ -196,17 +202,27 @@ func (s *Service) GenerateStakeTx(fee uint64, addr string, amount uint64, node s
 
 	if transaction.Type == common.StakeTxType {
 		typedTx := types.NewTransaction(transaction)
-		err := s.attestation.StakersLimitReached(typedTx)
-		if err != nil {
-			return nil, err
+
+		// Check if the node is a validator
+		if node != common.BlackHoleAddress {
+			// The address is not a validator so the node has to be a validator
+			err = s.attestation.IsNodeValidator(node)
+			if err != nil {
+				return nil, err
+			}
+
+			err = s.attestation.StakersLimitReached(typedTx)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	return transaction, err
 }
 
 func (s *Service) GenerateUnstakeTx(fee uint64, addr string, amount uint64, node string) (*prototype.Transaction, error) {
-	if amount%s.stakeAmount != 0 {
-		return nil, errors.New("Wrong unstake amount given.")
+	if amount%s.stakeAmount != 0 && (node == "" || node == common.BlackHoleAddress) {
+		return nil, errors.New("Wrong stake amount given.")
 	}
 
 	// get address and private key from hex
@@ -237,7 +253,7 @@ func (s *Service) GenerateUnstakeTx(fee uint64, addr string, amount uint64, node
 
 	stakeLeft := balance - amount
 
-	if stakeLeft%s.stakeAmount != 0 {
+	if stakeLeft%s.stakeAmount != 0 && (node == "" || node == common.BlackHoleAddress) {
 		return nil, errors.New("Bad stake amount.")
 	}
 

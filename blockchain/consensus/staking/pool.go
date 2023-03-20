@@ -593,3 +593,14 @@ func (s *StakingPool) SystemUnstakeElector(validator, elector string, amount uin
 		s.unstakedSnapshot[validator][elector] += amount
 	}
 }
+
+// IsNodeValidator tells whether the node is a validator
+func (s *StakingPool) IsNodeValidator(node string) (err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.validators[node]; !exists {
+		err = errors.Errorf("There is no such validator as %s", node)
+	}
+
+	return err
+}
