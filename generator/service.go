@@ -73,17 +73,22 @@ func (s *Service) GenerateUnsafeStakeTx(fee uint64, hexKey string, amount uint64
 		return transaction, err
 	}
 
-	if transaction.Type == common.StakeTxType {
-		typedTx := types.NewTransaction(transaction)
-
-		// Check if stakers' limit is reached
-		err := s.attestation.StakersLimitReached(typedTx)
+	// Check if the node is a validator
+	err = s.attestation.IsNodeValidator(address.Hex())
+	if err == nil {
+		// The address is a validator so the node can only be the BlackholeAddress
+		if node != common.BlackHoleAddress {
+			return nil, errors.New("Validators can only stake on the BlackHoleAddress")
+		}
+	} else {
+		// The address is not a validator so the node has to be a validator
+		err = s.attestation.IsNodeValidator(node)
 		if err != nil {
 			return nil, err
 		}
 
-		// Check if the node is a validator
-		err = s.attestation.IsNodeValidator(node)
+		typedTx := types.NewTransaction(transaction)
+		err = s.attestation.StakersLimitReached(typedTx)
 		if err != nil {
 			return nil, err
 		}
@@ -205,16 +210,24 @@ func (s *Service) GenerateStakeTx(fee uint64, addr string, amount uint64, node s
 	if transaction.Type == common.StakeTxType {
 		typedTx := types.NewTransaction(transaction)
 
-		// Check if stakers' limit is reached
-		err := s.attestation.StakersLimitReached(typedTx)
-		if err != nil {
-			return nil, err
-		}
-
 		// Check if the node is a validator
-		err = s.attestation.IsNodeValidator(node)
-		if err != nil {
-			return nil, err
+		err = s.attestation.IsNodeValidator(addr)
+		if err == nil {
+			// The address is a validator so the node can only be the BlackholeAddress
+			if node != common.BlackHoleAddress {
+				return nil, errors.New("Validators can only stake on the BlackHoleAddress")
+			}
+		} else {
+			// The address is not a validator so the node has to be a validator
+			err = s.attestation.IsNodeValidator(node)
+			if err != nil {
+				return nil, err
+			}
+
+			err = s.attestation.StakersLimitReached(typedTx)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	return transaction, err
