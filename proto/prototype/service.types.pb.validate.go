@@ -734,8 +734,6 @@ func (m *SignedTxValue) validate(all bool) error {
 
 	}
 
-	// no validation rules for TxCost
-
 	if len(errors) > 0 {
 		return SignedTxValueMultiError(errors)
 	}
@@ -865,9 +863,17 @@ func (m *NotSignedTxValue) validate(all bool) error {
 		}
 	}
 
-	// no validation rules for Signature
+	if utf8.RuneCountInString(m.GetSignature()) != 0 {
+		err := NotSignedTxValueValidationError{
+			field:  "Signature",
+			reason: "value length must be 0 runes",
+		}
+		if !all {
+			return err
+		}
+		errors = append(errors, err)
 
-	// no validation rules for TxCost
+	}
 
 	if len(errors) > 0 {
 		return NotSignedTxValueMultiError(errors)

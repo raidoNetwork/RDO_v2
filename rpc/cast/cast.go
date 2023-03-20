@@ -146,15 +146,13 @@ func SignedTxValue(tx *prototype.Transaction) *prototype.SignedTxValue {
 	txv := new(prototype.SignedTxValue)
 	txv.Data = TxValue(tx)
 	txv.Signature = common.Encode(tx.Signature)
-	txv.TxCost = calculateCost(tx)
 	return txv
 }
 
 func NotSignedTxValue(tx *prototype.Transaction) *prototype.NotSignedTxValue {
 	var txv prototype.NotSignedTxValue
 	txv.Data = TxValue(tx)
-	txv.Signature = "sign here"
-	txv.TxCost = calculateCost(tx)
+	txv.Signature = "sign_here"
 
 	return &txv
 }
@@ -186,8 +184,4 @@ func TxFromTxValue(txv *prototype.SignedTxValue) *prototype.Transaction {
 	tx.Signature = common.FromHex(txv.Signature)
 
 	return tx
-}
-
-func calculateCost(tx *prototype.Transaction) uint32 {
-	return uint32(tx.SizeSSZ()) * uint32(tx.Fee)
 }

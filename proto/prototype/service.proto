@@ -166,7 +166,7 @@ service Generator {
   // CreateSend generates signed transaction with given options.
   rpc Send(TxOptionsRequest) returns (TxBodyResponse) {
     option (google.api.http) = {
-      post: "/rdo/v1/generate/transaction/send"
+      post: "/rdo/v1/generate/transaction/generate/send"
       body: "*"
     };
   }
@@ -174,7 +174,7 @@ service Generator {
   // CreateStakeTx generates signed stake transaction with given options.
   rpc StakeTx(TxOptionsStakeRequest) returns (TxBodyResponse) {
     option (google.api.http) = {
-      post: "/rdo/v1/generate/transaction/stake"
+      post: "/rdo/v1/generate/transaction/generate/stake"
       body: "*"
     };
   }
@@ -182,7 +182,7 @@ service Generator {
   // CreateUnstakeTx generate signed unstake transaction with given options.
   rpc UnstakeTx(TxOptionsStakeRequest) returns (TxBodyResponse) {
     option (google.api.http) = {
-      post: "/rdo/v1/generate/transaction/unstake"
+      post: "/rdo/v1/generate/transaction/generate/unstake"
       body: "*"
     };
   }
