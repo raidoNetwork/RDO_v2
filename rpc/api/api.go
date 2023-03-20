@@ -44,6 +44,9 @@ type ChainAPI interface {
 
 	// GetServiceStatus return service status or error if service is offline.
 	GetServiceStatus() (string, error)
+
+	// GetBlocksStartCount returns a number of blocks starting at some number
+	GetBlocksStartCount(start int64, limit uint32) ([]*prototype.Block, error)
 }
 
 type AttestationAPI interface {
@@ -62,9 +65,22 @@ type AttestationAPI interface {
 	// StakersLimitReached returns an error if
 	// the limit of stakers for a particular validator is exceeded
 	StakersLimitReached(tx *types.Transaction) error
+
+	// IsNodeValidator returns an error if
+	// the node is not a validator
+	IsNodeValidator(node string) error
+
+	// ListValidators returns nodes that users can stake on
+	ListValidators() []string
 }
 
 type GeneratorAPI interface {
+	GenerateUnsafeTx([]*prototype.TxOutput, uint64, string) (*prototype.Transaction, error)
+
+	GenerateUnsafeStakeTx(uint64, string, uint64, string) (*prototype.Transaction, error)
+
+	GenerateUnsafeUnstakeTx(uint64, string, uint64, string) (*prototype.Transaction, error)
+
 	GenerateTx([]*prototype.TxOutput, uint64, string) (*prototype.Transaction, error)
 
 	GenerateStakeTx(uint64, string, uint64, string) (*prototype.Transaction, error)

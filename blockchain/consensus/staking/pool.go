@@ -496,6 +496,17 @@ func (s *StakingPool) NumberStakers(validator string) int {
 	}
 }
 
+func (s *StakingPool) ListValidators() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var res []string
+	for key := range s.validators {
+		res = append(res, key)
+	}
+	return res
+}
+
 func (s *StakingPool) DetermineProposer(seed int64) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -581,4 +592,15 @@ func (s *StakingPool) SystemUnstakeElector(validator, elector string, amount uin
 	} else {
 		s.unstakedSnapshot[validator][elector] += amount
 	}
+}
+
+// IsNodeValidator tells whether the node is a validator
+func (s *StakingPool) IsNodeValidator(node string) (err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.validators[node]; !exists {
+		err = errors.Errorf("There is no such validator as %s", node)
+	}
+
+	return err
 }

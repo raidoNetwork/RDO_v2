@@ -152,6 +152,13 @@ type StakePool interface {
 	// DetermineProposer determines the proposer according to seed
 	DetermineProposer(seed int64) string
 
+	// ListValidators returns all nodes with occupied slots
+	ListValidators() []string
+
+	// IsNodeValidator tells whether the node address
+	// is a validator
+	IsNodeValidator(node string) error
+
 	StakeDataReader
 }
 
