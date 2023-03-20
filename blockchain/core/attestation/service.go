@@ -134,13 +134,6 @@ func (s *Service) SendRawTx(tx *prototype.Transaction) error {
 		return status.Error(17, "Transaction has bad format")
 	}
 
-	// Validate the transaction
-	typed := types.NewTransaction(tx)
-	err = s.txPool.validateTx(typed)
-	if err != nil {
-		return status.Error(17, err.Error())
-	}
-
 	s.cfg.TxFeed.Send(types.NewTransaction(tx))
 
 	return nil
@@ -192,10 +185,6 @@ func (s *Service) waitSyncing() error {
 
 func (s *Service) StakersLimitReached(tx *types.Transaction) error {
 	return s.txPool.CheckMaxStakers(tx)
-}
-
-func (s *Service) IsNodeValidator(node string) error {
-	return s.stakePool.IsNodeValidator(node)
 }
 
 func (s *Service) ListValidators() []string {

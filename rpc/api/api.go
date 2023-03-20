@@ -66,10 +66,6 @@ type AttestationAPI interface {
 	// the limit of stakers for a particular validator is exceeded
 	StakersLimitReached(tx *types.Transaction) error
 
-	// IsNodeValidator returns an error if
-	// the node is not a validator
-	IsNodeValidator(node string) error
-
 	// ListValidators returns nodes that users can stake on
 	ListValidators() []string
 }

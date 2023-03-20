@@ -46,13 +46,11 @@ message TxOutputValue{
 message SignedTxValue {
   TxValue data = 1;
   string signature = 2 [(validate.rules).string.len = 132];
-  uint32 txCost = 3;
 }
 
 message NotSignedTxValue {
   TxValue data = 1;
-  string signature = 2;
-  uint32 txCost = 3;
+  string signature = 2 [(validate.rules).string.len=0];
 }
 
 message UTxO{

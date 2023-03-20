@@ -1309,7 +1309,7 @@ func RegisterGeneratorHandlerServer(ctx context.Context, mux *runtime.ServeMux, 
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/Send", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/send"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/Send", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/generate/send"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1332,7 +1332,7 @@ func RegisterGeneratorHandlerServer(ctx context.Context, mux *runtime.ServeMux, 
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/StakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/stake"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/StakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/generate/stake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1355,7 +1355,7 @@ func RegisterGeneratorHandlerServer(ctx context.Context, mux *runtime.ServeMux, 
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/UnstakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unstake"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/UnstakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/generate/unstake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1951,7 +1951,7 @@ func RegisterGeneratorHandlerClient(ctx context.Context, mux *runtime.ServeMux, 
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/Send", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/send"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/Send", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/generate/send"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1971,7 +1971,7 @@ func RegisterGeneratorHandlerClient(ctx context.Context, mux *runtime.ServeMux, 
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/StakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/stake"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/StakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/generate/stake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1991,7 +1991,7 @@ func RegisterGeneratorHandlerClient(ctx context.Context, mux *runtime.ServeMux, 
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/UnstakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unstake"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/UnstakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/generate/unstake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2017,11 +2017,11 @@ var (
 
 	pattern_Generator_UnsafeUnstakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"rdo", "v1", "generate", "transaction", "unsafe", "unstake"}, ""))
 
-	pattern_Generator_Send_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "generate", "transaction", "send"}, ""))
+	pattern_Generator_Send_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 2, 2, 4}, []string{"rdo", "v1", "generate", "transaction", "send"}, ""))
 
-	pattern_Generator_StakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "generate", "transaction", "stake"}, ""))
+	pattern_Generator_StakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 2, 2, 4}, []string{"rdo", "v1", "generate", "transaction", "stake"}, ""))
 
-	pattern_Generator_UnstakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "generate", "transaction", "unstake"}, ""))
+	pattern_Generator_UnstakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 2, 2, 4}, []string{"rdo", "v1", "generate", "transaction", "unstake"}, ""))
 )
 
 var (
