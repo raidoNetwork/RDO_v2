@@ -84,6 +84,13 @@ service RaidoChain {
       get: "/rdo/v1/chain/list/validators",
     };
   }
+
+  // ListValidators returns validator addresses
+  rpc ListStakeValidators(google.protobuf.Empty) returns (ValidatorAddressesResponse) {
+    option (google.api.http) = {
+      get: "/rdo/v1/chain/list/stakablevalidators",
+    };
+  }
 }
 
 // Attestation add new transactions to the pool and gossip transaction to known peers.

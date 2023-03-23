@@ -70,8 +70,11 @@ type AttestationAPI interface {
 	// the node is not a validator
 	IsNodeValidator(node string) error
 
-	// ListValidators returns nodes that users can stake on
+	// ListValidators returns a list of working validators
 	ListValidators() []string
+
+	// ListStakeValidators returns a list of validators that can be staken on
+	ListStakeValidators() []string
 }
 
 type GeneratorAPI interface {

@@ -43,6 +43,8 @@ type RaidoChainClient interface {
 	GetBlocksStartCount(ctx context.Context, in *BlocksStartCountRequest, opts ...grpc.CallOption) (*BlocksStartCountResponse, error)
 	// ListValidators returns validator addresses
 	ListValidators(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ValidatorAddressesResponse, error)
+	// ListValidators returns validator addresses
+	ListStakeValidators(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ValidatorAddressesResponse, error)
 }
 
 type raidoChainClient struct {
@@ -143,6 +145,15 @@ func (c *raidoChainClient) ListValidators(ctx context.Context, in *emptypb.Empty
 	return out, nil
 }
 
+func (c *raidoChainClient) ListStakeValidators(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ValidatorAddressesResponse, error) {
+	out := new(ValidatorAddressesResponse)
+	err := c.cc.Invoke(ctx, "/rdo.service.RaidoChain/ListStakeValidators", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RaidoChainServer is the server API for RaidoChain service.
 // All implementations must embed UnimplementedRaidoChainServer
 // for forward compatibility
@@ -167,6 +178,8 @@ type RaidoChainServer interface {
 	GetBlocksStartCount(context.Context, *BlocksStartCountRequest) (*BlocksStartCountResponse, error)
 	// ListValidators returns validator addresses
 	ListValidators(context.Context, *emptypb.Empty) (*ValidatorAddressesResponse, error)
+	// ListValidators returns validator addresses
+	ListStakeValidators(context.Context, *emptypb.Empty) (*ValidatorAddressesResponse, error)
 	mustEmbedUnimplementedRaidoChainServer()
 }
 
@@ -203,6 +216,9 @@ func (UnimplementedRaidoChainServer) GetBlocksStartCount(context.Context, *Block
 }
 func (UnimplementedRaidoChainServer) ListValidators(context.Context, *emptypb.Empty) (*ValidatorAddressesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListValidators not implemented")
+}
+func (UnimplementedRaidoChainServer) ListStakeValidators(context.Context, *emptypb.Empty) (*ValidatorAddressesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListStakeValidators not implemented")
 }
 func (UnimplementedRaidoChainServer) mustEmbedUnimplementedRaidoChainServer() {}
 
@@ -397,6 +413,24 @@ func _RaidoChain_ListValidators_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RaidoChain_ListStakeValidators_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RaidoChainServer).ListStakeValidators(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rdo.service.RaidoChain/ListStakeValidators",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RaidoChainServer).ListStakeValidators(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RaidoChain_ServiceDesc is the grpc.ServiceDesc for RaidoChain service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -443,6 +477,10 @@ var RaidoChain_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListValidators",
 			Handler:    _RaidoChain_ListValidators_Handler,
+		},
+		{
+			MethodName: "ListStakeValidators",
+			Handler:    _RaidoChain_ListStakeValidators_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
