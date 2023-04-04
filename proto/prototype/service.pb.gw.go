@@ -484,6 +484,24 @@ func local_request_RaidoChain_ListStakeValidators_0(ctx context.Context, marshal
 
 }
 
+func request_RaidoChain_GetMarketCap_0(ctx context.Context, marshaler runtime.Marshaler, client RaidoChainClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq emptypb.Empty
+	var metadata runtime.ServerMetadata
+
+	msg, err := client.GetMarketCap(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_RaidoChain_GetMarketCap_0(ctx context.Context, marshaler runtime.Marshaler, server RaidoChainServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq emptypb.Empty
+	var metadata runtime.ServerMetadata
+
+	msg, err := server.GetMarketCap(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
 func request_Attestation_SendLegacyTx_0(ctx context.Context, marshaler runtime.Marshaler, client AttestationClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq SendTxRequest
 	var metadata runtime.ServerMetadata
@@ -1119,6 +1137,29 @@ func RegisterRaidoChainHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 
 	})
 
+	mux.Handle("GET", pattern_RaidoChain_GetMarketCap_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetMarketCap", runtime.WithHTTPPathPattern("/rdo/v1/chain/info/marketcap"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_RaidoChain_GetMarketCap_0(rctx, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_RaidoChain_GetMarketCap_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
 	return nil
 }
 
@@ -1674,6 +1715,26 @@ func RegisterRaidoChainHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 
 	})
 
+	mux.Handle("GET", pattern_RaidoChain_GetMarketCap_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetMarketCap", runtime.WithHTTPPathPattern("/rdo/v1/chain/info/marketcap"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_RaidoChain_GetMarketCap_0(rctx, inboundMarshaler, client, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_RaidoChain_GetMarketCap_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
 	return nil
 }
 
@@ -1699,6 +1760,8 @@ var (
 	pattern_RaidoChain_ListValidators_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "chain", "list", "validators"}, ""))
 
 	pattern_RaidoChain_ListStakeValidators_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "chain", "list", "stakablevalidators"}, ""))
+
+	pattern_RaidoChain_GetMarketCap_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "chain", "info", "marketcap"}, ""))
 )
 
 var (
@@ -1723,6 +1786,8 @@ var (
 	forward_RaidoChain_ListValidators_0 = runtime.ForwardResponseMessage
 
 	forward_RaidoChain_ListStakeValidators_0 = runtime.ForwardResponseMessage
+
+	forward_RaidoChain_GetMarketCap_0 = runtime.ForwardResponseMessage
 )
 
 // RegisterAttestationHandlerFromEndpoint is same as RegisterAttestationHandler but

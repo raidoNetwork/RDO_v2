@@ -37,6 +37,11 @@ type ChainAPI interface {
 	// GetTransaction return transaction with given hash.
 	GetTransaction(string) (*prototype.Transaction, error)
 
+	/* Miscellaneous data */
+
+	// GetSystemBalance returns the total balance in the system (market cap)
+	GetSystemBalance() uint64
+
 	/* Status data */
 
 	// GetSyncStatus return node sync status SQL with KV.

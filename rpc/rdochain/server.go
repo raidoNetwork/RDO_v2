@@ -283,3 +283,10 @@ func (s *Server) ListStakeValidators(ctx context.Context, nothing *emptypb.Empty
 	response.Nodes = validators
 	return response, nil
 }
+
+func (s *Server) GetMarketCap(ctx context.Context, nothing *emptypb.Empty) (*prototype.MarketCapResponse, error) {
+	response := new(prototype.MarketCapResponse)
+	marketCap := s.Backend.GetSystemBalance()
+	response.Cap = marketCap
+	return response, nil
+}

@@ -91,6 +91,13 @@ service RaidoChain {
       get: "/rdo/v1/chain/list/stakablevalidators",
     };
   }
+
+  // GetMarketCap returns the total amount in the system
+  rpc GetMarketCap(google.protobuf.Empty) returns (MarketCapResponse) {
+    option (google.api.http) = {
+      get: "/rdo/v1/chain/info/marketcap",
+    };
+  }
 }
 
 // Attestation add new transactions to the pool and gossip transaction to known peers.
@@ -294,6 +301,10 @@ message RawTxRequest {
 
 message ValidatorAddressesResponse {
   repeated string nodes = 1;
+}
+
+message MarketCapResponse {
+  uint64 cap = 1;
 }
 
 option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
