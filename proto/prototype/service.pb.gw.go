@@ -890,7 +890,7 @@ func RegisterRaidoChainHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetUTxO", runtime.WithHTTPPathPattern("/rdo/v1/chain/utxo/{address}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetUTxO", runtime.WithHTTPPathPattern("/api/v1/chain/utxo/{address}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -913,7 +913,7 @@ func RegisterRaidoChainHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetStatus", runtime.WithHTTPPathPattern("/rdo/v1/chain/status"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetStatus", runtime.WithHTTPPathPattern("/api/v1/chain/status"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -936,7 +936,7 @@ func RegisterRaidoChainHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBlockByNum", runtime.WithHTTPPathPattern("/rdo/v1/chain/block/{num}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBlockByNum", runtime.WithHTTPPathPattern("/api/v1/chain/block/{num}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -959,7 +959,7 @@ func RegisterRaidoChainHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBlockByHash", runtime.WithHTTPPathPattern("/rdo/v1/chain/block/hash/{hash}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBlockByHash", runtime.WithHTTPPathPattern("/api/v1/chain/block/hash/{hash}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -982,7 +982,7 @@ func RegisterRaidoChainHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBalance", runtime.WithHTTPPathPattern("/rdo/v1/chain/balance/{address}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBalance", runtime.WithHTTPPathPattern("/api/v1/chain/balance/{address}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1005,7 +1005,7 @@ func RegisterRaidoChainHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetTransaction", runtime.WithHTTPPathPattern("/rdo/v1/chain/transaction/{hash}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetTransaction", runtime.WithHTTPPathPattern("/api/v1/chain/transaction/{hash}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1028,7 +1028,7 @@ func RegisterRaidoChainHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetStakeDeposits", runtime.WithHTTPPathPattern("/rdo/v1/chain/deposits/{address}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetStakeDeposits", runtime.WithHTTPPathPattern("/api/v1/chain/deposits/{address}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1051,7 +1051,7 @@ func RegisterRaidoChainHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetTransactionsCount", runtime.WithHTTPPathPattern("/rdo/v1/chain/transaction/count/{address}"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetTransactionsCount", runtime.WithHTTPPathPattern("/api/v1/chain/transaction/count/{address}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1074,7 +1074,7 @@ func RegisterRaidoChainHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBlocksStartCount", runtime.WithHTTPPathPattern("/rdo/v1/chain/blocks/range"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBlocksStartCount", runtime.WithHTTPPathPattern("/api/v1/chain/blocks/range"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1097,7 +1097,7 @@ func RegisterRaidoChainHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/ListValidators", runtime.WithHTTPPathPattern("/rdo/v1/chain/list/validators"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/ListValidators", runtime.WithHTTPPathPattern("/api/v1/chain/list/validators"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1120,7 +1120,7 @@ func RegisterRaidoChainHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/ListStakeValidators", runtime.WithHTTPPathPattern("/rdo/v1/chain/list/stakablevalidators"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/ListStakeValidators", runtime.WithHTTPPathPattern("/api/v1/chain/list/stakablevalidators"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1143,7 +1143,7 @@ func RegisterRaidoChainHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetMarketCap", runtime.WithHTTPPathPattern("/rdo/v1/chain/info/marketcap"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.RaidoChain/GetMarketCap", runtime.WithHTTPPathPattern("/api/v1/chain/info/marketcap"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1175,7 +1175,7 @@ func RegisterAttestationHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Attestation/SendLegacyTx", runtime.WithHTTPPathPattern("/rdo/v1/attestation/send/legacy"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Attestation/SendLegacyTx", runtime.WithHTTPPathPattern("/api/v1/attestation/send/legacy"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1198,7 +1198,7 @@ func RegisterAttestationHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Attestation/SendStakeTx", runtime.WithHTTPPathPattern("/rdo/v1/attestation/send/stake"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Attestation/SendStakeTx", runtime.WithHTTPPathPattern("/api/v1/attestation/send/stake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1221,7 +1221,7 @@ func RegisterAttestationHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Attestation/SendUnstakeTx", runtime.WithHTTPPathPattern("/rdo/v1/attestation/send/unstake"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Attestation/SendUnstakeTx", runtime.WithHTTPPathPattern("/api/v1/attestation/send/unstake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1244,7 +1244,7 @@ func RegisterAttestationHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Attestation/SendRawTx", runtime.WithHTTPPathPattern("/rdo/v1/attestation/send/raw"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Attestation/SendRawTx", runtime.WithHTTPPathPattern("/api/v1/attestation/send/raw"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1267,7 +1267,7 @@ func RegisterAttestationHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Attestation/GetFee", runtime.WithHTTPPathPattern("/rdo/v1/attestation/fee"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Attestation/GetFee", runtime.WithHTTPPathPattern("/api/v1/attestation/fee"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1290,7 +1290,7 @@ func RegisterAttestationHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Attestation/GetPendingTransactions", runtime.WithHTTPPathPattern("/rdo/v1/attestation/pending/transactions"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Attestation/GetPendingTransactions", runtime.WithHTTPPathPattern("/api/v1/attestation/pending/transactions"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1322,7 +1322,7 @@ func RegisterGeneratorHandlerServer(ctx context.Context, mux *runtime.ServeMux, 
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/UnsafeSend", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unsafe/send"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/UnsafeSend", runtime.WithHTTPPathPattern("/api/v1/generate/transaction/unsafe/send"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1345,7 +1345,7 @@ func RegisterGeneratorHandlerServer(ctx context.Context, mux *runtime.ServeMux, 
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/UnsafeStakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unsafe/stake"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/UnsafeStakeTx", runtime.WithHTTPPathPattern("/api/v1/generate/transaction/unsafe/stake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1368,7 +1368,7 @@ func RegisterGeneratorHandlerServer(ctx context.Context, mux *runtime.ServeMux, 
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/UnsafeUnstakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unsafe/unstake"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/UnsafeUnstakeTx", runtime.WithHTTPPathPattern("/api/v1/generate/transaction/unsafe/unstake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1391,7 +1391,7 @@ func RegisterGeneratorHandlerServer(ctx context.Context, mux *runtime.ServeMux, 
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/Send", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/send"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/Send", runtime.WithHTTPPathPattern("/api/v1/generate/transaction/send"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1414,7 +1414,7 @@ func RegisterGeneratorHandlerServer(ctx context.Context, mux *runtime.ServeMux, 
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/StakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/stake"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/StakeTx", runtime.WithHTTPPathPattern("/api/v1/generate/transaction/stake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1437,7 +1437,7 @@ func RegisterGeneratorHandlerServer(ctx context.Context, mux *runtime.ServeMux, 
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/UnstakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unstake"))
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rdo.service.Generator/UnstakeTx", runtime.WithHTTPPathPattern("/api/v1/generate/transaction/unstake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1499,7 +1499,7 @@ func RegisterRaidoChainHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetUTxO", runtime.WithHTTPPathPattern("/rdo/v1/chain/utxo/{address}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetUTxO", runtime.WithHTTPPathPattern("/api/v1/chain/utxo/{address}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1519,7 +1519,7 @@ func RegisterRaidoChainHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetStatus", runtime.WithHTTPPathPattern("/rdo/v1/chain/status"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetStatus", runtime.WithHTTPPathPattern("/api/v1/chain/status"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1539,7 +1539,7 @@ func RegisterRaidoChainHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBlockByNum", runtime.WithHTTPPathPattern("/rdo/v1/chain/block/{num}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBlockByNum", runtime.WithHTTPPathPattern("/api/v1/chain/block/{num}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1559,7 +1559,7 @@ func RegisterRaidoChainHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBlockByHash", runtime.WithHTTPPathPattern("/rdo/v1/chain/block/hash/{hash}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBlockByHash", runtime.WithHTTPPathPattern("/api/v1/chain/block/hash/{hash}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1579,7 +1579,7 @@ func RegisterRaidoChainHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBalance", runtime.WithHTTPPathPattern("/rdo/v1/chain/balance/{address}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBalance", runtime.WithHTTPPathPattern("/api/v1/chain/balance/{address}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1599,7 +1599,7 @@ func RegisterRaidoChainHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetTransaction", runtime.WithHTTPPathPattern("/rdo/v1/chain/transaction/{hash}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetTransaction", runtime.WithHTTPPathPattern("/api/v1/chain/transaction/{hash}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1619,7 +1619,7 @@ func RegisterRaidoChainHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetStakeDeposits", runtime.WithHTTPPathPattern("/rdo/v1/chain/deposits/{address}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetStakeDeposits", runtime.WithHTTPPathPattern("/api/v1/chain/deposits/{address}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1639,7 +1639,7 @@ func RegisterRaidoChainHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetTransactionsCount", runtime.WithHTTPPathPattern("/rdo/v1/chain/transaction/count/{address}"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetTransactionsCount", runtime.WithHTTPPathPattern("/api/v1/chain/transaction/count/{address}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1659,7 +1659,7 @@ func RegisterRaidoChainHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBlocksStartCount", runtime.WithHTTPPathPattern("/rdo/v1/chain/blocks/range"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetBlocksStartCount", runtime.WithHTTPPathPattern("/api/v1/chain/blocks/range"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1679,7 +1679,7 @@ func RegisterRaidoChainHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/ListValidators", runtime.WithHTTPPathPattern("/rdo/v1/chain/list/validators"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/ListValidators", runtime.WithHTTPPathPattern("/api/v1/chain/list/validators"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1699,7 +1699,7 @@ func RegisterRaidoChainHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/ListStakeValidators", runtime.WithHTTPPathPattern("/rdo/v1/chain/list/stakablevalidators"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/ListStakeValidators", runtime.WithHTTPPathPattern("/api/v1/chain/list/stakablevalidators"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1719,7 +1719,7 @@ func RegisterRaidoChainHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetMarketCap", runtime.WithHTTPPathPattern("/rdo/v1/chain/info/marketcap"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.RaidoChain/GetMarketCap", runtime.WithHTTPPathPattern("/api/v1/chain/info/marketcap"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1739,29 +1739,29 @@ func RegisterRaidoChainHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 }
 
 var (
-	pattern_RaidoChain_GetUTxO_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"rdo", "v1", "chain", "utxo", "address"}, ""))
+	pattern_RaidoChain_GetUTxO_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"api", "v1", "chain", "utxo", "address"}, ""))
 
-	pattern_RaidoChain_GetStatus_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"rdo", "v1", "chain", "status"}, ""))
+	pattern_RaidoChain_GetStatus_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "chain", "status"}, ""))
 
-	pattern_RaidoChain_GetBlockByNum_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"rdo", "v1", "chain", "block", "num"}, ""))
+	pattern_RaidoChain_GetBlockByNum_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"api", "v1", "chain", "block", "num"}, ""))
 
-	pattern_RaidoChain_GetBlockByHash_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 4}, []string{"rdo", "v1", "chain", "block", "hash"}, ""))
+	pattern_RaidoChain_GetBlockByHash_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 4}, []string{"api", "v1", "chain", "block", "hash"}, ""))
 
-	pattern_RaidoChain_GetBalance_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"rdo", "v1", "chain", "balance", "address"}, ""))
+	pattern_RaidoChain_GetBalance_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"api", "v1", "chain", "balance", "address"}, ""))
 
-	pattern_RaidoChain_GetTransaction_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"rdo", "v1", "chain", "transaction", "hash"}, ""))
+	pattern_RaidoChain_GetTransaction_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"api", "v1", "chain", "transaction", "hash"}, ""))
 
-	pattern_RaidoChain_GetStakeDeposits_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"rdo", "v1", "chain", "deposits", "address"}, ""))
+	pattern_RaidoChain_GetStakeDeposits_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"api", "v1", "chain", "deposits", "address"}, ""))
 
-	pattern_RaidoChain_GetTransactionsCount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"rdo", "v1", "chain", "transaction", "count", "address"}, ""))
+	pattern_RaidoChain_GetTransactionsCount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"api", "v1", "chain", "transaction", "count", "address"}, ""))
 
-	pattern_RaidoChain_GetBlocksStartCount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "chain", "blocks", "range"}, ""))
+	pattern_RaidoChain_GetBlocksStartCount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "chain", "blocks", "range"}, ""))
 
-	pattern_RaidoChain_ListValidators_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "chain", "list", "validators"}, ""))
+	pattern_RaidoChain_ListValidators_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "chain", "list", "validators"}, ""))
 
-	pattern_RaidoChain_ListStakeValidators_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "chain", "list", "stakablevalidators"}, ""))
+	pattern_RaidoChain_ListStakeValidators_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "chain", "list", "stakablevalidators"}, ""))
 
-	pattern_RaidoChain_GetMarketCap_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "chain", "info", "marketcap"}, ""))
+	pattern_RaidoChain_GetMarketCap_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "chain", "info", "marketcap"}, ""))
 )
 
 var (
@@ -1832,7 +1832,7 @@ func RegisterAttestationHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Attestation/SendLegacyTx", runtime.WithHTTPPathPattern("/rdo/v1/attestation/send/legacy"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Attestation/SendLegacyTx", runtime.WithHTTPPathPattern("/api/v1/attestation/send/legacy"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1852,7 +1852,7 @@ func RegisterAttestationHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Attestation/SendStakeTx", runtime.WithHTTPPathPattern("/rdo/v1/attestation/send/stake"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Attestation/SendStakeTx", runtime.WithHTTPPathPattern("/api/v1/attestation/send/stake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1872,7 +1872,7 @@ func RegisterAttestationHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Attestation/SendUnstakeTx", runtime.WithHTTPPathPattern("/rdo/v1/attestation/send/unstake"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Attestation/SendUnstakeTx", runtime.WithHTTPPathPattern("/api/v1/attestation/send/unstake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1892,7 +1892,7 @@ func RegisterAttestationHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Attestation/SendRawTx", runtime.WithHTTPPathPattern("/rdo/v1/attestation/send/raw"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Attestation/SendRawTx", runtime.WithHTTPPathPattern("/api/v1/attestation/send/raw"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1912,7 +1912,7 @@ func RegisterAttestationHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Attestation/GetFee", runtime.WithHTTPPathPattern("/rdo/v1/attestation/fee"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Attestation/GetFee", runtime.WithHTTPPathPattern("/api/v1/attestation/fee"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1932,7 +1932,7 @@ func RegisterAttestationHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Attestation/GetPendingTransactions", runtime.WithHTTPPathPattern("/rdo/v1/attestation/pending/transactions"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Attestation/GetPendingTransactions", runtime.WithHTTPPathPattern("/api/v1/attestation/pending/transactions"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1952,17 +1952,17 @@ func RegisterAttestationHandlerClient(ctx context.Context, mux *runtime.ServeMux
 }
 
 var (
-	pattern_Attestation_SendLegacyTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "attestation", "send", "legacy"}, ""))
+	pattern_Attestation_SendLegacyTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "attestation", "send", "legacy"}, ""))
 
-	pattern_Attestation_SendStakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "attestation", "send", "stake"}, ""))
+	pattern_Attestation_SendStakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "attestation", "send", "stake"}, ""))
 
-	pattern_Attestation_SendUnstakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "attestation", "send", "unstake"}, ""))
+	pattern_Attestation_SendUnstakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "attestation", "send", "unstake"}, ""))
 
-	pattern_Attestation_SendRawTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "attestation", "send", "raw"}, ""))
+	pattern_Attestation_SendRawTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "attestation", "send", "raw"}, ""))
 
-	pattern_Attestation_GetFee_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"rdo", "v1", "attestation", "fee"}, ""))
+	pattern_Attestation_GetFee_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v1", "attestation", "fee"}, ""))
 
-	pattern_Attestation_GetPendingTransactions_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "attestation", "pending", "transactions"}, ""))
+	pattern_Attestation_GetPendingTransactions_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "attestation", "pending", "transactions"}, ""))
 )
 
 var (
@@ -2021,7 +2021,7 @@ func RegisterGeneratorHandlerClient(ctx context.Context, mux *runtime.ServeMux, 
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/UnsafeSend", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unsafe/send"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/UnsafeSend", runtime.WithHTTPPathPattern("/api/v1/generate/transaction/unsafe/send"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2041,7 +2041,7 @@ func RegisterGeneratorHandlerClient(ctx context.Context, mux *runtime.ServeMux, 
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/UnsafeStakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unsafe/stake"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/UnsafeStakeTx", runtime.WithHTTPPathPattern("/api/v1/generate/transaction/unsafe/stake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2061,7 +2061,7 @@ func RegisterGeneratorHandlerClient(ctx context.Context, mux *runtime.ServeMux, 
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/UnsafeUnstakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unsafe/unstake"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/UnsafeUnstakeTx", runtime.WithHTTPPathPattern("/api/v1/generate/transaction/unsafe/unstake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2081,7 +2081,7 @@ func RegisterGeneratorHandlerClient(ctx context.Context, mux *runtime.ServeMux, 
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/Send", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/send"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/Send", runtime.WithHTTPPathPattern("/api/v1/generate/transaction/send"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2101,7 +2101,7 @@ func RegisterGeneratorHandlerClient(ctx context.Context, mux *runtime.ServeMux, 
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/StakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/stake"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/StakeTx", runtime.WithHTTPPathPattern("/api/v1/generate/transaction/stake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2121,7 +2121,7 @@ func RegisterGeneratorHandlerClient(ctx context.Context, mux *runtime.ServeMux, 
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/UnstakeTx", runtime.WithHTTPPathPattern("/rdo/v1/generate/transaction/unstake"))
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rdo.service.Generator/UnstakeTx", runtime.WithHTTPPathPattern("/api/v1/generate/transaction/unstake"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2141,17 +2141,17 @@ func RegisterGeneratorHandlerClient(ctx context.Context, mux *runtime.ServeMux, 
 }
 
 var (
-	pattern_Generator_UnsafeSend_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"rdo", "v1", "generate", "transaction", "unsafe", "send"}, ""))
+	pattern_Generator_UnsafeSend_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "generate", "transaction", "unsafe", "send"}, ""))
 
-	pattern_Generator_UnsafeStakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"rdo", "v1", "generate", "transaction", "unsafe", "stake"}, ""))
+	pattern_Generator_UnsafeStakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "generate", "transaction", "unsafe", "stake"}, ""))
 
-	pattern_Generator_UnsafeUnstakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"rdo", "v1", "generate", "transaction", "unsafe", "unstake"}, ""))
+	pattern_Generator_UnsafeUnstakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 2, 5}, []string{"api", "v1", "generate", "transaction", "unsafe", "unstake"}, ""))
 
-	pattern_Generator_Send_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "generate", "transaction", "send"}, ""))
+	pattern_Generator_Send_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "generate", "transaction", "send"}, ""))
 
-	pattern_Generator_StakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "generate", "transaction", "stake"}, ""))
+	pattern_Generator_StakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "generate", "transaction", "stake"}, ""))
 
-	pattern_Generator_UnstakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"rdo", "v1", "generate", "transaction", "unstake"}, ""))
+	pattern_Generator_UnstakeTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"api", "v1", "generate", "transaction", "unstake"}, ""))
 )
 
 var (
