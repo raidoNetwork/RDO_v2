@@ -201,3 +201,7 @@ func (s *Service) IsNodeValidator(node string) error {
 func (s *Service) ListValidators() []string {
 	return s.stakePool.ListValidators()
 }
+
+func (s *Service) ListStakeValidators() []string {
+	return s.stakePool.ListStakeValidators()
+}
