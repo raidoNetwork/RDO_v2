@@ -151,6 +151,15 @@ func (s *Service) CheckBalance() error {
 	return nil
 }
 
+// GetBalance returns the total supply of the chain
+func (s *Service) GetSystemBalance() uint64 {
+	// get amount stats from KV
+	rewardAmount, _, genesisSupply := s.bc.GetAmountStats()
+
+	targetSum := genesisSupply + rewardAmount
+	return targetSum
+}
+
 // FindAllUTxO returns all address unspent outputs.
 func (s *Service) FindAllUTxO(addr string) ([]*types.UTxO, error) {
 	return s.outm.FindAllUTxO(addr)

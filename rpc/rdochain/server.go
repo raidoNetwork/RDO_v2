@@ -274,3 +274,19 @@ func (s *Server) ListValidators(ctx context.Context, nothing *emptypb.Empty) (*p
 	response.Nodes = validators
 	return response, nil
 }
+
+// ListStakeValidators return validators (with reserved slots) that can be staked on.
+func (s *Server) ListStakeValidators(ctx context.Context, nothing *emptypb.Empty) (*prototype.ValidatorAddressesResponse, error) {
+	response := new(prototype.ValidatorAddressesResponse)
+	validators := s.Attestation.ListStakeValidators()
+
+	response.Nodes = validators
+	return response, nil
+}
+
+func (s *Server) GetMarketCap(ctx context.Context, nothing *emptypb.Empty) (*prototype.MarketCapResponse, error) {
+	response := new(prototype.MarketCapResponse)
+	marketCap := s.Backend.GetSystemBalance()
+	response.Cap = marketCap
+	return response, nil
+}

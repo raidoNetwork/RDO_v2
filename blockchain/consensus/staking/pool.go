@@ -19,6 +19,8 @@ var log = logrus.WithField("prefix", "StakePool")
 
 var ErrNoStake = errors.New("no stake from address")
 
+var config = params.RaidoConfig()
+
 type ValidatorStakeData struct {
 	SlotsFilled     int
 	CumulativeStake uint64
@@ -505,6 +507,21 @@ func (s *StakingPool) ListValidators() []string {
 		res = append(res, key)
 	}
 	return res
+}
+
+func (s *StakingPool) ListStakeValidators() []string {
+	validators := s.ListValidators()
+	filtered := make([]string, 0)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// Filter the validators that can be staked on
+	for _, val := range validators {
+		if (len(s.validators[val].Electors)) < config.MaxNumberOfStakers {
+			filtered = append(filtered, val)
+		}
+	}
+	return filtered
 }
 
 func (s *StakingPool) DetermineProposer(seed int64) string {

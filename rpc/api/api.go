@@ -37,6 +37,11 @@ type ChainAPI interface {
 	// GetTransaction return transaction with given hash.
 	GetTransaction(string) (*prototype.Transaction, error)
 
+	/* Miscellaneous data */
+
+	// GetSystemBalance returns the total balance in the system (market cap)
+	GetSystemBalance() uint64
+
 	/* Status data */
 
 	// GetSyncStatus return node sync status SQL with KV.
@@ -70,8 +75,11 @@ type AttestationAPI interface {
 	// the node is not a validator
 	IsNodeValidator(node string) error
 
-	// ListValidators returns nodes that users can stake on
+	// ListValidators returns a list of working validators
 	ListValidators() []string
+
+	// ListStakeValidators returns a list of validators that can be staken on
+	ListStakeValidators() []string
 }
 
 type GeneratorAPI interface {

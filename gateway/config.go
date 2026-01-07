@@ -32,7 +32,7 @@ func DefaultConfig() MuxConfig {
 
 	v1PbHandler := PbMux{
 		Registrations: v1Registrations,
-		Patterns:      []string{"/rdo/v1/"},
+		Patterns:      []string{"/api/v1/"},
 		Mux:           v1Mux,
 	}
 

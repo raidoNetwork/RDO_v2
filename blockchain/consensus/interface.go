@@ -155,6 +155,9 @@ type StakePool interface {
 	// ListValidators returns all nodes with occupied slots
 	ListValidators() []string
 
+	// ListStakeValidators returns all nodes that can be staked on
+	ListStakeValidators() []string
+
 	// IsNodeValidator tells whether the node address
 	// is a validator
 	IsNodeValidator(node string) error
